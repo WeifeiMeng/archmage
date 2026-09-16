@@ -101,3 +101,105 @@ pub async fn inspect() -> Result<LocalTools> {
         git_version,
     })
 }
+
+#[derive(Debug, Serialize)]
+pub struct ProbeResult {
+    pub thread_id: String,
+    pub exit_code: i32,
+    pub result: serde_json::Value,
+}
+
+/// Bounded, read-only connectivity check; does not execute a product workflow.
+pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
+    use super::codex_event::Decoder;
+    let temp = tempfile::tempdir()?;
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo)?;
+    let git = capture(
+        &tools.git_binary,
+        &["init".into(), "--quiet".into(), repo.as_os_str().into()],
+        None,
+        b"",
+        Duration::from_secs(10),
+        1024 * 1024,
+    )
+    .await?;
+    if git.code != Some(0) {
+        return Err(Error::Preflight("probe Git init failed".into()));
+    }
+    let schema = temp.path().join("schema.json");
+    let output = temp.path().join("result.json");
+    std::fs::write(&schema, br#"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}"#)?;
+    let args: Vec<OsString> = vec![
+        "exec".into(),
+        "--cd".into(),
+        repo.as_os_str().into(),
+        "--sandbox".into(),
+        "read-only".into(),
+        "--json".into(),
+        "--output-schema".into(),
+        schema.as_os_str().into(),
+        "--output-last-message".into(),
+        output.as_os_str().into(),
+        "-".into(),
+    ];
+    let captured = capture(
+        &tools.codex_binary,
+        &args,
+        Some(&repo),
+        b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
+        Duration::from_secs(120),
+        8 * 1024 * 1024,
+    )
+    .await?;
+    if captured.code != Some(0) {
+        // Do not print untrusted stderr (which can contain credentials/configuration).
+        return Err(Error::Preflight(format!(
+            "Codex probe failed with exit {:?}; verify local Codex login/configuration",
+            captured.code
+        )));
+    }
+    let mut decoder = Decoder::new(8 * 1024 * 1024);
+    let mut events = decoder.push(&captured.stdout)?;
+    events.extend(decoder.finish()?);
+    if events
+        .iter()
+        .any(|e| matches!(e["type"].as_str(), Some("turn.failed" | "error")))
+    {
+        return Err(Error::Preflight(
+            "Codex probe emitted a failure event".into(),
+        ));
+    }
+    if !events.iter().any(|e| e["type"] == "turn.completed") {
+        return Err(Error::Preflight(
+            "Codex probe did not complete a turn".into(),
+        ));
+    }
+    let thread_id = events
+        .iter()
+        .find(|e| e["type"] == "thread.started")
+        .and_then(|e| e["thread_id"].as_str())
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| Error::Preflight("missing Codex thread ID".into()))?
+        .to_owned();
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(output)?
+        .take(8 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err(Error::Limit("probe result too large".into()));
+    }
+    let result: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|_| Error::Preflight("invalid probe result JSON".into()))?;
+    if result != serde_json::json!({"ok": true}) {
+        return Err(Error::Preflight(
+            "probe result does not satisfy contract".into(),
+        ));
+    }
+    Ok(ProbeResult {
+        thread_id,
+        exit_code: 0,
+        result,
+    })
+}

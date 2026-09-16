@@ -4,6 +4,8 @@ This directory is the maintained source of truth for product scope, concepts, ar
 
 ## Recommended reading order
 
+**Want to run the current code?** Start with the [current usage guide (中文)](guide.md). It distinguishes working commands from planned capabilities.
+
 1. [Product vision](product/vision.md)
 2. [MVP definition](product/mvp-definition.md)
 3. [Glossary](concepts/glossary.md)
