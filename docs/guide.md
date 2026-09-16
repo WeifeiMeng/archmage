@@ -1,6 +1,6 @@
 # 当前版本使用指南
 
-更新日期：2026-09-16。适用范围：`feat/s0-codex` 开发分支，S0 的 A 批次阶段代码。
+更新日期：2026-09-16。适用范围：已合入本地 `main` 的 S0 A 批次阶段代码。
 
 ## 先说现在能做什么
 
@@ -19,16 +19,16 @@
 
 ## 1. 进入正确的代码目录
 
-这台机器上，源码在隔离 Worktree，主仓库根目录仍以设计文档为主：
+这台机器上，阶段代码已经合入本地主仓库，可以直接在主目录运行：
 
 ```bash
-cd /Users/mengweifei/Desktop/code/github/archmage/.worktrees/s0-codex
+cd /Users/mengweifei/Desktop/code/github/archmage
 git branch --show-current
 ```
 
-预期分支为 `feat/s0-codex`。后续命令均在这个目录运行。若在主仓库根目录运行 Cargo，可能看到找不到 `Cargo.toml`。
+预期分支为 `main`，该目录现在包含 `Cargo.toml`。后续命令均在这个目录运行。
 
-Provider 和探针代码位于本地 `feat/s0-codex` 分支，尚未合并到 `main`，也未推送远端。重新 clone 远端仓库不一定包含本指南描述的能力；请先使用上述现有 Worktree。
+Provider 和探针代码已合入本地 `main`，尚未推送远端。重新 clone 远端仓库不一定包含这些能力。原来的 `.worktrees/s0-codex` 开发目录仍保留，但日常试用不需要切换过去。
 
 ## 2. 检查前置工具
 
@@ -138,7 +138,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ### `could not find Cargo.toml`
 
-当前目录不是源码 Worktree。回到第 1 节的绝对路径。
+当前目录不包含源码，或使用了尚未更新的远端 checkout。回到第 1 节的本地主仓库绝对路径，确认存在 `Cargo.toml`。
 
 ### `codex executable not found on PATH`
 
