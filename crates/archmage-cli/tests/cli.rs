@@ -56,3 +56,22 @@ fn blank_goal_is_rejected() {
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
 }
+
+#[test]
+fn doctor_missing_tools_is_explicit_without_creating_data() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("absent");
+    let output = cli()
+        .args(["doctor", "--offline"])
+        .env("PATH", "")
+        .env("ARCHMAGE_HOME", &root)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(20));
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("executable not found")
+    );
+    assert!(!root.exists());
+}
