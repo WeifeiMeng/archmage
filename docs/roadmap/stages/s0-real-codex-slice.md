@@ -2,6 +2,8 @@
 
 **Status:** Approved for implementation planning
 
+**Implementation plan:** [S0 task-by-task plan](../../superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md). Planning is complete; product implementation and real Codex acceptance have not started.
+
 ## Goal
 
 Prove the Archmage collaboration spine by connecting a real local Codex CLI provider and coordinating four independent Capability Agents through a fixed workflow in an isolated Git worktree.

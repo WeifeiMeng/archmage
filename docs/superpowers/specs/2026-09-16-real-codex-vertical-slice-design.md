@@ -69,7 +69,7 @@ codex exec
 
 The rendered prompt is written to stdin. JSONL on stdout is parsed incrementally and persisted; stderr is captured separately. The adapter records the `thread.started` identifier, process identity, version, timestamps, exit status, usage when available, and termination path.
 
-Normal Handoffs never call `codex exec resume`. On Archmage resume, an interrupted node starts a new Codex session with a new attempt and the same persisted inputs. This keeps recovery independent of provider-local conversation files.
+Normal Handoffs never call `codex exec resume`. On Archmage resume, an interrupted node starts a new Codex session with a new attempt and the same persisted logical inputs. If an interrupted writer left partial workspace changes, the new attempt also receives a new recovery Context Snapshot describing the current workspace and its delta from the previous snapshot. Previous snapshots remain immutable. This keeps recovery independent of provider-local conversation files without pretending that code changes disappeared after interruption.
 
 ## Context and Handoff
 
@@ -106,6 +106,8 @@ Worktree identity, baseline, branch, `HEAD`, and status are checked before and a
 SQLite uses migrations, WAL, foreign keys, transactions, and bounded busy handling. Artifact content uses temporary-file write, flush, and atomic rename before metadata insertion.
 
 On startup, owned attempts left in `running` are reconciled. If their process cannot be safely confirmed, the attempt becomes `interrupted`. `archmage resume` preserves successful nodes, discards incomplete outputs from Context eligibility, and creates a new attempt for retryable work.
+
+Reconciliation requires exclusive scheduler ownership of the Run. An interrupted classification does not establish that an old child process stopped: replacement writers must wait until owned Codex/check processes are confirmed exited or safely terminated. Uncertain process identity blocks execution instead of authorizing a signal to a possibly reused PID. Read-only status inspection does not take over an active Run.
 
 ## Error model
 
@@ -155,7 +157,7 @@ CLI argument errors retain the parser's standard non-zero behavior and never cre
 
 Automated tests cover domain transitions, Ready Set and lease compatibility, migrations, transaction rollback, recovery queries, artifact atomicity, real temporary Git repositories and worktrees, schema/invariant validation, Context hashing, and Codex JSONL parsing from fixed protocol samples.
 
-Protocol samples are parser fixtures, not an executable provider and not a product Fake Agent path. The stage acceptance test invokes real authenticated Codex four times, including an interrupted run followed by resume.
+Protocol samples are parser fixtures, not an executable provider and not a product Fake Agent path. A complete happy-path run invokes real authenticated Codex for all four roles. The separate interruption/resume scenario necessarily creates additional real invocations.
 
 ## Security
 
@@ -173,3 +175,5 @@ S0 excludes the Fix loop, human gates, external workflow editing, other provider
 ## Acceptance
 
 The authoritative exit criteria are in [the S0 stage document](../../roadmap/stages/s0-real-codex-slice.md) and the executable manual procedure is in [the S0 acceptance runbook](../../runbooks/s0-acceptance.md).
+
+The [S0 implementation plan](../plans/2026-09-16-s0-real-codex-vertical-slice.md) specifies file ownership, task dependencies, test gates, and the implementation details above. No product implementation or real provider acceptance is claimed by this document.

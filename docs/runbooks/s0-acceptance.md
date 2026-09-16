@@ -42,11 +42,13 @@ This procedure is the release gate for S0. It must use an installed, authenticat
 6. Confirm a new Tester attempt and a new real Codex thread are created.
 7. Confirm the workflow finishes without re-running already successful upstream nodes.
 
-## Scenario C: contract failure
+## Scenario C: offline contract regression (not real-provider acceptance)
 
-1. Use a test-only malformed schema or controlled provider-output fixture at the adapter parser boundary; do not replace the real workflow provider.
-2. Confirm the attempt becomes `contract_invalid` even if the process exit is zero.
-3. Confirm raw output and validation diagnostics are retained and no downstream node starts.
+1. Run contract unit tests with a malformed final JSON fixture. Test schema compilation failures separately as preflight failures.
+2. Confirm that the result-acceptance function rejects invalid output even when given a successful exit status.
+3. Test the failed state transition and dependency-readiness rules against the real temporary database. These are component tests, not a synthetic Agent workflow, and do not satisfy Scenarios A or B.
+
+The [implementation plan](../superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md) also requires real-provider cancellation, dirty-source, failed-check, and concurrent-reader evidence before S0 completion.
 
 ## Acceptance record
 

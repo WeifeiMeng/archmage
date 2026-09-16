@@ -12,6 +12,7 @@ This directory is the maintained source of truth for product scope, concepts, ar
 6. [Delivery roadmap](roadmap/README.md)
 7. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
 8. [Approved S0 design](superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
+9. [S0 implementation plan](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md) — 14 tasks, four delivery batches, real Codex acceptance gates
 
 ## Documentation layers
 
