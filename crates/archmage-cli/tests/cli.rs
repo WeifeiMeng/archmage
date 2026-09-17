@@ -69,7 +69,7 @@ fn offline_doctor_opens_database_without_auth_probe() {
         .unwrap();
     assert!(out.status.success());
     let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(value["database"]["schema_version"], 2);
+    assert_eq!(value["database"]["schema_version"], 3);
     assert_eq!(value["authentication"], "not_verified_offline");
     assert!(root.join("archmage.db").is_file());
 }

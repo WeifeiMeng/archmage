@@ -4,7 +4,7 @@
 
 ## 已实现
 
-- SQLite schema v2、事务迁移、WAL、foreign_keys、FULL synchronous、5 秒 busy timeout。
+- SQLite schema v3、事务迁移、WAL、foreign_keys、FULL synchronous、5 秒 busy timeout。
 - Run、NodeRun、attempt 分离；Runtime 生成 UUID；唯一 active attempt。
 - revision/state CAS；状态和事件在同一事务提交。
 - 按 Run 单调事件序列、cursor 查询；active attempt 查询只读。
@@ -17,6 +17,7 @@
 - provisioning 重启对账只接受 path、branch、baseline、common-dir 全部匹配的已登记 Worktree。
 - ChangeSet 将 tracked binary patch、每个 untracked 内容和 canonical manifest 发布为 attempt-owned Artifact。
 - Unix attempt 使用独立 session/process group；取消验证 PID/PGID/启动标识，并按 TERM、宽限、KILL、wait 确认执行。
+- 每 Run OS owner lock 互斥调度器；数据库 owner generation fencing 拒绝旧 owner 登记进程或提交终态。
 
 ## 验证范围
 
@@ -32,7 +33,7 @@ TERM 宽限和忽略 TERM 后整个进程树 KILL。
 - Project/Provider/Capability/Context/Handoff/check/control 的完整持久化模型。
 - 终态、Contract 校验输出及 Handoff 的整体提交；当前 finish_attempt 只是内部 ledger API，
   调用方必须先做 Contract 校验，不是用户可直接使用的工作流入口。
-- owner generation 的数据库 fencing、OS Run owner lock、跨节点调度和 Runtime 恢复编排。
+- 跨节点调度和 Runtime 恢复编排。
 - 原子文件发布前后的进程崩溃注入矩阵及敌对文件系统 TOCTOU 加固。
 - source 前后不变量检查，以及非精确 partial provisioning 的人工诊断入口。
 

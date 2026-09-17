@@ -1,5 +1,6 @@
 use super::{Attempt, AttemptOutcome, Store};
 use crate::error::{Error, Result};
+use crate::process::ProcessIdentity;
 use rusqlite::{Transaction, TransactionBehavior, params};
 use serde_json::{Value, json};
 
@@ -26,6 +27,96 @@ pub(crate) fn event(
     Ok(())
 }
 impl Store {
+    pub fn claim_run_owner(&mut self, run: &str) -> Result<i64> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE runs SET owner_generation=owner_generation+1,revision=revision+1 WHERE id=?1 AND state='running'",
+            [run],
+        )?)?;
+        let generation: i64 = tx.query_row(
+            "SELECT owner_generation FROM runs WHERE id=?1",
+            [run],
+            |r| r.get(0),
+        )?;
+        event(
+            &tx,
+            run,
+            "owner.claimed",
+            None,
+            None,
+            json!({"generation":generation}),
+        )?;
+        tx.commit()?;
+        Ok(generation)
+    }
+
+    pub fn attach_attempt_process(
+        &mut self,
+        id: &str,
+        revision: i64,
+        generation: i64,
+        identity: &ProcessIdentity,
+    ) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE attempts SET state='running',revision=revision+1,owner_generation=?3,process_pid=?4,process_pgid=?5,process_started=?6
+             WHERE id=?1 AND revision=?2 AND state='starting'
+             AND EXISTS(SELECT 1 FROM node_runs n JOIN runs r ON r.id=n.run_id
+                        WHERE n.id=attempts.node_run_id AND r.owner_generation=?3 AND r.state='running')",
+            params![id, revision, generation, identity.pid, identity.pgid, identity.started],
+        )?)?;
+        let (node,run):(String,String)=tx.query_row("SELECT n.id,n.run_id FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?)))?;
+        event(
+            &tx,
+            &run,
+            "node.started",
+            Some(&node),
+            Some(id),
+            json!({"owner_generation":generation,"pid":identity.pid,"pgid":identity.pgid}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn finish_attempt_owned(
+        &mut self,
+        id: &str,
+        revision: i64,
+        generation: i64,
+        outcome: AttemptOutcome,
+    ) -> Result<()> {
+        let (state, output, error) = outcome_values(outcome);
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE attempts SET state=?4,revision=revision+1,output_json=?5,error_code=?6
+             WHERE id=?1 AND revision=?2 AND state='running' AND owner_generation=?3
+             AND EXISTS(SELECT 1 FROM node_runs n JOIN runs r ON r.id=n.run_id
+                        WHERE n.id=attempts.node_run_id AND r.owner_generation=?3 AND r.state='running')",
+            params![id,revision,generation,state,output,error],
+        )?)?;
+        let (node,run):(String,String)=tx.query_row("SELECT n.id,n.run_id FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?)))?;
+        changed(tx.execute(
+            "UPDATE node_runs SET state=?2,revision=revision+1 WHERE id=?1 AND state='running'",
+            params![node, state],
+        )?)?;
+        event(
+            &tx,
+            &run,
+            &format!("node.{state}"),
+            Some(&node),
+            Some(id),
+            json!({"error_code":error,"owner_generation":generation}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn record_workspace_intent(
         &mut self,
@@ -177,12 +268,7 @@ impl Store {
         revision: i64,
         outcome: AttemptOutcome,
     ) -> Result<()> {
-        let (state, output, error) = match outcome {
-            AttemptOutcome::Succeeded(v) => ("succeeded", Some(v.to_string()), None),
-            AttemptOutcome::Failed(code) => ("failed", None, Some(code)),
-            AttemptOutcome::Interrupted => ("interrupted", None, Some("interrupted".into())),
-            AttemptOutcome::Cancelled => ("cancelled", None, Some("cancelled".into())),
-        };
+        let (state, output, error) = outcome_values(outcome);
         let tx = self
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -204,5 +290,14 @@ impl Store {
         )?;
         tx.commit()?;
         Ok(())
+    }
+}
+
+fn outcome_values(outcome: AttemptOutcome) -> (&'static str, Option<String>, Option<String>) {
+    match outcome {
+        AttemptOutcome::Succeeded(v) => ("succeeded", Some(v.to_string()), None),
+        AttemptOutcome::Failed(code) => ("failed", None, Some(code)),
+        AttemptOutcome::Interrupted => ("interrupted", None, Some("interrupted".into())),
+        AttemptOutcome::Cancelled => ("cancelled", None, Some("cancelled".into())),
     }
 }

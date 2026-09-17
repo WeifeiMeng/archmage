@@ -6,5 +6,6 @@ pub mod error;
 pub mod event;
 pub mod process;
 pub mod provider;
+pub mod runtime;
 pub mod store;
 pub mod workspace;

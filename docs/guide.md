@@ -70,7 +70,7 @@ cargo run -p archmage-cli -- doctor --offline
 {
   "authentication": "not_verified_offline",
   "database": {
-    "schema_version": 2,
+    "schema_version": 3,
     "foreign_keys": true,
     "synchronous": 2,
     "journal_mode": "wal",

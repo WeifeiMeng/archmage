@@ -14,7 +14,7 @@ ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-dev" cargo run -p arch
 - probe.exit_code=0
 - probe.result={"ok":true}
 - probe.diagnostics_dir：本次诊断目录
-- database：真实数据库检查对象，包含 schema_version=2、foreign_keys=true、
+- database：真实数据库检查对象，包含 schema_version=3、foreign_keys=true、
   synchronous=2、journal_mode=wal、busy_timeout_ms=5000。这不是整体工作流已可用。
 
 每次在线调用创建独立 probe-* 目录，保留 events.jsonl、stderr.log、result.json、metadata.json、Schema 与探针仓库。事件在进程运行时增量解码；失败时也保留已收到的日志并显示目录路径。Unix 上目录 0700，日志文件 0600。诊断可能包含敏感内容，请勿直接上传或提交 Git。
