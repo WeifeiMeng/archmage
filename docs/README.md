@@ -4,6 +4,8 @@ This directory is the maintained source of truth for product scope, concepts, ar
 
 ## Recommended reading order
 
+Latest development increment: [Online Doctor guide (中文)](guide-online-doctor.md).
+
 **Want to run the current code?** Start with the [current usage guide (中文)](guide.md). It distinguishes working commands from planned capabilities.
 
 1. [Product vision](product/vision.md)

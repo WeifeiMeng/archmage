@@ -17,14 +17,20 @@ async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
             let root = std::env::var_os("ARCHMAGE_HOME").map(std::path::PathBuf::from);
             let config = Config::resolve(root.as_deref(), None)?;
             config.prepare()?;
-            if !offline {
-                return Err(Error::NotImplemented("online authentication probe"));
-            }
+            let probe = if offline {
+                None
+            } else {
+                eprintln!(
+                    "Invoking real Codex (read-only, 120s deadline); uses your configured model and account."
+                );
+                Some(codex::readonly_probe_logged(&tools, &config.data_root).await?)
+            };
             println!(
                 "{}",
                 serde_json::json!({
                     "tools": tools, "config": config,
-                    "authentication": "not_verified_offline",
+                    "authentication": if offline { "not_verified_offline" } else { "verified" },
+                    "probe": probe,
                     "database": "not_implemented_batch_b"
                 })
             );

@@ -1,4 +1,33 @@
 use archmage_core::process::capture;
+use archmage_core::process::{Stream, capture_observed};
+
+#[tokio::test]
+async fn observer_sees_bytes_before_process_exits() {
+    let temp = tempfile::tempdir().unwrap();
+    let gate = temp.path().join("gate");
+    let args = vec![
+        "-c".into(),
+        "printf ready; while [ ! -f gate ]; do sleep 0.01; done; printf done >&2".into(),
+    ];
+    let out = capture_observed(
+        Path::new("/bin/sh"),
+        &args,
+        Some(temp.path()),
+        b"",
+        Duration::from_secs(5),
+        1024,
+        |stream, bytes| {
+            if stream == Stream::Stdout && bytes == b"ready" {
+                std::fs::write(&gate, b"go")?;
+            }
+            Ok(())
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(out.code, Some(0));
+    assert_eq!(out.stderr, b"done");
+}
 use std::{ffi::OsString, path::Path, time::Duration};
 
 #[tokio::test]

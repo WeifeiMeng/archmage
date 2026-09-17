@@ -13,7 +13,18 @@ pub struct Captured {
     pub stderr: Vec<u8>,
 }
 
-async fn bounded(mut stream: impl AsyncRead + Unpin, max: usize) -> Result<Vec<u8>> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stream {
+    Stdout,
+    Stderr,
+}
+
+async fn bounded(
+    mut stream: impl AsyncRead + Unpin,
+    max: usize,
+    kind: Stream,
+    observer: &std::cell::RefCell<impl FnMut(Stream, &[u8]) -> Result<()>>,
+) -> Result<Vec<u8>> {
     let mut result = Vec::new();
     let mut chunk = [0u8; 8192];
     loop {
@@ -25,6 +36,7 @@ async fn bounded(mut stream: impl AsyncRead + Unpin, max: usize) -> Result<Vec<u
             return Err(Error::Limit("process output limit exceeded".into()));
         }
         result.extend_from_slice(&chunk[..count]);
+        (observer.borrow_mut())(kind, &chunk[..count])?;
     }
     Ok(result)
 }
@@ -37,6 +49,20 @@ pub async fn capture(
     deadline: Duration,
     max: usize,
 ) -> Result<Captured> {
+    capture_observed(binary, args, cwd, input, deadline, max, |_, _| Ok(())).await
+}
+
+/// Observer runs while pipes are drained, before child exit. Errors stop capture.
+pub async fn capture_observed(
+    binary: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    input: &[u8],
+    deadline: Duration,
+    max: usize,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()>,
+) -> Result<Captured> {
+    let observer = std::cell::RefCell::new(observer);
     let mut command = Command::new(binary);
     command
         .args(args)
@@ -59,8 +85,12 @@ pub async fn capture(
             Ok::<_, Error>(())
         };
         let wait = async { Ok::<_, Error>(child.wait().await?) };
-        let (_, stdout, stderr, status) =
-            tokio::try_join!(write, bounded(stdout, max), bounded(stderr, max), wait)?;
+        let (_, stdout, stderr, status) = tokio::try_join!(
+            write,
+            bounded(stdout, max, Stream::Stdout, &observer),
+            bounded(stderr, max, Stream::Stderr, &observer),
+            wait
+        )?;
         Ok(Captured {
             code: status.code(),
             stdout,

@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    process::capture,
+    process::{Stream, capture, capture_observed},
 };
 use serde::Serialize;
 use std::{
@@ -107,13 +107,52 @@ pub struct ProbeResult {
     pub thread_id: String,
     pub exit_code: i32,
     pub result: serde_json::Value,
+    pub diagnostics_dir: Option<PathBuf>,
 }
 
 /// Bounded, read-only connectivity check; does not execute a product workflow.
 pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
-    use super::codex_event::Decoder;
     let temp = tempfile::tempdir()?;
-    let repo = temp.path().join("repo");
+    probe_in(tools, temp.path(), None).await
+}
+
+/// Retain each probe in a fresh private directory, including failure diagnostics.
+pub async fn readonly_probe_logged(tools: &LocalTools, root: &Path) -> Result<ProbeResult> {
+    let dir = tempfile::Builder::new()
+        .prefix("probe-")
+        .tempdir_in(root)?
+        .keep();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let result = probe_in(tools, &dir, Some(dir.clone())).await;
+    if let Err(error) = &result {
+        let message = format!("{error}\nDiagnostics: {}", dir.display());
+        return Err(Error::Preflight(message));
+    }
+    result
+}
+
+async fn probe_in(
+    tools: &LocalTools,
+    dir: &Path,
+    diagnostics_dir: Option<PathBuf>,
+) -> Result<ProbeResult> {
+    use super::codex_event::Decoder;
+    use std::io::Write;
+    fn private_file(path: &Path) -> Result<std::fs::File> {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        Ok(options.open(path)?)
+    }
+    let repo = dir.join("repo");
     std::fs::create_dir(&repo)?;
     let git = capture(
         &tools.git_binary,
@@ -127,8 +166,11 @@ pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
     if git.code != Some(0) {
         return Err(Error::Preflight("probe Git init failed".into()));
     }
-    let schema = temp.path().join("schema.json");
-    let output = temp.path().join("result.json");
+    let schema = dir.join("schema.json");
+    let output = dir.join("result.json");
+    private_file(&output)?;
+    let mut event_log = private_file(&dir.join("events.jsonl"))?;
+    let mut stderr_log = private_file(&dir.join("stderr.log"))?;
     std::fs::write(&schema, br#"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}"#)?;
     let args: Vec<OsString> = vec![
         "exec".into(),
@@ -143,15 +185,40 @@ pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
         output.as_os_str().into(),
         "-".into(),
     ];
-    let captured = capture(
+    let mut decoder = Decoder::new(8 * 1024 * 1024);
+    let mut events = Vec::new();
+    let mut metadata = private_file(&dir.join("metadata.json"))?;
+    let captured = capture_observed(
         &tools.codex_binary,
         &args,
         Some(&repo),
         b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
         Duration::from_secs(120),
         8 * 1024 * 1024,
+        |stream, bytes| {
+            match stream {
+                Stream::Stdout => {
+                    event_log.write_all(bytes)?;
+                    events.extend(decoder.push(bytes)?);
+                }
+                Stream::Stderr => stderr_log.write_all(bytes)?,
+            }
+            Ok(())
+        },
     )
-    .await?;
+    .await;
+    event_log.sync_all()?;
+    stderr_log.sync_all()?;
+    let record = serde_json::json!({
+        "codex_version": tools.codex_version,
+        "argv": args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>(),
+        "exit_code": captured.as_ref().ok().and_then(|c| c.code),
+        "capture_error": captured.as_ref().err().map(ToString::to_string),
+        "sandbox": "read-only",
+    });
+    metadata.write_all(record.to_string().as_bytes())?;
+    metadata.sync_all()?;
+    let captured = captured?;
     if captured.code != Some(0) {
         // Do not print untrusted stderr (which can contain credentials/configuration).
         return Err(Error::Preflight(format!(
@@ -159,8 +226,6 @@ pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
             captured.code
         )));
     }
-    let mut decoder = Decoder::new(8 * 1024 * 1024);
-    let mut events = decoder.push(&captured.stdout)?;
     events.extend(decoder.finish()?);
     if events
         .iter()
@@ -201,5 +266,6 @@ pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
         thread_id,
         exit_code: 0,
         result,
+        diagnostics_dir,
     })
 }

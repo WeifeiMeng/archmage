@@ -2,6 +2,15 @@ use archmage_core::provider::codex::validate_help;
 use archmage_core::provider::codex_event::Decoder;
 
 #[test]
+fn sanitized_real_cli_fixture_decodes() {
+    let bytes = include_bytes!("fixtures/codex-events.jsonl");
+    let events = Decoder::new(1024).push(bytes).unwrap();
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[0]["type"], "thread.started");
+    assert_eq!(events[3]["type"], "turn.completed");
+}
+
+#[test]
 fn fragmented_utf8_unknown_and_unterminated_events_are_preserved() {
     let input = "{\"type\":\"thread.started\",\"thread_id\":\"abc\"}\n{\"type\":\"future.event\",\"text\":\"中文\"}\n{\"type\":\"turn.completed\"}";
     let mut d = Decoder::new(1024);

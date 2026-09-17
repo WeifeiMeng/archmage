@@ -1,5 +1,14 @@
 # Batch A implementation checkpoint
 
+## 2026-09-17 follow-up
+
+Online doctor now invokes real Codex, incrementally decodes stdout, and retains private diagnostics including failures.
+Live CLI integration test passed, verifying final JSON and 0600 diagnostic files.
+Manual real invocation: Codex 0.154.0, thread 01a0ad29-6623-7d92-a80d-b78e28c404f6, exit 0, result {"ok":true}.
+Sanitized observed event shapes are checked in as a parser fixture; no fake Provider was added.
+The remaining list below records the earlier checkpoint: online wiring, streaming decoding and diagnostic retention are now implemented.
+Database and owned process-group recovery remain batch B; no full S0 completion is claimed.
+
 Date: 2026-09-16. Branch: feat/s0-codex.
 
 ## Completed
