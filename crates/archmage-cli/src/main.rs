@@ -17,6 +17,9 @@ async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
             let root = std::env::var_os("ARCHMAGE_HOME").map(std::path::PathBuf::from);
             let config = Config::resolve(root.as_deref(), None)?;
             config.prepare()?;
+            let database =
+                archmage_core::store::Store::open(&config.data_root.join("archmage.db"))?
+                    .health()?;
             let probe = if offline {
                 None
             } else {
@@ -31,7 +34,7 @@ async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
                     "tools": tools, "config": config,
                     "authentication": if offline { "not_verified_offline" } else { "verified" },
                     "probe": probe,
-                    "database": "not_implemented_batch_b"
+                    "database": database
                 })
             );
             Ok(())

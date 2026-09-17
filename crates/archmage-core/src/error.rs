@@ -1,5 +1,9 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("storage_failed: {0}")]
+    Storage(#[from] rusqlite::Error),
+    #[error("state_conflict: stale revision or invalid transition")]
+    Conflict,
     #[error("preflight_failed: {0}")]
     Preflight(String),
     #[error("spawn_failed: {0}")]

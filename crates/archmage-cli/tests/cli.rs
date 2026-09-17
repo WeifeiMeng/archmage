@@ -58,6 +58,23 @@ fn blank_goal_is_rejected() {
 }
 
 #[test]
+#[ignore = "requires installed local Codex and Git; no model request"]
+fn offline_doctor_opens_database_without_auth_probe() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("data");
+    let out = cli()
+        .args(["doctor", "--offline"])
+        .env("ARCHMAGE_HOME", &root)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(value["database"]["schema_version"], 1);
+    assert_eq!(value["authentication"], "not_verified_offline");
+    assert!(root.join("archmage.db").is_file());
+}
+
+#[test]
 fn doctor_missing_tools_is_explicit_without_creating_data() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("absent");

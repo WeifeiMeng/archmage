@@ -12,6 +12,9 @@ serde.workspace = true
 serde_json.workspace = true
 directories.workspace = true
 tempfile.workspace = true
+rusqlite = { version = "0.37", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile.workspace = true
