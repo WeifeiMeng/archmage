@@ -1,6 +1,10 @@
 use archmage_core::{
+    artifact::ArtifactStore,
+    store::AttemptOutcome,
     store::Store,
-    workspace::{ProvisionState, inspect_repository, provision, snapshot},
+    workspace::{
+        ProvisionState, inspect_repository, provision, publish_changeset, reconcile, snapshot,
+    },
 };
 use std::{fs, path::Path, process::Command};
 
@@ -146,4 +150,88 @@ fn snapshot_changes_for_staged_unstaged_untracked_binary_and_symlink_content() {
                 .any(|e| e.path == "link" && e.kind == "symlink")
         );
     }
+}
+
+#[test]
+fn reconcile_completes_an_exact_partial_provision() {
+    let source = repo();
+    let data = tempfile::tempdir().unwrap();
+    let roots = data.path().join("runs");
+    fs::create_dir(&roots).unwrap();
+    let roots = fs::canonicalize(roots).unwrap();
+    let inspected = inspect_repository(source.path()).unwrap();
+    let mut store = Store::open(&data.path().join("state.db")).unwrap();
+    let run = store.create_run("recover", &["design"]).unwrap();
+    let path = roots.join(&run);
+    let branch = format!("archmage/run-{run}");
+    store
+        .record_workspace_intent(
+            &run,
+            inspected.root.to_str().unwrap(),
+            path.to_str().unwrap(),
+            &branch,
+            &inspected.baseline,
+            inspected.common_dir.to_str().unwrap(),
+        )
+        .unwrap();
+    git(
+        source.path(),
+        &[
+            "worktree",
+            "add",
+            "-b",
+            &branch,
+            path.to_str().unwrap(),
+            &inspected.baseline,
+        ],
+    );
+
+    let recovered = reconcile(&mut store, &run).unwrap();
+
+    assert_eq!(recovered.state, ProvisionState::Ready);
+    assert_eq!(store.run(&run).unwrap().state, "running");
+}
+
+#[test]
+fn changeset_publishes_tracked_patch_and_untracked_content() {
+    let source = repo();
+    fs::write(source.path().join("tracked.txt"), "changed\n").unwrap();
+    fs::write(source.path().join("new.bin"), [0_u8, 255, 7]).unwrap();
+    let inspected = inspect_repository(source.path()).unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&data.path().join("state.db")).unwrap();
+    let run = store.create_run("changes", &["code"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let node = store.nodes(&run).unwrap()[0].id.clone();
+    store.ready_node(&node, 0).unwrap();
+    let attempt = store.begin_attempt(&node, 1).unwrap();
+    store.mark_running(&attempt.id, 0).unwrap();
+    let artifacts = ArtifactStore::open(&data.path().join("artifacts")).unwrap();
+
+    let changes = publish_changeset(&artifacts, &mut store, &attempt.id, &inspected).unwrap();
+    store
+        .finish_attempt(
+            &attempt.id,
+            1,
+            AttemptOutcome::Succeeded(serde_json::json!({})),
+        )
+        .unwrap();
+
+    let patch = artifacts
+        .read_committed(&store, &changes.tracked_patch_artifact)
+        .unwrap();
+    assert!(String::from_utf8_lossy(&patch).contains("+changed"));
+    assert_eq!(changes.untracked.len(), 1);
+    assert_eq!(changes.untracked[0].path, "new.bin");
+    assert_eq!(
+        artifacts
+            .read_committed(&store, &changes.untracked[0].artifact_id)
+            .unwrap(),
+        [0_u8, 255, 7]
+    );
+    assert!(
+        artifacts
+            .read_committed(&store, &changes.manifest_artifact)
+            .is_ok()
+    );
 }

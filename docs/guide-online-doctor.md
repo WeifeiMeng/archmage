@@ -33,4 +33,4 @@ cargo test -p archmage-cli --test doctor_live -- --ignored --nocapture
 
 ## 已知边界
 
-当前 subprocess 仅管理直接子进程；进程组取消和崩溃归属恢复仍在 B 批次。Core 已有真实 Git Worktree provisioning 与内容级 Snapshot 基础，但尚未接入 `run`。当前只读探针不是通用 Agent invocation，也不代表四个能力协作已完成。
+Unix subprocess 已使用独立 process group，超时和显式取消会校验启动身份并执行 TERM/KILL；数据库 owner generation 和完整崩溃恢复编排仍待后续 Runtime。Core 已有真实 Git Worktree provisioning、精确恢复对账、ChangeSet Artifact 与内容级 Snapshot，但尚未接入 `run`。当前只读探针不是通用 Agent invocation，也不代表四个能力协作已完成。

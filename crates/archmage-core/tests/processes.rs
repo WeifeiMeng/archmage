@@ -1,5 +1,16 @@
-use archmage_core::process::capture;
-use archmage_core::process::{Stream, capture_observed};
+#![cfg(unix)]
+
+use archmage_core::process::{ProcessIdentity, Stream, capture, capture_observed, spawn_owned};
+use std::{
+    ffi::OsString,
+    fs,
+    path::Path,
+    time::{Duration, Instant},
+};
+
+fn alive(pid: i32) -> bool {
+    unsafe { libc::kill(pid, 0) == 0 }
+}
 
 #[tokio::test]
 async fn observer_sees_bytes_before_process_exits() {
@@ -28,7 +39,6 @@ async fn observer_sees_bytes_before_process_exits() {
     assert_eq!(out.code, Some(0));
     assert_eq!(out.stderr, b"done");
 }
-use std::{ffi::OsString, path::Path, time::Duration};
 
 #[tokio::test]
 async fn captures_real_stdout_stderr_and_exit() {
@@ -50,12 +60,12 @@ async fn captures_real_stdout_stderr_and_exit() {
     assert_eq!(result.stdout, b"out");
     assert_eq!(result.stderr, b"err");
 }
+
 #[tokio::test]
-async fn deadline_terminates_direct_process() {
-    let args = vec!["10".into()];
+async fn deadline_terminates_process_group() {
     let result = capture(
         Path::new("/bin/sleep"),
-        &args,
+        &["10".into()],
         None,
         b"",
         Duration::from_millis(50),
@@ -64,19 +74,106 @@ async fn deadline_terminates_direct_process() {
     .await;
     assert!(result.unwrap_err().to_string().contains("timed_out"));
 }
+
 #[tokio::test]
 async fn output_limit_is_an_error_not_silent_truncation() {
-    let args = vec!["-c".into(), "printf 123456789".into()];
     assert!(
         capture(
             Path::new("/bin/sh"),
-            &args,
+            &["-c".into(), "printf 123456789".into()],
             None,
             b"",
             Duration::from_secs(5),
-            4
+            4,
         )
         .await
         .is_err()
     );
+}
+
+#[tokio::test]
+async fn cancellation_escalates_and_kills_the_process_group() {
+    let mut child = spawn_owned(
+        Path::new("/bin/sh"),
+        &[
+            OsString::from("-c"),
+            OsString::from("trap '' TERM; while :; do sleep 1; done"),
+        ],
+        None,
+    )
+    .await
+    .unwrap();
+    let identity = child.identity().clone();
+    let started = Instant::now();
+
+    child
+        .cancel(&identity, Duration::from_millis(100))
+        .await
+        .unwrap();
+
+    assert!(started.elapsed() >= Duration::from_millis(90));
+    assert!(!alive(identity.pid as i32));
+}
+
+#[tokio::test]
+async fn stale_identity_is_rejected_without_signalling() {
+    let mut child = spawn_owned(
+        Path::new("/bin/sh"),
+        &[
+            OsString::from("-c"),
+            OsString::from("while :; do sleep 1; done"),
+        ],
+        None,
+    )
+    .await
+    .unwrap();
+    let correct = child.identity().clone();
+    let stale = ProcessIdentity {
+        started: "wrong".into(),
+        ..correct.clone()
+    };
+
+    assert!(
+        child
+            .cancel(&stale, Duration::from_millis(50))
+            .await
+            .is_err()
+    );
+    assert!(alive(correct.pid as i32));
+    child
+        .cancel(&correct, Duration::from_millis(100))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn capture_timeout_kills_background_children() {
+    let dir = tempfile::tempdir().unwrap();
+    let pid_file = dir.path().join("child.pid");
+    let script = format!(
+        "trap '' TERM; (trap '' TERM; while :; do sleep 1; done) & echo $! > '{}'; while :; do sleep 1; done",
+        pid_file.display()
+    );
+    let result = capture(
+        Path::new("/bin/sh"),
+        &[OsString::from("-c"), OsString::from(script)],
+        None,
+        b"",
+        Duration::from_millis(150),
+        1024,
+    )
+    .await;
+    assert!(result.is_err());
+    let pid: i32 = fs::read_to_string(pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    for _ in 0..20 {
+        if !alive(pid) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    panic!("background child {pid} survived timeout");
 }
