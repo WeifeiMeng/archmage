@@ -132,9 +132,11 @@ cargo test -p archmage-core --test persistence
 cargo test -p archmage-core --test artifacts
 cargo test -p archmage-core --test workspace
 cargo test -p archmage-core --test processes
+cargo test -p archmage-core --test ownership
+cargo test -p archmage-core --test contracts
 ```
 
-Worktree 测试验证 committed baseline 隔离、partial provisioning 对账和 ChangeSet Artifact。进程测试仅启动普通本地 shell，验证双流读取、输出上限、进程启动身份，以及 TERM → bounded wait → KILL 对整个进程组的清理。
+Worktree 测试验证 committed baseline 隔离、partial provisioning 对账和 ChangeSet Artifact。进程测试仅启动普通本地 shell，验证双流读取、输出上限、进程启动身份，以及 TERM → bounded wait → KILL 对整个进程组的清理。ownership 测试验证单 Run OS lock 和旧 generation 不能提交结果；contracts 测试验证四个 Capability 的严格输出和业务不变量。
 
 当前这些 Worktree API 仍是 Core 能力，尚未暴露为可执行的 `archmage run`。
 
@@ -184,6 +186,6 @@ Archmage 使用当前终端的 `PATH`。如果尚未登录，运行 `codex login
 
 ### `workflow command is not implemented in this batch`
 
-这是 `run/status/logs/resume/cancel` 的当前预期行为。接下来还需要 owner generation/Run lock、四个 Capability Contract、Context/Handoff、Check Runner 和调度器，才会开放纵向工作流。
+这是 `run/status/logs/resume/cancel` 的当前预期行为。owner generation、Run lock 和四个 Capability Contract 已在 Core 完成；还需要 Context/Handoff、Check Runner 和调度器，才会开放纵向工作流。
 
 详细进度见 [B 批次进度](acceptance/s0/batch-b-progress.md)，总体范围见 [S0 实现计划](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)。

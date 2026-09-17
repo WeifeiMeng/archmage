@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["schema_version","summary_markdown","status","changed_paths","notes"],"properties":{"schema_version":{"const":"1"},"summary_markdown":{"type":"string"},"status":{"enum":["implemented","blocked"]},"changed_paths":{"type":"array","items":{"type":"string"}},"notes":{"type":"array","items":{"type":"string"}}}}
