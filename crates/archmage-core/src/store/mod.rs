@@ -58,6 +58,13 @@ pub struct WorkspaceRecord {
     pub state: String,
     pub revision: i64,
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Handoff {
+    pub input_key: String,
+    pub artifact_id: String,
+    pub content_hash: String,
+    pub producer_attempt_id: String,
+}
 pub enum AttemptOutcome {
     /// Caller must have validated the contract. This is a ledger write, not a validation bypass API.
     Succeeded(Value),
@@ -102,6 +109,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0001_initial.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0002_workspaces.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0003_ownership.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0004_contexts.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -116,7 +124,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0003_ownership.sql"))?;
                 version = 3;
             }
-            if version != 3 {
+            if version == 3 {
+                tx.execute_batch(include_str!("../../migrations/0004_contexts.sql"))?;
+                version = 4;
+            }
+            if version != 4 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -179,6 +191,25 @@ impl Store {
                 schema_version: r.get(5)?,
                 payload: parse_json(r.get::<_, String>(6)?, 6)?,
                 created_at: r.get(7)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+    pub fn attempt_context(&self, attempt: &str) -> Result<String> {
+        Ok(self.db.query_row(
+            "SELECT context_id FROM attempts WHERE id=?1",
+            [attempt],
+            |r| r.get(0),
+        )?)
+    }
+    pub fn handoffs_for_context(&self, context: &str) -> Result<Vec<Handoff>> {
+        let mut q = self.db.prepare("SELECT input_key,artifact_id,content_hash,producer_attempt_id FROM handoffs WHERE context_id=?1 ORDER BY input_key")?;
+        Ok(q.query_map([context], |r| {
+            Ok(Handoff {
+                input_key: r.get(0)?,
+                artifact_id: r.get(1)?,
+                content_hash: r.get(2)?,
+                producer_attempt_id: r.get(3)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?)

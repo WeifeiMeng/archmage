@@ -14,6 +14,11 @@ use std::{
 pub struct ArtifactStore {
     root: PathBuf,
 }
+pub struct CommittedArtifact {
+    pub bytes: Vec<u8>,
+    pub sha256: String,
+    pub producer_attempt_id: String,
+}
 const MAX_BYTES: usize = 16 * 1024 * 1024;
 
 impl ArtifactStore {
@@ -80,14 +85,18 @@ impl ArtifactStore {
     }
 
     pub fn read_committed(&self, store: &Store, id: &str) -> Result<Vec<u8>> {
+        Ok(self.read_committed_info(store, id)?.bytes)
+    }
+
+    pub fn read_committed_info(&self, store: &Store, id: &str) -> Result<CommittedArtifact> {
         let parsed = uuid::Uuid::parse_str(id)
             .map_err(|_| Error::Preflight("invalid artifact ID".into()))?;
         if parsed.to_string() != id {
             return Err(Error::Preflight("noncanonical artifact ID".into()));
         }
-        let (hash,len):(String,i64)=store.db.query_row(
-            "SELECT f.content_hash,f.byte_length FROM artifacts f JOIN attempts a ON a.id=f.attempt_id WHERE f.id=?1 AND a.state='succeeded'",
-            [id],|r|Ok((r.get(0)?,r.get(1)?)))?;
+        let (hash,len,producer_attempt_id):(String,i64,String)=store.db.query_row(
+            "SELECT f.content_hash,f.byte_length,f.attempt_id FROM artifacts f JOIN attempts a ON a.id=f.attempt_id WHERE f.id=?1 AND a.state='succeeded'",
+            [id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
         let path = self.root.join(id);
         if !fs::symlink_metadata(&path)?.file_type().is_file() {
             return Err(Error::Preflight("artifact must be a regular file".into()));
@@ -102,6 +111,10 @@ impl ArtifactStore {
         {
             return Err(Error::Preflight("artifact content integrity failed".into()));
         }
-        Ok(bytes)
+        Ok(CommittedArtifact {
+            bytes,
+            sha256: hash,
+            producer_attempt_id,
+        })
     }
 }

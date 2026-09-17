@@ -1,4 +1,5 @@
 use super::{Attempt, AttemptOutcome, Store};
+use crate::context::ContextSnapshot;
 use crate::error::{Error, Result};
 use crate::process::ProcessIdentity;
 use rusqlite::{Transaction, TransactionBehavior, params};
@@ -27,6 +28,48 @@ pub(crate) fn event(
     Ok(())
 }
 impl Store {
+    pub fn persist_context(
+        &mut self,
+        run: &str,
+        node: &str,
+        snapshot: &ContextSnapshot,
+    ) -> Result<String> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let belongs: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM node_runs WHERE id=?1 AND run_id=?2)",
+            params![node, run],
+            |r| r.get(0),
+        )?;
+        if !belongs {
+            return Err(Error::Conflict);
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        tx.execute("INSERT INTO contexts(id,run_id,consumer_node_id,content_hash,prompt_version,rendered_bytes,manifest_json) VALUES(?1,?2,?3,?4,?5,?6,?7)", params![id,run,node,snapshot.hash,snapshot.prompt_version,snapshot.rendered,snapshot.manifest.to_string()])?;
+        for handoff in &snapshot.handoffs {
+            let valid: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM artifacts f JOIN attempts a ON a.id=f.attempt_id WHERE f.id=?1 AND f.attempt_id=?2 AND f.content_hash=?3 AND a.state='succeeded')",params![handoff.artifact_id,handoff.producer_attempt_id,handoff.content_hash],|r|r.get(0))?;
+            if !valid {
+                return Err(Error::Conflict);
+            }
+            tx.execute("INSERT INTO handoffs(id,context_id,producer_attempt_id,artifact_id,consumer_node_id,input_key,content_hash) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![uuid::Uuid::new_v4().to_string(),id,handoff.producer_attempt_id,handoff.artifact_id,node,handoff.input_key,handoff.content_hash])?;
+        }
+        event(
+            &tx,
+            run,
+            "context.created",
+            Some(node),
+            None,
+            json!({"id":id,"sha256":snapshot.hash}),
+        )?;
+        tx.commit()?;
+        Ok(id)
+    }
+
+    pub fn bind_attempt_context(&mut self, attempt: &str, context: &str) -> Result<()> {
+        changed(self.db.execute("UPDATE attempts SET context_id=?2 WHERE id=?1 AND state='starting' AND context_id IS NULL AND EXISTS(SELECT 1 FROM contexts c WHERE c.id=?2 AND c.consumer_node_id=attempts.node_run_id)",params![attempt,context])?)
+    }
+
     pub fn claim_run_owner(&mut self, run: &str) -> Result<i64> {
         let tx = self
             .db
