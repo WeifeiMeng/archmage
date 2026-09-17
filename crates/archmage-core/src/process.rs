@@ -151,8 +151,20 @@ impl OwnedProcess {
 #[derive(Debug)]
 pub struct Captured {
     pub code: Option<i32>,
+    pub signal: Option<i32>,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
+}
+
+#[cfg(unix)]
+fn exit_signal(status: &ExitStatus) -> Option<i32> {
+    use std::os::unix::process::ExitStatusExt;
+    status.signal()
+}
+
+#[cfg(not(unix))]
+fn exit_signal(_status: &ExitStatus) -> Option<i32> {
+    None
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -192,6 +204,61 @@ pub async fn capture(
     max: usize,
 ) -> Result<Captured> {
     capture_observed(binary, args, cwd, input, deadline, max, |_, _| Ok(())).await
+}
+
+pub async fn capture_clean(
+    binary: &Path,
+    args: &[OsString],
+    cwd: &Path,
+    deadline: Duration,
+    max: usize,
+    environment: &[(OsString, OsString)],
+) -> Result<Captured> {
+    let observer = std::cell::RefCell::new(|_: Stream, _: &[u8]| Ok(()));
+    let mut command = Command::new(binary);
+    command
+        .args(args)
+        .current_dir(cwd)
+        .env_clear()
+        .envs(environment.iter().cloned())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    configure_process_group(&mut command);
+    let mut child = command.spawn().map_err(|e| Error::Spawn(e.to_string()))?;
+    let pgid = child.id().map(|id| id as i32);
+    let stdout = child.stdout.take().expect("piped stdout");
+    let stderr = child.stderr.take().expect("piped stderr");
+    let work = async {
+        let (stdout, stderr, status) = tokio::try_join!(
+            bounded(stdout, max, Stream::Stdout, &observer),
+            bounded(stderr, max, Stream::Stderr, &observer),
+            async { Ok::<_, Error>(child.wait().await?) }
+        )?;
+        Ok(Captured {
+            code: status.code(),
+            signal: exit_signal(&status),
+            stdout,
+            stderr,
+        })
+    };
+    let result = match tokio::time::timeout(deadline, work).await {
+        Ok(result) => result,
+        Err(_) => Err(Error::TimedOut),
+    };
+    if result.is_err() {
+        #[cfg(unix)]
+        if let Some(pgid) = pgid {
+            let _ = signal_group(pgid, libc::SIGTERM);
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if group_exists(pgid) {
+                let _ = signal_group(pgid, libc::SIGKILL);
+            }
+        }
+        let _ = child.wait().await;
+    }
+    result
 }
 
 /// Observer runs while pipes are drained, before child exit. Errors stop capture.
@@ -237,6 +304,7 @@ pub async fn capture_observed(
         )?;
         Ok(Captured {
             code: status.code(),
+            signal: exit_signal(&status),
             stdout,
             stderr,
         })

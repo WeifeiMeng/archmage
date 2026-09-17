@@ -110,6 +110,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0002_workspaces.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0003_ownership.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0004_contexts.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0005_checks.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -128,7 +129,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0004_contexts.sql"))?;
                 version = 4;
             }
-            if version != 4 {
+            if version == 4 {
+                tx.execute_batch(include_str!("../../migrations/0005_checks.sql"))?;
+                version = 5;
+            }
+            if version != 5 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));

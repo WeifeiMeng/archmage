@@ -332,15 +332,15 @@ COMMIT;
 **Create:** `check_runner.rs`、`tests/checks.rs`。
 **Modify:** `args.rs`、`main.rs`、`tester.md`、`store/transitions.rs`、`process.rs`。
 
-- [ ] 内部子命令 `archmage internal check --endpoint <socket> --attempt <id> --check <id>` 仅向活跃 Runtime 请求已冻结的 check ID，不能接受模型传入任意命令或数据目录。
-- [ ] Runtime 负责 check 的真正启动和输出落盘。Tester 仍决定调用、理解证据并形成 TestResult；Runtime 不替代 Tester 生成能力结论。
-- [ ] helper 与 parent 使用每 attempt 短生命周期 Unix socket；验证 attempt 活跃、owner generation、请求归属和固定 check ID。证明 Codex 当前 sandbox 能连接此 socket；否则停止该任务报告兼容性，不开启 full access。
-- [ ] `--check` 是用户显式授权的 shell command。只此入口使用 `/bin/sh -c`，cwd 固定为 worktree；stdin 关闭；环境 allowlist，排除 provider auth；日志显示 shell/command/cwd/timeout。
-- [ ] parent 运行 check 也必须受支持的 workspace sandbox 限制，不能把 helper 做成 Codex sandbox 绕过通道。实现时使用 Provider 实际支持的 sandbox launcher 并以真实 read/write escape probe 验证；不支持就明确阻塞 check 执行。
-- [ ] 测试矩阵：exit 0、exit 7、timeout、unknown ID、过期 attempt、重复请求、另一 attempt evidence、漏跑项、source 改动、必跑失败却 passed。普通 check shell 进程不是 Agent 模拟器。
-- [ ] `cargo test -p archmage-core --test checks` 红绿通过。证据包含执行 command、exit/signal、start/end/duration、stdout/stderr hashes、check ID、attempt、workspace before/after manifest。
-- [ ] check 非零也返回 evidence 给 Tester；transport failure/证据丢失才使能力失败。模型不能写 canonical evidence，重复请求返回已完成 evidence 或明确 in-progress，不双重执行。
-- [ ] 真实 Codex Tester 运行一个成功 check 和一个失败 check，验证 TestResult=`failed`。提交 `feat: capture tester-invoked validation evidence`。
+- [x] 内部子命令 `archmage internal check --endpoint <socket> --attempt <id> --check <id>` 仅向活跃 Runtime 请求已冻结的 check ID，不能接受模型传入任意命令或数据目录。
+- [x] Runtime 负责 check 的真正启动和输出落盘。Tester 仍决定调用、理解证据并形成 TestResult；Runtime 不替代 Tester 生成能力结论。
+- [x] helper 与 parent 使用每 attempt 短生命周期 Unix socket；验证 attempt 活跃、owner generation、请求归属和固定 check ID。证明 Codex 当前 sandbox 能连接此 socket；否则停止该任务报告兼容性，不开启 full access。
+- [x] `--check` 是用户显式授权的 shell command。只此入口使用 `/bin/sh -c`，cwd 固定为 worktree；stdin 关闭；环境 allowlist，排除 provider auth；日志显示 shell/command/cwd/timeout。
+- [x] parent 运行 check 也必须受支持的 workspace sandbox 限制，不能把 helper 做成 Codex sandbox 绕过通道。实现时使用 Provider 实际支持的 sandbox launcher 并以真实 read/write escape probe 验证；不支持就明确阻塞 check 执行。
+- [x] 测试矩阵：exit 0、exit 7、timeout、unknown ID、过期 attempt、重复请求、另一 attempt evidence、漏跑项、source 改动、必跑失败却 passed。普通 check shell 进程不是 Agent 模拟器。
+- [x] `cargo test -p archmage-core --test checks` 红绿通过。证据包含执行 command、exit/signal、start/end/duration、stdout/stderr hashes、check ID、attempt、workspace before/after manifest。
+- [x] check 非零也返回 evidence 给 Tester；transport failure/证据丢失才使能力失败。模型不能写 canonical evidence，重复请求返回已完成 evidence 或明确 in-progress，不双重执行。
+- [x] 真实 Codex Tester 运行一个成功 check 和一个失败 check，验证 TestResult=`failed`。提交 `feat: capture tester-invoked validation evidence`。
 
 实现前的定向兼容性核对：读取已安装 CLI 的 `codex sandbox --help` 及本平台子命令帮助，确认支持的 argv、网络策略、工作目录与环境传递。使用一个 disposable repo 验证允许在 run worktree 创建 build output、禁止写 sibling source、socket helper 可用且无额外 shell 权限。这里验证的是支持能力，不预填未经观测的 CLI flag。官方资料只作为本机帮助不足时的补充。任何一项失败都属于 C 批次工程阻塞，不能降低边界后标为通过。
 

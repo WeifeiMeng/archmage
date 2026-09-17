@@ -126,6 +126,31 @@ pub fn validate_builtin_schemas() -> Result<()> {
         if value["type"] != "object" || value["additionalProperties"] != false {
             return Err(invalid("builtin schema root must be strict object"));
         }
+        require_explicit_types(&value)?;
+    }
+    Ok(())
+}
+
+fn require_explicit_types(value: &Value) -> Result<()> {
+    match value {
+        Value::Object(object) => {
+            if (object.contains_key("const") || object.contains_key("enum"))
+                && !object.contains_key("type")
+            {
+                return Err(invalid(
+                    "const and enum schema nodes require an explicit type",
+                ));
+            }
+            for child in object.values() {
+                require_explicit_types(child)?;
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                require_explicit_types(child)?;
+            }
+        }
+        _ => {}
     }
     Ok(())
 }

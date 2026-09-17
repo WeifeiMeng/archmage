@@ -1,6 +1,7 @@
 //! UI-independent collaboration runtime.
 pub mod artifact;
 pub mod capability;
+pub mod check_runner;
 pub mod config;
 pub mod context;
 pub mod contract;

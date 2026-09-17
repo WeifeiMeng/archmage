@@ -58,6 +58,22 @@ fn blank_goal_is_rejected() {
 }
 
 #[test]
+fn internal_check_requires_only_endpoint_attempt_and_check() {
+    let output = cli()
+        .args(["internal", "check", "--attempt", "a", "--check", "unit"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let help = cli()
+        .args(["internal", "check", "--help"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8(help.stdout).unwrap();
+    assert!(text.contains("--endpoint") && text.contains("--attempt") && text.contains("--check"));
+    assert!(!text.contains("--command") && !text.contains("--repo"));
+}
+
+#[test]
 #[ignore = "requires installed local Codex and Git; no model request"]
 fn offline_doctor_opens_database_without_auth_probe() {
     let temp = tempfile::tempdir().unwrap();
@@ -69,7 +85,7 @@ fn offline_doctor_opens_database_without_auth_probe() {
         .unwrap();
     assert!(out.status.success());
     let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(value["database"]["schema_version"], 4);
+    assert_eq!(value["database"]["schema_version"], 5);
     assert_eq!(value["authentication"], "not_verified_offline");
     assert!(root.join("archmage.db").is_file());
 }

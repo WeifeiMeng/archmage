@@ -44,6 +44,23 @@ pub enum Commands {
     Resume { run_id: String },
     /// Request cancellation.
     Cancel { run_id: String },
+    #[command(hide = true)]
+    Internal {
+        #[command(subcommand)]
+        command: InternalCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum InternalCommands {
+    Check {
+        #[arg(long)]
+        endpoint: PathBuf,
+        #[arg(long)]
+        attempt: String,
+        #[arg(long)]
+        check: String,
+    },
 }
 
 fn nonblank(value: &str) -> Result<String, String> {

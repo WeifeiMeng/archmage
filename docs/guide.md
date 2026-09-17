@@ -1,22 +1,22 @@
 # 当前版本使用指南
 
-更新日期：2026-09-17。本文以开发分支 `feat/s0-codex` 为准，描述当前代码实际可用的入口。
+更新日期：2026-09-17。本文以开发分支 `codex/s0-runtime-fencing` 为准，描述当前代码实际可用的入口。
 
 ## 当前可以做什么
 
-当前版本可以构建 CLI、检查本机 Git/Codex 环境、初始化本地 SQLite 数据库，并通过在线 `doctor` 调用真实 Codex。Core 已具备事务执行账本、不可变 Artifact 存储，以及真实 Git Worktree provisioning 和内容级 Snapshot 基础能力。
+当前版本可以构建 CLI、检查本机 Git/Codex 环境、初始化本地 SQLite 数据库，并通过在线 `doctor` 调用真实 Codex。Core 已具备事务执行账本、不可变 Artifact、真实 Git Worktree、Capability Contract/Context/Handoff，以及由真实 Codex Tester 发起的受限 Check Runner。
 
 `run`、`status`、`logs`、`resume`、`cancel` 仍只有参数解析，尚未连到完整的四能力工作流。看到帮助项不代表该工作流已经可用。
 
 ## 1. 进入开发 Worktree
 
 ```bash
-cd /Users/mengweifei/Desktop/code/github/archmage/.worktrees/s0-codex
+cd /Users/mengweifei/Desktop/code/github/archmage/.worktrees/s0-runtime-fencing
 git branch --show-current
 git log -1 --oneline
 ```
 
-预期分支是 `feat/s0-codex`。如果只想使用已经合入 `main` 的较早版本，可以回主目录；本指南的新数据库和 Worktree 能力以开发 Worktree 为准。
+预期分支是 `codex/s0-runtime-fencing`。如果只想使用已经合入 `main` 的较早版本，可以回主目录；本指南的新 Runtime fencing、Contract 和 Check Runner 能力以开发 Worktree 为准。
 
 ## 2. 检查依赖
 
@@ -70,7 +70,7 @@ cargo run -p archmage-cli -- doctor --offline
 {
   "authentication": "not_verified_offline",
   "database": {
-    "schema_version": 4,
+    "schema_version": 5,
     "foreign_keys": true,
     "synchronous": 2,
     "journal_mode": "wal",
@@ -135,9 +135,21 @@ cargo test -p archmage-core --test processes
 cargo test -p archmage-core --test ownership
 cargo test -p archmage-core --test contracts
 cargo test -p archmage-core --test context
+cargo test -p archmage-core --test checks
 ```
 
-Worktree 测试验证 committed baseline 隔离、partial provisioning 对账和 ChangeSet Artifact。进程测试仅启动普通本地 shell，验证双流读取、输出上限、进程启动身份，以及 TERM → bounded wait → KILL 对整个进程组的清理。ownership 测试验证单 Run OS lock 和旧 generation 不能提交结果；contracts 测试验证四个 Capability 的严格输出和业务不变量。
+Worktree 测试验证 committed baseline 隔离、partial provisioning 对账和 ChangeSet Artifact。进程测试验证双流读取、输出上限、进程启动身份，以及 TERM → bounded wait → KILL 对整个进程组的清理。ownership 测试验证单 Run OS lock 和旧 generation 不能提交结果；contracts 测试验证四个 Capability 的严格输出和业务不变量；checks 测试用真实 Codex sandbox 执行普通 shell check，但不调用模型。
+
+要运行真实 Codex Tester 验收，先构建 CLI，再显式运行 ignored 测试：
+
+```bash
+cargo build -p archmage-cli
+cargo test -p archmage-core --test checks_live \
+  real_tester_requests_success_and_failure_evidence \
+  -- --ignored --nocapture
+```
+
+该测试会产生真实模型调用。Tester 只能通过 attempt 专属 Unix socket 请求冻结的 check ID；命令、cwd、timeout、exit/signal、stdout/stderr hash 与 Artifact、执行时间和工作区前后 Snapshot 都由 Runtime 形成 canonical evidence。失败 check 仍返回 evidence，只有传输或证据故障才视为能力失败。`archmage internal check` 是隐藏的内部协议，不是面向用户手工运行的命令。
 
 当前这些 Worktree API 仍是 Core 能力，尚未暴露为可执行的 `archmage run`。
 
@@ -187,6 +199,6 @@ Archmage 使用当前终端的 `PATH`。如果尚未登录，运行 `codex login
 
 ### `workflow command is not implemented in this batch`
 
-这是 `run/status/logs/resume/cancel` 的当前预期行为。owner generation、Run lock、四个 Capability Contract 和 Context/Handoff 已在 Core 完成；还需要 Check Runner 和调度器，才会开放纵向工作流。
+这是 `run/status/logs/resume/cancel` 的当前预期行为。owner generation、Run lock、四个 Capability Contract、Context/Handoff 和 Check Runner 已在 Core 完成；还需要 Ready Set 调度器与 Runtime 主链，才会开放纵向工作流。
 
-详细进度见 [B 批次进度](acceptance/s0/batch-b-progress.md)，总体范围见 [S0 实现计划](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)。
+详细进度见 [C 批次进度](acceptance/s0/batch-c-progress.md)，总体范围见 [S0 实现计划](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)。

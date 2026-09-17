@@ -12,6 +12,30 @@ async fn main() {
 async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
     use archmage_core::{config::Config, error::Error, provider::codex};
     match args.command {
+        args::Commands::Internal { command } => match command {
+            args::InternalCommands::Check {
+                endpoint,
+                attempt,
+                check,
+            } => {
+                #[cfg(unix)]
+                {
+                    let evidence =
+                        archmage_core::check_runner::request_check(&endpoint, &attempt, &check)
+                            .await?;
+                    println!(
+                        "{}",
+                        serde_json::to_string(&evidence)
+                            .map_err(|e| Error::Preflight(e.to_string()))?
+                    );
+                    Ok(())
+                }
+                #[cfg(not(unix))]
+                Err(Error::Preflight(
+                    "internal check helper requires Unix sockets".into(),
+                ))
+            }
+        },
         args::Commands::Doctor { offline } => {
             let tools = codex::inspect().await?;
             let root = std::env::var_os("ARCHMAGE_HOME").map(std::path::PathBuf::from);
