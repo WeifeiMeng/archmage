@@ -26,6 +26,66 @@ pub(crate) fn event(
     Ok(())
 }
 impl Store {
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_workspace_intent(
+        &mut self,
+        run: &str,
+        source_root: &str,
+        path: &str,
+        branch: &str,
+        baseline: &str,
+        common_dir: &str,
+    ) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE runs SET state='provisioning',revision=revision+1 WHERE id=?1 AND state='created'",
+            [run],
+        )?)?;
+        tx.execute(
+            "INSERT INTO workspaces(id,run_id,source_root,path,branch,baseline,common_dir,state)
+             VALUES(?1,?2,?3,?4,?5,?6,?7,'provisioning')",
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                run,
+                source_root,
+                path,
+                branch,
+                baseline,
+                common_dir
+            ],
+        )?;
+        event(
+            &tx,
+            run,
+            "workspace.provisioning",
+            None,
+            None,
+            json!({"path":path,"branch":branch,"baseline":baseline}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn complete_workspace(&mut self, run: &str) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE workspaces SET state='ready',revision=revision+1 WHERE run_id=?1 AND state='provisioning'",
+            [run],
+        )?)?;
+        changed(tx.execute(
+            "UPDATE runs SET state='running',revision=revision+1 WHERE id=?1 AND state='provisioning'",
+            [run],
+        )?)?;
+        event(&tx, run, "workspace.created", None, None, json!({}))?;
+        event(&tx, run, "workflow.started", None, None, json!({}))?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn create_run(&mut self, goal: &str, nodes: &[&str]) -> Result<String> {
         if goal.trim().is_empty() || nodes.is_empty() || nodes.iter().any(|s| s.trim().is_empty()) {
             return Err(Error::Preflight(

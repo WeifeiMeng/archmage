@@ -46,6 +46,18 @@ pub struct Attempt {
     pub revision: i64,
     pub output: Option<Value>,
 }
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct WorkspaceRecord {
+    pub id: String,
+    pub run_id: String,
+    pub source_root: String,
+    pub path: String,
+    pub branch: String,
+    pub baseline: String,
+    pub common_dir: String,
+    pub state: String,
+    pub revision: i64,
+}
 pub enum AttemptOutcome {
     /// Caller must have validated the contract. This is a ledger write, not a validation bypass API.
     Succeeded(Value),
@@ -88,13 +100,18 @@ impl Store {
             [], |r| r.get(0))?;
         if !has_schema {
             tx.execute_batch(include_str!("../../migrations/0001_initial.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0002_workspaces.sql"))?;
         } else {
-            let version: i64 = tx.query_row(
+            let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
                 [],
                 |r| r.get(0),
             )?;
-            if version != 1 {
+            if version == 1 {
+                tx.execute_batch(include_str!("../../migrations/0002_workspaces.sql"))?;
+                version = 2;
+            }
+            if version != 2 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -138,6 +155,13 @@ impl Store {
     pub fn attempt(&self, id: &str) -> Result<Attempt> {
         Ok(self.db.query_row("SELECT id,node_run_id,attempt_number,state,revision,output_json FROM attempts WHERE id=?1", [id], attempt_row)?)
     }
+    pub fn workspace_for_run(&self, run: &str) -> Result<WorkspaceRecord> {
+        Ok(self.db.query_row(
+            "SELECT id,run_id,source_root,path,branch,baseline,common_dir,state,revision FROM workspaces WHERE run_id=?1",
+            [run],
+            workspace_row,
+        )?)
+    }
     pub fn events(&self, run: &str, after: i64) -> Result<Vec<Event>> {
         let mut q=self.db.prepare("SELECT run_id,event_seq,event_type,node_id,attempt_id,schema_version,payload_json,created_at FROM events WHERE run_id=?1 AND event_seq>?2 ORDER BY event_seq")?;
         Ok(q.query_map(rusqlite::params![run, after], |r| {
@@ -154,6 +178,19 @@ impl Store {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?)
     }
+}
+fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {
+    Ok(WorkspaceRecord {
+        id: r.get(0)?,
+        run_id: r.get(1)?,
+        source_root: r.get(2)?,
+        path: r.get(3)?,
+        branch: r.get(4)?,
+        baseline: r.get(5)?,
+        common_dir: r.get(6)?,
+        state: r.get(7)?,
+        revision: r.get(8)?,
+    })
 }
 fn parse_json(text: String, column: usize) -> rusqlite::Result<Value> {
     serde_json::from_str(&text).map_err(|e| {

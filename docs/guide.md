@@ -1,38 +1,24 @@
 # 当前版本使用指南
 
-> **2026-09-17 更新：** 开发 Worktree 已支持在线 doctor、增量解析和持久化诊断日志，见 [在线 Doctor 使用说明](guide-online-doctor.md)。下文保留上次 main 版本的指南；其中“在线 doctor 未实现”仅适用于尚未合入本次更新的 main。
+更新日期：2026-09-17。本文以开发分支 `feat/s0-codex` 为准，描述当前代码实际可用的入口。
 
-更新日期：2026-09-16。适用范围：已合入本地 `main` 的 S0 A 批次阶段代码。
+## 当前可以做什么
 
-## 先说现在能做什么
+当前版本可以构建 CLI、检查本机 Git/Codex 环境、初始化本地 SQLite 数据库，并通过在线 `doctor` 调用真实 Codex。Core 已具备事务执行账本、不可变 Artifact 存储，以及真实 Git Worktree provisioning 和内容级 Snapshot 基础能力。
 
-目前是开发中的 CLI 原型，**还不能输入开发目标后自动完成设计、编码、测试、Review**。现在可以编译 CLI、检查本机运行条件，以及通过集成测试真正调用一次 Codex。
+`run`、`status`、`logs`、`resume`、`cancel` 仍只有参数解析，尚未连到完整的四能力工作流。看到帮助项不代表该工作流已经可用。
 
-| 入口 | 当前状态 |
-|---|---|
-| `--help`、`--version`、子命令 `--help` | 可用 |
-| `doctor --offline` | 可用：检查 Git/Codex、必要参数和本地数据目录 |
-| 真实只读 Codex 探针 | 可用，但入口暂时是 Cargo 集成测试 |
-| `doctor`（不带 `--offline`） | 尚未接入在线探针，返回未实现错误 |
-| `run`、`status`、`logs`、`resume`、`cancel` | 只有参数解析，业务尚未实现 |
-| 桌面 UI、持久化 Run、多能力协作 | 尚未实现 |
-
-帮助里出现某个命令，不代表它的业务已经实现。路线图、Spec 和实现计划描述的是目标，本指南描述的是当前实际行为。
-
-## 1. 进入正确的代码目录
-
-这台机器上，阶段代码已经合入本地主仓库，可以直接在主目录运行：
+## 1. 进入开发 Worktree
 
 ```bash
-cd /Users/mengweifei/Desktop/code/github/archmage
+cd /Users/mengweifei/Desktop/code/github/archmage/.worktrees/s0-codex
 git branch --show-current
+git log -1 --oneline
 ```
 
-预期分支为 `main`，该目录现在包含 `Cargo.toml`。后续命令均在这个目录运行。
+预期分支是 `feat/s0-codex`。如果只想使用已经合入 `main` 的较早版本，可以回主目录；本指南的新数据库和 Worktree 能力以开发 Worktree 为准。
 
-Provider 和探针代码已合入本地 `main`，尚未推送远端。重新 clone 远端仓库不一定包含这些能力。原来的 `.worktrees/s0-codex` 开发目录仍保留，但日常试用不需要切换过去。
-
-## 2. 检查前置工具
+## 2. 检查依赖
 
 ```bash
 rustc --version
@@ -42,128 +28,161 @@ codex --version
 codex login status
 ```
 
-当前验证环境：macOS、Rust/Cargo 1.95.0、Codex CLI 0.154.0，Codex 已通过 ChatGPT 登录。
+当前验证环境是 macOS、Rust/Cargo 1.95.0、Codex CLI 0.154.0。在线探针使用 Codex 当前登录和默认模型配置；Archmage 不会静默切换模型。
 
-工程的 `rust-toolchain.toml` 固定为 1.95.0；使用 rustup 时需要对应工具链。首次 Cargo 构建需要下载依赖。Codex 必须在当前终端的 `PATH` 中；未登录时先自行运行 `codex login`。不要把 token、API key 或认证文件内容粘贴到项目里。
-
-## 3. 编译并查看帮助
+## 3. 构建与查看命令
 
 ```bash
 cargo build -p archmage-cli
 ./target/debug/archmage --help
 ./target/debug/archmage --version
+./target/debug/archmage doctor --help
+./target/debug/archmage run --help
 ```
 
-版本输出为 `archmage 0.1.0`。目前不需要全局安装 Archmage，也不需要 Node.js 前端或 Tauri。
-
-也可以用 Cargo 直接运行：
+也可以不预先构建：
 
 ```bash
 cargo run -p archmage-cli -- --help
 ```
 
-第一个 `--` 将后面的参数传给 Archmage，而不是 Cargo。
+第一个 `--` 用于把后面的参数传给 Archmage。
 
-## 4. 运行本地诊断
+## 4. 设置独立数据目录
 
-为了便于找到数据，建议显式设置一个仓库之外的专用目录：
+建议为开发验证指定仓库外的专用目录：
 
 ```bash
-ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-dev" \
-  cargo run -p archmage-cli -- doctor --offline
+export ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-dev"
 ```
 
-这条命令会：
+该目录保存 `archmage.db` 和在线探针诊断。Unix 上新目录为 `0700`，敏感日志为 `0600`。不要把 `ARCHMAGE_HOME` 设为家目录、系统临时目录根或源码仓库目录，也不要提交或上传其中的原始诊断日志。
 
-- 定位 Git、Codex 可执行文件并读取版本。
-- 检查 Codex 是否支持所需的非交互参数。
-- 创建或验证 Archmage 数据目录，并通过临时文件检查可写性。
-- 输出 JSON，包括 `tools`、`config`、`authentication` 和 `database`。
+## 5. 不调用模型的离线诊断
 
-其中两个字段应当是：
+```bash
+cargo run -p archmage-cli -- doctor --offline
+```
+
+这条命令会检查 Git、Codex executable、必要 flags、数据目录和 SQLite。它不会请求模型，也不会验证账号是否真的能完成推理。成功 JSON 中应包含：
 
 ```json
 {
   "authentication": "not_verified_offline",
-  "database": "not_implemented_batch_b"
+  "database": {
+    "schema_version": 2,
+    "foreign_keys": true,
+    "synchronous": 2,
+    "journal_mode": "wal",
+    "busy_timeout_ms": 5000
+  }
 }
 ```
 
-这不是异常：离线诊断不调用模型，不验证认证是否可用于请求；数据库还未实现。退出码为 `0` 只代表这些本地检查通过，不代表工作流已可用。
+离线 doctor 会创建或打开 `$ARCHMAGE_HOME/archmage.db`，但不会创建 Workflow Run。
 
-不设置 `ARCHMAGE_HOME` 时采用系统应用数据目录，实际路径见输出的 `config.data_root`。Unix 上新建目录权限为 `0700`；已有目录权限过宽时会拒绝使用，不会自动修改已有目录权限。不要把该变量设置为家目录、临时目录根或源码仓库目录。
+## 6. 调用真实 Codex
 
-## 5. 真正调用一次 Codex
+```bash
+cargo run -p archmage-cli -- doctor
+```
 
-目前真实接入入口是这个显式启用的测试：
+该命令会明确提示即将进行在线请求，然后以 `read-only` sandbox 调用真实 `codex exec`。它使用本机账号和当前模型配置，可能消耗 Codex 使用额度。成功结果包含：
+
+- `authentication=verified`
+- 非空的 `probe.thread_id`
+- `probe.exit_code=0`
+- `probe.result={"ok":true}`
+- `probe.diagnostics_dir`
+
+每次调用都会在数据目录创建独立 `probe-*` 目录，保存 JSONL 事件、stderr、最终结果、Schema 和元数据。失败时目录同样保留，以便诊断。
+
+还可以直接运行两层真实接入测试：
 
 ```bash
 cargo test -p archmage-core --test codex_live real_readonly_probe \
   -- --ignored --nocapture
+
+cargo test -p archmage-cli --test doctor_live \
+  -- --ignored --nocapture
 ```
 
-它会使用你本机 Codex 的登录和默认模型配置，实际访问模型服务并消耗相应使用额度。没有模拟 Agent，也不会自动替换模型。
+这两条命令都会实际访问模型服务；普通 `cargo test` 默认忽略它们。
 
-执行过程：
+## 7. 查看本地数据库
 
-1. 创建临时 Git 仓库，不修改你的业务仓库。
-2. 以 `read-only` sandbox 启动真实 `codex exec`。
-3. 通过 stdin 发送只要求返回 `{"ok":true}` 的提示。
-4. 获取 JSONL 事件、独立 thread ID 和 Schema 约束的最终结果。
-5. 检查进程退出成功、完成事件存在、结果恰好符合探针 Contract。
-
-成功输出包含：
-
-```text
-version=codex-cli 0.154.0 thread=<实际生成的 ID> exit=0 result={"ok":true}
-test real_readonly_probe ... ok
-test result: ok. 1 passed; 0 failed; 0 ignored
-```
-
-`thread` 每次不同。探针调用限时 120 秒；网络、账号、配额或模型不兼容都会使测试失败。
-
-`--ignored` 是必须的：该测试为避免默认消耗额度而标记为忽略。只运行普通 `cargo test` 时看到 `ignored` 不代表真实接入验证通过。
-
-探针的临时仓库和结果文件在结束后清理；当前没有 Run ID、SQLite Timeline 或持久化探针日志。Codex 自身的会话存储不由这个临时目录清理。此次只证明连接与结构化输出可用，尚不是四个 Capability Agent 的协作验收。
-
-## 6. 跑开发检查
+先确保已运行一次 doctor，然后可用系统 `sqlite3` 做只读检查：
 
 ```bash
-cargo test --workspace
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+sqlite3 "$ARCHMAGE_HOME/archmage.db" \
+  'SELECT version, applied_at FROM schema_migrations ORDER BY version;'
+
+sqlite3 "$ARCHMAGE_HOME/archmage.db" \
+  'SELECT id, state, created_at FROM runs ORDER BY created_at DESC LIMIT 10;'
 ```
 
-目前离线测试覆盖 CLI 参数、读写兼容规则、目录权限与路径验证、JSONL 分片解析、进程双流输出、超时及输出大小限制。最近一次离线结果为 20 项通过、1 项真实 Codex 测试默认忽略。
+当前 doctor 不创建 Run，所以第二条通常没有输出。不要手工修改数据库；后续 Runtime 依赖 revision、外键和事件事务保持一致。
 
-## 7. 常见问题
+## 8. 验证持久化、Artifact 与真实 Worktree
 
-### `could not find Cargo.toml`
+这些命令不调用模型，但会使用临时 SQLite 数据库和临时真实 Git 仓库：
 
-当前目录不包含源码，或使用了尚未更新的远端 checkout。回到第 1 节的本地主仓库绝对路径，确认存在 `Cargo.toml`。
+```bash
+cargo test -p archmage-core --test persistence
+cargo test -p archmage-core --test artifacts
+cargo test -p archmage-core --test workspace
+```
+
+Worktree 测试验证 committed baseline 隔离：源仓库的 dirty tracked/untracked 内容不会被复制进 Run Worktree。它还覆盖路径碰撞保留 provisioning intent，以及 staged、unstaged、untracked、binary、symlink 的内容级 Snapshot 变化。
+
+当前这些 Worktree API 仍是 Core 能力，尚未暴露为可执行的 `archmage run`。
+
+## 9. 完整开发检查
+
+```bash
+cargo fmt --all --check
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+git diff --check
+```
+
+普通测试不会调用真实 Codex；输出中的 ignored 是额度保护，不代表在线门禁已通过。
+
+## 10. 尚未可用的工作流命令
+
+以下命令已经定义参数，但当前会返回退出码 `20` 和 `not implemented`：
+
+```bash
+cargo run -p archmage-cli -- run \
+  --repo /absolute/path/to/repository \
+  --goal "实现目标" \
+  --check "cargo test"
+
+cargo run -p archmage-cli -- status <run-id> --json
+cargo run -p archmage-cli -- logs <run-id> --follow
+cargo run -p archmage-cli -- resume <run-id>
+cargo run -p archmage-cli -- cancel <run-id>
+```
+
+这些命令列在这里是为了说明最终接口形态，不是当前可用示例。现在还没有通过 CLI 产生的 Run ID。
+
+## 常见问题
 
 ### `codex executable not found on PATH`
 
-在同一终端运行 `command -v codex`。Archmage 使用当前终端 PATH，不读取桌面应用内部的 Codex 二进制路径。
+```bash
+command -v codex
+codex --version
+```
 
-### 模型要求更新的 Codex
+Archmage 使用当前终端的 `PATH`。如果尚未登录，运行 `codex login`；不要把 token 或认证文件内容复制到项目中。
 
-本机曾出现 Codex 0.142.4 无法使用配置的 `gpt-5.6-sol`，升级至 0.154.0 后同一探针通过。不要只凭 `login status` 成功就判断模型请求可用，也不要为通过测试而静默换模型。
+### 在线 doctor 失败但离线 doctor 成功
 
-### `data root ... mode 0700` 或不可写
-
-选择你拥有的全新专用目录。诊断会实际创建临时文件；目录权限、ACL 和只读文件系统都可能导致失败。不要为解决权限问题使用 `sudo` 运行 Agent。
-
-### `online authentication probe is not implemented in this batch`
-
-你运行了不带 `--offline` 的 `doctor`。当前在线探针还没连到 CLI；请使用第 5 节的集成测试。注意该命令报错前仍可能已经创建数据目录。
+离线检查只证明 executable 和本地参数存在。网络、账号、额度、默认模型或 CLI/模型兼容性仍可能让真实请求失败。查看错误中给出的 `probe.diagnostics_dir`，但不要直接公开原始日志。
 
 ### `workflow command is not implemented in this batch`
 
-`run/status/logs/resume/cancel` 暂不可用，返回退出码 `20` 是当前预期行为。现在还没有可供这些命令使用的 Run ID。
+这是 `run/status/logs/resume/cancel` 的当前预期行为。接下来还需要进程组所有权、四个 Capability Contract、Context/Handoff、Check Runner 和调度器，才会开放纵向工作流。
 
-## 下一步会增加什么
-
-先完成在线 `doctor`、增量事件流和诊断日志，再接入 SQLite、真实 per-run Worktree、四个能力 Contract 和协作调度。
-
-详细范围见 [S0 实现计划](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)；真实接入记录见 [A 批次进度](acceptance/s0/batch-a-progress.md)。
+详细进度见 [B 批次进度](acceptance/s0/batch-b-progress.md)，总体范围见 [S0 实现计划](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)。

@@ -14,10 +14,10 @@ fn setup() -> (tempfile::TempDir, Store, String, String) {
 #[test]
 fn migration_and_pragmas_survive_reopen() {
     let (dir, store, run, _) = setup();
-    assert_eq!(store.schema_version().unwrap(), 1);
+    assert_eq!(store.schema_version().unwrap(), 2);
     drop(store);
     let store = Store::open(&dir.path().join("state.db")).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 1);
+    assert_eq!(store.schema_version().unwrap(), 2);
     assert_eq!(store.run(&run).unwrap().state, "running");
     let db = rusqlite::Connection::open(dir.path().join("state.db")).unwrap();
     assert_eq!(

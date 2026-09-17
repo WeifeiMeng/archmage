@@ -7,3 +7,4 @@ pub mod event;
 pub mod process;
 pub mod provider;
 pub mod store;
+pub mod workspace;

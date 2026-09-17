@@ -12,6 +12,8 @@ pub enum Error {
     TimedOut,
     #[error("resource_limit: {0}")]
     Limit(String),
+    #[error("workspace_failed: {0}")]
+    Workspace(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("{0} is not implemented in this batch")]
