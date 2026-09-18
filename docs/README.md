@@ -6,17 +6,18 @@ This directory is the maintained source of truth for product scope, concepts, ar
 
 Latest development increment: [Online Doctor guide (中文)](guide-online-doctor.md).
 
-**Want to run the current code?** Start with the [current usage guide (中文)](guide.md). It distinguishes working commands from planned capabilities.
+**Want to run the current code?** Install it and check the exact available surface in the [CLI command reference (中文)](cli-reference.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
 
-1. [Product vision](product/vision.md)
-2. [MVP definition](product/mvp-definition.md)
-3. [Glossary](concepts/glossary.md)
-4. [Collaboration model](concepts/collaboration-model.md)
-5. [Architecture overview](architecture/overview.md)
-6. [Delivery roadmap](roadmap/README.md)
-7. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
-8. [Approved S0 design](superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
-9. [S0 implementation plan](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md) — 14 tasks, four delivery batches, real Codex acceptance gates
+1. [CLI command reference](cli-reference.md)
+2. [Product vision](product/vision.md)
+3. [MVP definition](product/mvp-definition.md)
+4. [Glossary](concepts/glossary.md)
+5. [Collaboration model](concepts/collaboration-model.md)
+6. [Architecture overview](architecture/overview.md)
+7. [Delivery roadmap](roadmap/README.md)
+8. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
+9. [Approved S0 design](superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
+10. [S0 implementation plan](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md) — 14 tasks, four delivery batches, real Codex acceptance gates
 
 ## Documentation layers
 

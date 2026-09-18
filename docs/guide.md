@@ -1,22 +1,22 @@
 # 当前版本使用指南
 
-更新日期：2026-09-17。本文以开发分支 `codex/s0-runtime-fencing` 为准，描述当前代码实际可用的入口。
+更新日期：2026-09-18。本文以 `main` 分支为准，描述当前代码实际可用的入口。安装和日常命令优先查阅 [CLI 命令手册](cli-reference.md)。
 
 ## 当前可以做什么
 
-当前版本可以构建 CLI、检查本机 Git/Codex 环境、初始化本地 SQLite 数据库，并通过在线 `doctor` 调用真实 Codex。Core 已具备事务执行账本、不可变 Artifact、真实 Git Worktree、Capability Contract/Context/Handoff，以及由真实 Codex Tester 发起的受限 Check Runner。
+当前版本可以安装 CLI、检查本机 Git/Codex 环境、初始化本地 SQLite 数据库，并通过在线 `doctor` 调用真实 Codex。Core 已具备事务执行账本、不可变 Artifact、真实 Git Worktree、Capability Contract/Context/Handoff，以及由真实 Codex Tester 发起的受限 Check Runner。
 
 `run`、`status`、`logs`、`resume`、`cancel` 仍只有参数解析，尚未连到完整的四能力工作流。看到帮助项不代表该工作流已经可用。
 
-## 1. 进入开发 Worktree
+## 1. 进入仓库
 
 ```bash
-cd /Users/mengweifei/Desktop/code/github/archmage/.worktrees/s0-runtime-fencing
+cd /Users/mengweifei/Desktop/code/github/archmage
 git branch --show-current
 git log -1 --oneline
 ```
 
-预期分支是 `codex/s0-runtime-fencing`。如果只想使用已经合入 `main` 的较早版本，可以回主目录；本指南的新 Runtime fencing、Contract 和 Check Runner 能力以开发 Worktree 为准。
+本指南描述 `main` 的当前行为。开发新功能时可以使用独立 Worktree，但用户不需要进入功能分支才能安装 CLI。
 
 ## 2. 检查依赖
 
@@ -30,23 +30,24 @@ codex login status
 
 当前验证环境是 macOS、Rust/Cargo 1.95.0、Codex CLI 0.154.0。在线探针使用 Codex 当前登录和默认模型配置；Archmage 不会静默切换模型。
 
-## 3. 构建与查看命令
+## 3. 安装与查看命令
+
+```bash
+cargo install --path crates/archmage-cli --locked --force
+command -v archmage
+archmage --help
+archmage --version
+archmage doctor --help
+```
+
+只想使用仓库内的开发构建时：
 
 ```bash
 cargo build -p archmage-cli
 ./target/debug/archmage --help
-./target/debug/archmage --version
-./target/debug/archmage doctor --help
-./target/debug/archmage run --help
 ```
 
-也可以不预先构建：
-
-```bash
-cargo run -p archmage-cli -- --help
-```
-
-第一个 `--` 用于把后面的参数传给 Archmage。
+`cargo build` 不会把 executable 安装进 `PATH`。标准安装、更新、卸载和退出码见 [CLI 命令手册](cli-reference.md)。
 
 ## 4. 设置独立数据目录
 
@@ -61,7 +62,7 @@ export ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-dev"
 ## 5. 不调用模型的离线诊断
 
 ```bash
-cargo run -p archmage-cli -- doctor --offline
+archmage doctor --offline
 ```
 
 这条命令会检查 Git、Codex executable、必要 flags、数据目录和 SQLite。它不会请求模型，也不会验证账号是否真的能完成推理。成功 JSON 中应包含：
@@ -84,7 +85,7 @@ cargo run -p archmage-cli -- doctor --offline
 ## 6. 调用真实 Codex
 
 ```bash
-cargo run -p archmage-cli -- doctor
+archmage doctor
 ```
 
 该命令会明确提示即将进行在线请求，然后以 `read-only` sandbox 调用真实 `codex exec`。它使用本机账号和当前模型配置，可能消耗 Codex 使用额度。成功结果包含：
@@ -169,15 +170,15 @@ git diff --check
 以下命令已经定义参数，但当前会返回退出码 `20` 和 `not implemented`：
 
 ```bash
-cargo run -p archmage-cli -- run \
+archmage run \
   --repo /absolute/path/to/repository \
   --goal "实现目标" \
   --check "cargo test"
 
-cargo run -p archmage-cli -- status <run-id> --json
-cargo run -p archmage-cli -- logs <run-id> --follow
-cargo run -p archmage-cli -- resume <run-id>
-cargo run -p archmage-cli -- cancel <run-id>
+archmage status <run-id> --json
+archmage logs <run-id> --follow
+archmage resume <run-id>
+archmage cancel <run-id>
 ```
 
 这些命令列在这里是为了说明最终接口形态，不是当前可用示例。现在还没有通过 CLI 产生的 Run ID。
