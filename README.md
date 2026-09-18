@@ -7,7 +7,7 @@ The first executable slice is being built to connect a real Codex CLI provider a
 Install the current development CLI from the repository root:
 
 ```bash
-cargo install --path crates/archmage-cli --locked --force
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 archmage doctor --offline
 ```
 

@@ -33,7 +33,7 @@ codex login status
 ## 3. 安装与查看命令
 
 ```bash
-cargo install --path crates/archmage-cli --locked --force
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 command -v archmage
 archmage --help
 archmage --version

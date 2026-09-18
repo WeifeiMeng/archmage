@@ -11,10 +11,10 @@ Make the development build available as a normal `archmage` command and provide 
 Archmage uses Cargo's standard local package installation:
 
 ```bash
-cargo install --path crates/archmage-cli --locked --force
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 ```
 
-This installs the binary into Cargo's configured binary directory, normally `$CARGO_HOME/bin` or `$HOME/.cargo/bin`. A successful installation must be verified with:
+This installs the binary into `$HOME/.local/bin`, which is already part of the target development environment's `PATH`. It keeps installation explicit without modifying shell startup files. A successful installation must be verified with:
 
 ```bash
 command -v archmage
@@ -43,7 +43,7 @@ The repository README and current usage guide link to the canonical manual inste
 Implementation acceptance requires:
 
 1. all workspace tests pass;
-2. `cargo install --path crates/archmage-cli --locked --force` succeeds;
+2. `cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"` succeeds;
 3. the resolved `archmage` binary reports the current package version and help;
 4. `archmage doctor --offline` succeeds against a disposable data directory;
 5. documentation contains no example claiming that the incomplete workflow commands run successfully;

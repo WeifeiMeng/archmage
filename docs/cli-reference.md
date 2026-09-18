@@ -39,10 +39,10 @@ codex --version
 在 Archmage 仓库根目录执行一次：
 
 ```bash
-cargo install --path crates/archmage-cli --locked --force
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 ```
 
-Cargo 会构建 `archmage-cli` package，并把其中名为 `archmage` 的 executable 安装到 Cargo bin 目录。默认通常是 `$HOME/.cargo/bin`；如果设置了 `CARGO_HOME`，则使用 `$CARGO_HOME/bin`。
+Cargo 会构建 `archmage-cli` package，并把其中名为 `archmage` 的 executable 安装到 `$HOME/.local/bin`。当前开发环境已经把该目录加入 `PATH`，因此安装后可以直接输入 `archmage`，同时无需修改 shell 启动文件。
 
 验证安装：
 
@@ -52,10 +52,10 @@ archmage --version
 archmage --help
 ```
 
-如果 `command -v archmage` 没有输出，请确认 Cargo bin 目录已加入 `PATH`。例如使用默认目录时：
+如果 `command -v archmage` 没有输出，请确认 `$HOME/.local/bin` 已加入 `PATH`：
 
 ```bash
-export PATH="$HOME/.cargo/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 `cargo build -p archmage-cli` 只生成仓库内的 `target/debug/archmage`，不会安装全局命令，也不会修改 shell 配置。只想临时执行开发构建时可以使用：
@@ -69,13 +69,13 @@ export PATH="$HOME/.cargo/bin:$PATH"
 源码更新后，在仓库根目录重新安装：
 
 ```bash
-cargo install --path crates/archmage-cli --locked --force
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 ```
 
 卸载 executable：
 
 ```bash
-cargo uninstall archmage-cli
+cargo uninstall --root "$HOME/.local" archmage-cli
 ```
 
 卸载 CLI 不会自动删除 Archmage 数据目录、数据库或诊断文件。
@@ -245,10 +245,10 @@ archmage cancel <run-id>
 ```bash
 cargo install --list | rg archmage-cli
 printf '%s\n' "$PATH"
-ls "$HOME/.cargo/bin/archmage"
+ls "$HOME/.local/bin/archmage"
 ```
 
-如果使用自定义 `CARGO_HOME`，检查 `$CARGO_HOME/bin/archmage`。
+如果自行省略了 `--root "$HOME/.local"`，Cargo 通常会改装到 `$CARGO_HOME/bin` 或 `$HOME/.cargo/bin`；此时需要自行保证该目录位于 `PATH`。
 
 ### `codex executable not found on PATH`
 

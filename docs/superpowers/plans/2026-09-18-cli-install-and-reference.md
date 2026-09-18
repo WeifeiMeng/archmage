@@ -48,14 +48,14 @@ Create `docs/cli-reference.md` with these exact sections and semantics:
 
 在仓库根目录执行：
 
-    cargo install --path crates/archmage-cli --locked --force
+    cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 
 验证 `command -v archmage`、`archmage --version` 和 `archmage --help`。
 说明 `cargo build -p archmage-cli` 只生成 `target/debug/archmage`，不会安装全局命令。
 
 ## 更新与卸载
 
-更新使用同一条带 `--force` 的安装命令；卸载使用 `cargo uninstall archmage-cli`。
+更新使用同一条带 `--force` 的安装命令；卸载使用 `cargo uninstall --root "$HOME/.local" archmage-cli`。
 
 ## 数据目录
 
@@ -85,7 +85,7 @@ The actual prose must be complete Chinese documentation, not the outline text ab
 Run:
 
 ```bash
-rg -n 'cargo install --path crates/archmage-cli --locked --force|doctor --offline|真实调用 Codex|尚未实现|退出码 20|cargo uninstall archmage-cli' docs/cli-reference.md
+rg -n 'cargo install --path crates/archmage-cli --locked --force --root|doctor --offline|真实调用 Codex|尚未实现|退出码 20|cargo uninstall --root' docs/cli-reference.md
 ```
 
 Expected: every pattern appears at least once.
@@ -118,7 +118,7 @@ Expected: README routes users only to the broad guide, and `docs/guide.md` still
 
 Make these focused changes:
 
-- README: add `cargo install --path crates/archmage-cli --locked --force`, then link `docs/cli-reference.md` as the first CLI reference.
+- README: add `cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"`, then link `docs/cli-reference.md` as the first CLI reference.
 - Documentation index: put `cli-reference.md` before the broader current-version guide.
 - Current-version guide: update the date to 2026-09-18, state that content describes `main`, remove the deleted worktree instructions, add the one-time install command, use `archmage doctor` examples, and link the canonical manual. Keep contributor-only test commands and internal architecture details in this guide.
 
@@ -127,7 +127,7 @@ Make these focused changes:
 Run:
 
 ```bash
-rg -n 'cli-reference.md|cargo install --path crates/archmage-cli --locked --force' README.md docs/README.md docs/guide.md
+rg -n 'cli-reference.md|cargo install --path crates/archmage-cli --locked --force --root' README.md docs/README.md docs/guide.md
 ! rg -n 's0-runtime-fencing|\.worktrees/s0-runtime-fencing' README.md docs/README.md docs/guide.md
 ```
 
@@ -163,10 +163,10 @@ Expected: every command exits `0`; real Codex tests remain explicitly ignored by
 Run:
 
 ```bash
-cargo install --path crates/archmage-cli --locked --force
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 ```
 
-Expected: Cargo reports installation of executable `archmage` from package `archmage-cli v0.1.0`.
+Expected: Cargo reports installation of executable `archmage` from package `archmage-cli v0.1.0` at `$HOME/.local/bin/archmage`.
 
 - [ ] **Step 3: Verify command resolution and basic behavior**
 
@@ -178,7 +178,7 @@ archmage --version
 archmage --help
 ```
 
-Expected: `command -v` resolves a Cargo bin path, version is `archmage 0.1.0`, and help lists `doctor`, `run`, `status`, `logs`, `resume`, and `cancel`.
+Expected: `command -v` resolves `$HOME/.local/bin/archmage`, version is `archmage 0.1.0`, and help lists `doctor`, `run`, `status`, `logs`, `resume`, and `cancel`.
 
 - [ ] **Step 4: Verify offline Doctor without using the normal data directory**
 
