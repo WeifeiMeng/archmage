@@ -282,6 +282,7 @@ impl Runtime {
                 "-c".into(),
                 socket_policy.into(),
             ];
+            invocation.use_custom_permissions();
             let mut check_store = self.store()?;
             let frozen = checks
                 .iter()

@@ -35,17 +35,68 @@ fn missing_run_arguments_are_rejected_without_side_effects() {
 }
 
 #[test]
-fn unimplemented_workflow_never_claims_success() {
+fn status_reads_a_persisted_run_without_starting_codex() {
+    use archmage_core::{
+        config::Config,
+        runtime::{CheckSpec, RunRequest, Runtime},
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    for args in [
+        vec!["init", "--quiet"],
+        vec!["config", "user.email", "archmage@example.invalid"],
+        vec!["config", "user.name", "Archmage Test"],
+    ] {
+        assert!(
+            Command::new("git")
+                .args(args)
+                .current_dir(&repo)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
+    assert!(
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["commit", "--quiet", "-m", "fixture"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
+    let request = RunRequest::new(
+        &repo,
+        "health",
+        vec![CheckSpec::new("check-1", "true").unwrap()],
+    )
+    .unwrap();
+    let run_id = runtime.create_run_definition(&request).unwrap();
+
     let output = cli()
-        .args(["run", "--repo", ".", "--goal", "health", "--check", "true"])
+        .args(["status", &run_id, "--json"])
+        .env("ARCHMAGE_HOME", &data)
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(20));
     assert!(
-        String::from_utf8(output.stderr)
-            .unwrap()
-            .contains("not implemented")
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["id"], run_id);
+    assert_eq!(value["nodes"].as_array().unwrap().len(), 4);
 }
 
 #[test]
@@ -85,7 +136,7 @@ fn offline_doctor_opens_database_without_auth_probe() {
         .unwrap();
     assert!(out.status.success());
     let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(value["database"]["schema_version"], 5);
+    assert_eq!(value["database"]["schema_version"], 6);
     assert_eq!(value["authentication"], "not_verified_offline");
     assert!(root.join("archmage.db").is_file());
 }

@@ -76,3 +76,22 @@ fn invocation_builds_schema_bound_argv_without_prompt_text() {
     assert_eq!(argv.last().map(String::as_str), Some("-"));
     assert!(!argv.iter().any(|part| part.contains("secret goal")));
 }
+
+#[test]
+fn custom_permission_profile_omits_builtin_sandbox_override() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut invocation = CodexInvocation::new(
+        temp.path().join("repo"),
+        temp.path().join("schema.json"),
+        temp.path().join("result.json"),
+        temp.path().join("diagnostics"),
+        Sandbox::WorkspaceWrite,
+    );
+    invocation.use_custom_permissions();
+    let argv = invocation
+        .argv()
+        .iter()
+        .map(|part| part.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert!(!argv.iter().any(|part| part == "--sandbox"));
+}

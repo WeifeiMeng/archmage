@@ -66,6 +66,7 @@ pub struct CodexInvocation {
     pub result_path: PathBuf,
     pub diagnostics_dir: PathBuf,
     pub sandbox: Sandbox,
+    use_builtin_sandbox: bool,
     pub deadline: Duration,
     pub max_line_bytes: usize,
     pub max_stream_bytes: usize,
@@ -87,6 +88,7 @@ impl CodexInvocation {
             result_path,
             diagnostics_dir,
             sandbox,
+            use_builtin_sandbox: true,
             deadline: Duration::from_secs(30 * 60),
             max_line_bytes: 8 * 1024 * 1024,
             max_stream_bytes: 128 * 1024 * 1024,
@@ -100,9 +102,10 @@ impl CodexInvocation {
             "exec".into(),
             "--cd".into(),
             self.repository.as_os_str().into(),
-            "--sandbox".into(),
-            self.sandbox.as_str().into(),
         ];
+        if self.use_builtin_sandbox {
+            args.extend(["--sandbox".into(), self.sandbox.as_str().into()]);
+        }
         args.extend(self.extra_args.iter().cloned());
         args.extend([
             "--json".into(),
@@ -113,6 +116,10 @@ impl CodexInvocation {
             "-".into(),
         ]);
         args
+    }
+
+    pub fn use_custom_permissions(&mut self) {
+        self.use_builtin_sandbox = false;
     }
 }
 
@@ -180,7 +187,7 @@ pub async fn invoke_with_identity(
         "argv": args.iter().map(|part| part.to_string_lossy()).collect::<Vec<_>>(),
         "exit_code": captured.as_ref().ok().and_then(|value| value.code),
         "capture_error": captured.as_ref().err().map(ToString::to_string),
-        "sandbox": invocation.sandbox.as_str(),
+        "sandbox": if invocation.use_builtin_sandbox { invocation.sandbox.as_str() } else { "custom-permissions" },
     });
     let mut metadata_file = private_file(&metadata_path)?;
     metadata_file.write_all(metadata.to_string().as_bytes())?;
