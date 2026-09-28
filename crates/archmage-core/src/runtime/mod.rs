@@ -1,4 +1,5 @@
 pub mod control;
+mod dispatch;
 pub mod scheduler;
 
 use crate::{
@@ -79,6 +80,7 @@ pub struct RunSummary {
     pub id: String,
     pub goal: String,
     pub state: String,
+    pub outcome: Option<String>,
     pub created_at: String,
     pub last_event_sequence: i64,
 }
@@ -100,6 +102,7 @@ pub struct RunSnapshot {
     pub repository: PathBuf,
     pub checks: Vec<CheckSpec>,
     pub state: String,
+    pub outcome: Option<String>,
     pub revision: i64,
     pub created_at: String,
     pub last_event_sequence: i64,
@@ -109,15 +112,15 @@ pub struct RunSnapshot {
 
 #[derive(Clone)]
 pub struct Runtime {
-    config: Config,
+    pub(crate) config: Config,
 }
 
 #[derive(Serialize, Deserialize)]
 struct FrozenRunDefinition {
-    version: u32,
-    repository: PathBuf,
-    checks: Vec<CheckSpec>,
-    nodes: Vec<String>,
+    pub(crate) version: u32,
+    pub(crate) repository: PathBuf,
+    pub(crate) checks: Vec<CheckSpec>,
+    pub(crate) nodes: Vec<String>,
 }
 
 impl Runtime {
@@ -128,7 +131,7 @@ impl Runtime {
         Ok(Self { config })
     }
 
-    fn store(&self) -> Result<Store> {
+    pub(crate) fn store(&self) -> Result<Store> {
         Store::open(&self.config.data_root.join("archmage.db"))
     }
 
@@ -144,6 +147,19 @@ impl Runtime {
             .map_err(|error| Error::Preflight(error.to_string()))?;
         self.store()?
             .create_run_definition(&request.goal, &BUILTIN_NODES, value)
+    }
+
+    pub async fn start_run(&self, request: &RunRequest) -> Result<String> {
+        crate::provider::codex::inspect().await?;
+        let run_id = self.create_run_definition(request)?;
+        let mut store = self.store()?;
+        crate::workspace::provision(
+            &mut store,
+            &run_id,
+            &request.repository,
+            &self.config.data_root.join("worktrees"),
+        )?;
+        Ok(run_id)
     }
 
     pub fn list_runs(&self) -> Result<Vec<RunSummary>> {
@@ -179,12 +195,17 @@ impl Runtime {
             repository: definition.repository,
             checks: definition.checks,
             state: record.state,
+            outcome: record.outcome,
             revision: record.revision,
             created_at: record.created_at,
             last_event_sequence: record.last_event_sequence,
             nodes,
             workspace,
         })
+    }
+
+    pub fn events(&self, run_id: &str, after_sequence: i64) -> Result<Vec<crate::event::Event>> {
+        self.store()?.events(run_id, after_sequence)
     }
 }
 
@@ -193,6 +214,7 @@ fn summary_from_record(record: RunDefinitionRecord) -> Result<RunSummary> {
         id: record.id,
         goal: record.goal,
         state: record.state,
+        outcome: record.outcome,
         created_at: record.created_at,
         last_event_sequence: record.last_event_sequence,
     })

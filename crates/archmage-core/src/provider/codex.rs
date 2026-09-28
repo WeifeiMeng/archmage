@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    process::{Stream, capture, capture_observed},
+    process::{ProcessIdentity, Stream, capture, capture_observed, capture_observed_with_identity},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -70,6 +70,7 @@ pub struct CodexInvocation {
     pub max_line_bytes: usize,
     pub max_stream_bytes: usize,
     pub max_result_bytes: usize,
+    pub extra_args: Vec<OsString>,
 }
 
 impl CodexInvocation {
@@ -90,23 +91,28 @@ impl CodexInvocation {
             max_line_bytes: 8 * 1024 * 1024,
             max_stream_bytes: 128 * 1024 * 1024,
             max_result_bytes: 8 * 1024 * 1024,
+            extra_args: Vec::new(),
         }
     }
 
     pub fn argv(&self) -> Vec<OsString> {
-        vec![
+        let mut args = vec![
             "exec".into(),
             "--cd".into(),
             self.repository.as_os_str().into(),
             "--sandbox".into(),
             self.sandbox.as_str().into(),
+        ];
+        args.extend(self.extra_args.iter().cloned());
+        args.extend([
             "--json".into(),
             "--output-schema".into(),
             self.schema_path.as_os_str().into(),
             "--output-last-message".into(),
             self.result_path.as_os_str().into(),
             "-".into(),
-        ]
+        ]);
+        args
     }
 }
 
@@ -124,6 +130,15 @@ pub async fn invoke(
     invocation: &CodexInvocation,
     prompt: &[u8],
 ) -> Result<CodexOutcome> {
+    invoke_with_identity(tools, invocation, prompt, |_| Ok(())).await
+}
+
+pub async fn invoke_with_identity(
+    tools: &LocalTools,
+    invocation: &CodexInvocation,
+    prompt: &[u8],
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
+) -> Result<CodexOutcome> {
     if !invocation.repository.is_dir() || !invocation.schema_path.is_file() {
         return Err(Error::Preflight(
             "Codex invocation repository and schema must exist".into(),
@@ -138,13 +153,14 @@ pub async fn invoke(
     let mut decoder = super::codex_event::Decoder::new(invocation.max_line_bytes);
     let mut events = Vec::new();
     let args = invocation.argv();
-    let captured = capture_observed(
+    let captured = capture_observed_with_identity(
         &tools.codex_binary,
         &args,
         Some(&invocation.repository),
         prompt,
         invocation.deadline,
         invocation.max_stream_bytes,
+        on_spawn,
         |stream, bytes| {
             match stream {
                 Stream::Stdout => {

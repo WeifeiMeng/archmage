@@ -161,6 +161,63 @@ impl Store {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn finish_attempt_owned_with_result(
+        &mut self,
+        id: &str,
+        revision: i64,
+        generation: i64,
+        output: Value,
+        thread_id: &str,
+        result_artifact_id: &str,
+        changeset_artifact_id: Option<&str>,
+    ) -> Result<()> {
+        if thread_id.trim().is_empty() {
+            return Err(Error::Preflight("Codex thread ID is blank".into()));
+        }
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE attempts
+             SET state='succeeded',revision=revision+1,output_json=?4,thread_id=?5,
+                 result_artifact_id=?6,changeset_artifact_id=?7
+             WHERE id=?1 AND revision=?2 AND state='running' AND owner_generation=?3
+             AND EXISTS(SELECT 1 FROM artifacts WHERE id=?6 AND attempt_id=?1)
+             AND (?7 IS NULL OR EXISTS(SELECT 1 FROM artifacts WHERE id=?7 AND attempt_id=?1))
+             AND EXISTS(SELECT 1 FROM node_runs n JOIN runs r ON r.id=n.run_id
+                        WHERE n.id=attempts.node_run_id AND r.owner_generation=?3 AND r.state='running')",
+            params![
+                id,
+                revision,
+                generation,
+                output.to_string(),
+                thread_id,
+                result_artifact_id,
+                changeset_artifact_id
+            ],
+        )?)?;
+        let (node, run): (String, String) = tx.query_row(
+            "SELECT n.id,n.run_id FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        changed(tx.execute(
+            "UPDATE node_runs SET state='succeeded',revision=revision+1 WHERE id=?1 AND state='running'",
+            [&node],
+        )?)?;
+        event(
+            &tx,
+            &run,
+            "node.succeeded",
+            Some(&node),
+            Some(id),
+            json!({"owner_generation":generation,"thread_id":thread_id,"result_artifact_id":result_artifact_id}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn record_workspace_intent(
         &mut self,
         run: &str,
@@ -262,16 +319,57 @@ impl Store {
     }
 
     pub fn complete_run(&mut self, id: &str, revision: i64) -> Result<()> {
+        self.complete_run_with_outcome(id, revision, "approved")
+    }
+
+    pub fn complete_run_with_outcome(
+        &mut self,
+        id: &str,
+        revision: i64,
+        outcome: &str,
+    ) -> Result<()> {
+        if !matches!(outcome, "approved" | "changes_requested") {
+            return Err(Error::Preflight("invalid completion outcome".into()));
+        }
         let tx = self
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         changed(tx.execute(
-            "UPDATE runs SET state='completed',revision=revision+1
+            "UPDATE runs SET state='completed',outcome=?3,revision=revision+1
              WHERE id=?1 AND revision=?2 AND state='running'
              AND NOT EXISTS(SELECT 1 FROM node_runs WHERE run_id=?1 AND state!='succeeded')",
+            params![id, revision, outcome],
+        )?)?;
+        event(
+            &tx,
+            id,
+            "workflow.completed",
+            None,
+            None,
+            json!({"outcome":outcome}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn fail_run(&mut self, id: &str, revision: i64, code: &str) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE runs SET state='failed',revision=revision+1
+             WHERE id=?1 AND revision=?2 AND state='running'
+             AND EXISTS(SELECT 1 FROM node_runs WHERE run_id=?1 AND state='failed')",
             params![id, revision],
         )?)?;
-        event(&tx, id, "workflow.completed", None, None, json!({}))?;
+        event(
+            &tx,
+            id,
+            "workflow.failed",
+            None,
+            None,
+            json!({"error_code":code}),
+        )?;
         tx.commit()?;
         Ok(())
     }

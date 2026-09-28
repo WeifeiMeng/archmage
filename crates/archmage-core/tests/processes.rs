@@ -1,6 +1,8 @@
 #![cfg(unix)]
 
-use archmage_core::process::{ProcessIdentity, Stream, capture, capture_observed, spawn_owned};
+use archmage_core::process::{
+    ProcessIdentity, Stream, capture, capture_observed, capture_observed_with_identity, spawn_owned,
+};
 use std::{
     ffi::OsString,
     fs,
@@ -38,6 +40,29 @@ async fn observer_sees_bytes_before_process_exits() {
     .unwrap();
     assert_eq!(out.code, Some(0));
     assert_eq!(out.stderr, b"done");
+}
+
+#[tokio::test]
+async fn capture_publishes_process_identity_before_output() {
+    let identity = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let published = identity.clone();
+    let output = capture_observed_with_identity(
+        Path::new("/bin/sh"),
+        &["-c".into(), "printf ready".into()],
+        None,
+        b"",
+        Duration::from_secs(5),
+        1024,
+        move |value| {
+            *published.lock().unwrap() = Some(value.clone());
+            Ok(())
+        },
+        |_, _| Ok(()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(output.stdout, b"ready");
+    assert!(identity.lock().unwrap().as_ref().unwrap().pid > 0);
 }
 
 #[tokio::test]

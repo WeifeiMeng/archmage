@@ -36,6 +36,7 @@ pub(crate) struct RunDefinitionRecord {
     pub goal: String,
     pub state: String,
     pub revision: i64,
+    pub outcome: Option<String>,
     pub definition: Value,
     pub created_at: String,
     pub last_event_sequence: i64,
@@ -75,6 +76,15 @@ pub struct Handoff {
     pub artifact_id: String,
     pub content_hash: String,
     pub producer_attempt_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct NodeResult {
+    pub attempt_id: String,
+    pub thread_id: String,
+    pub result_artifact_id: String,
+    pub changeset_artifact_id: Option<String>,
+    pub output: Value,
 }
 pub enum AttemptOutcome {
     /// Caller must have validated the contract. This is a ledger write, not a validation bypass API.
@@ -122,6 +132,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0003_ownership.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0004_contexts.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0005_checks.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0006_runtime.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -144,7 +155,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0005_checks.sql"))?;
                 version = 5;
             }
-            if version != 5 {
+            if version == 5 {
+                tx.execute_batch(include_str!("../../migrations/0006_runtime.sql"))?;
+                version = 6;
+            }
+            if version != 6 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -176,7 +191,7 @@ impl Store {
 
     pub(crate) fn run_definition(&self, id: &str) -> Result<RunDefinitionRecord> {
         Ok(self.db.query_row(
-            "SELECT r.id,r.goal,r.state,r.revision,r.definition_json,r.created_at,
+            "SELECT r.id,r.goal,r.state,r.revision,r.outcome,r.definition_json,r.created_at,
                     COALESCE(MAX(e.event_seq),0)
              FROM runs r LEFT JOIN events e ON e.run_id=r.id
              WHERE r.id=?1 GROUP BY r.id",
@@ -187,7 +202,7 @@ impl Store {
 
     pub(crate) fn run_definitions(&self) -> Result<Vec<RunDefinitionRecord>> {
         let mut query = self.db.prepare(
-            "SELECT r.id,r.goal,r.state,r.revision,r.definition_json,r.created_at,
+            "SELECT r.id,r.goal,r.state,r.revision,r.outcome,r.definition_json,r.created_at,
                     COALESCE(MAX(e.event_seq),0)
              FROM runs r LEFT JOIN events e ON e.run_id=r.id
              GROUP BY r.id ORDER BY r.created_at DESC, r.id DESC",
@@ -253,6 +268,25 @@ impl Store {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?)
     }
+
+    pub fn node_result(&self, run: &str, node_key: &str) -> Result<NodeResult> {
+        Ok(self.db.query_row(
+            "SELECT a.id,a.thread_id,a.result_artifact_id,a.changeset_artifact_id,a.output_json
+             FROM attempts a JOIN node_runs n ON n.id=a.node_run_id
+             WHERE n.run_id=?1 AND n.node_key=?2 AND a.state='succeeded'
+             ORDER BY a.attempt_number DESC LIMIT 1",
+            rusqlite::params![run, node_key],
+            |row| {
+                Ok(NodeResult {
+                    attempt_id: row.get(0)?,
+                    thread_id: row.get(1)?,
+                    result_artifact_id: row.get(2)?,
+                    changeset_artifact_id: row.get(3)?,
+                    output: parse_json(row.get(4)?, 4)?,
+                })
+            },
+        )?)
+    }
 }
 fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {
     Ok(WorkspaceRecord {
@@ -299,8 +333,9 @@ fn run_definition_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RunDefinitionRe
         goal: r.get(1)?,
         state: r.get(2)?,
         revision: r.get(3)?,
-        definition: parse_json(r.get(4)?, 4)?,
-        created_at: r.get(5)?,
-        last_event_sequence: r.get(6)?,
+        outcome: r.get(4)?,
+        definition: parse_json(r.get(5)?, 5)?,
+        created_at: r.get(6)?,
+        last_event_sequence: r.get(7)?,
     })
 }

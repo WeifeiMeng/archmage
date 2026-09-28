@@ -271,6 +271,30 @@ pub async fn capture_observed(
     max: usize,
     observer: impl FnMut(Stream, &[u8]) -> Result<()>,
 ) -> Result<Captured> {
+    capture_observed_with_identity(
+        binary,
+        args,
+        cwd,
+        input,
+        deadline,
+        max,
+        |_| Ok(()),
+        observer,
+    )
+    .await
+}
+
+/// Captures a process while publishing its verified OS identity before stdin is written.
+pub async fn capture_observed_with_identity(
+    binary: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    input: &[u8],
+    deadline: Duration,
+    max: usize,
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()>,
+) -> Result<Captured> {
     let observer = std::cell::RefCell::new(observer);
     let mut command = Command::new(binary);
     command
@@ -284,7 +308,23 @@ pub async fn capture_observed(
     }
     configure_process_group(&mut command);
     let mut child = command.spawn().map_err(|e| Error::Spawn(e.to_string()))?;
-    let pgid = child.id().map(|id| id as i32);
+    let pid = child
+        .id()
+        .ok_or_else(|| Error::Spawn("child PID unavailable".into()))?;
+    #[cfg(unix)]
+    let identity = ProcessIdentity {
+        pid,
+        pgid: pid as i32,
+        started: process_started(pid)?,
+    };
+    #[cfg(not(unix))]
+    let identity = ProcessIdentity {
+        pid,
+        pgid: pid as i32,
+        started: String::new(),
+    };
+    on_spawn(&identity)?;
+    let pgid = Some(identity.pgid);
     let mut stdin = child.stdin.take().expect("piped stdin");
     let stdout = child.stdout.take().expect("piped stdout");
     let stderr = child.stderr.take().expect("piped stderr");

@@ -98,7 +98,10 @@ pub fn resolve_context(
                     content_hash: content.sha256.clone(),
                     producer_attempt_id: content.producer_attempt_id,
                 });
-                json!({"artifact_id":artifact_id,"sha256":content.sha256,"bytes":content.bytes})
+                let value: Value = serde_json::from_slice(&content.bytes).unwrap_or_else(|_| {
+                    String::from_utf8_lossy(&content.bytes).into_owned().into()
+                });
+                json!({"artifact_id":artifact_id,"sha256":content.sha256,"content":value})
             }
         };
         bindings.insert(key, resolved);
