@@ -221,6 +221,15 @@ impl Store {
     }
 
     pub fn create_run(&mut self, goal: &str, nodes: &[&str]) -> Result<String> {
+        self.create_run_definition(goal, nodes, json!({"version":1,"nodes":nodes}))
+    }
+
+    pub(crate) fn create_run_definition(
+        &mut self,
+        goal: &str,
+        nodes: &[&str],
+        definition: Value,
+    ) -> Result<String> {
         if goal.trim().is_empty() || nodes.is_empty() || nodes.iter().any(|s| s.trim().is_empty()) {
             return Err(Error::Preflight(
                 "goal and node keys must be nonempty".into(),
@@ -232,7 +241,7 @@ impl Store {
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         tx.execute(
             "INSERT INTO runs(id,goal,state,definition_json) VALUES(?1,?2,'created',?3)",
-            params![id, goal, json!({"version":1,"nodes":nodes}).to_string()],
+            params![id, goal, definition.to_string()],
         )?;
         for (ordinal, key) in nodes.iter().enumerate() {
             tx.execute("INSERT INTO node_runs(id,run_id,node_key,ordinal,state) VALUES(?1,?2,?3,?4,'pending')",

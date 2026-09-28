@@ -29,6 +29,17 @@ pub struct Run {
     pub state: String,
     pub revision: i64,
 }
+
+#[derive(Debug, Clone)]
+pub(crate) struct RunDefinitionRecord {
+    pub id: String,
+    pub goal: String,
+    pub state: String,
+    pub revision: i64,
+    pub definition: Value,
+    pub created_at: String,
+    pub last_event_sequence: i64,
+}
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Node {
     pub id: String,
@@ -162,6 +173,29 @@ impl Store {
             },
         )?)
     }
+
+    pub(crate) fn run_definition(&self, id: &str) -> Result<RunDefinitionRecord> {
+        Ok(self.db.query_row(
+            "SELECT r.id,r.goal,r.state,r.revision,r.definition_json,r.created_at,
+                    COALESCE(MAX(e.event_seq),0)
+             FROM runs r LEFT JOIN events e ON e.run_id=r.id
+             WHERE r.id=?1 GROUP BY r.id",
+            [id],
+            run_definition_row,
+        )?)
+    }
+
+    pub(crate) fn run_definitions(&self) -> Result<Vec<RunDefinitionRecord>> {
+        let mut query = self.db.prepare(
+            "SELECT r.id,r.goal,r.state,r.revision,r.definition_json,r.created_at,
+                    COALESCE(MAX(e.event_seq),0)
+             FROM runs r LEFT JOIN events e ON e.run_id=r.id
+             GROUP BY r.id ORDER BY r.created_at DESC, r.id DESC",
+        )?;
+        Ok(query
+            .query_map([], run_definition_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
     pub fn node(&self, id: &str) -> Result<Node> {
         Ok(self.db.query_row(
             "SELECT id,run_id,node_key,state,revision FROM node_runs WHERE id=?1",
@@ -256,5 +290,17 @@ fn attempt_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Attempt> {
         state: r.get(3)?,
         revision: r.get(4)?,
         output: output.map(|s| parse_json(s, 5)).transpose()?,
+    })
+}
+
+fn run_definition_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RunDefinitionRecord> {
+    Ok(RunDefinitionRecord {
+        id: r.get(0)?,
+        goal: r.get(1)?,
+        state: r.get(2)?,
+        revision: r.get(3)?,
+        definition: parse_json(r.get(4)?, 4)?,
+        created_at: r.get(5)?,
+        last_event_sequence: r.get(6)?,
     })
 }
