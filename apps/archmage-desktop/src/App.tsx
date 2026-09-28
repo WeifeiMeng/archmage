@@ -52,7 +52,7 @@ export default function App() {
   const [goal, setGoal] = useState("");
   const [checks, setChecks] = useState([""]);
   const [busy, setBusy] = useState(false);
-  const [environment, setEnvironment] = useState<"checking" | "ready" | "failed">("checking");
+  const [environment, setEnvironment] = useState<"checking" | "ready" | "failed" | "preview">("checking");
   const [error, setError] = useState<string | null>(null);
 
   const refreshRuns = useCallback(async () => {
@@ -76,6 +76,7 @@ export default function App() {
   }, [refreshRuns]);
 
   useEffect(() => {
+    if (!isTauri()) return;
     refreshRuns()
       .then((items) => items[0] && setSelectedId(items[0].id))
       .catch((reason) => setError(String(reason)));
@@ -83,7 +84,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isTauri()) {
-      setEnvironment("ready");
+      setEnvironment("preview");
       return;
     }
     checkEnvironment();
@@ -130,6 +131,7 @@ export default function App() {
   }, [selectedId, refreshRun]);
 
   useEffect(() => {
+    if (!isTauri()) return;
     let stop: (() => void) | undefined;
     api.onRunEvent((runId) => {
       if (runId === selectedId) refreshRun(runId).catch((reason) => setError(String(reason)));
@@ -199,7 +201,7 @@ export default function App() {
               <div className="check-list">{checks.map((check, index) => <div className="command-field" key={index}><span>$</span><input aria-label={`验收命令 ${index + 1}`} value={check} onChange={(event) => setChecks(checks.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder="cargo test / npm test / ./scripts/check.sh" />{checks.length > 1 && <button aria-label="移除命令" onClick={() => setChecks(checks.filter((_, itemIndex) => itemIndex !== index))}>×</button>}</div>)}</div>
               <div className={`preflight ${environment}`}>
                 {environment === "checking" ? <LoaderCircle className="spin" size={17} /> : environment === "ready" ? <Check size={17} /> : <Circle size={17} />}
-                <div><strong>{environment === "checking" ? "正在检查本地环境" : environment === "ready" ? "本地 Runtime 已就绪" : "环境检查未通过"}</strong><span>{environment === "ready" ? "Git、Codex CLI、schema 和数据目录可以使用。" : environment === "failed" ? "请处理顶部错误后重试，未通过前不会创建 Run。" : "正在确认 Git、Codex CLI、schema 和数据目录。"}</span></div>
+                <div><strong>{environment === "checking" ? "正在检查本地环境" : environment === "ready" ? "本地 Runtime 已就绪" : environment === "preview" ? "当前是浏览器界面预览" : "环境检查未通过"}</strong><span>{environment === "ready" ? "Git、Codex CLI、schema 和数据目录可以使用。" : environment === "failed" ? "请处理顶部错误后重试，未通过前不会创建 Run。" : environment === "preview" ? "请使用 Tauri 桌面窗口连接真实 Runtime 和 Codex。" : "正在确认 Git、Codex CLI、schema 和数据目录。"}</span></div>
                 {environment === "failed" && <button type="button" onClick={checkEnvironment}>重试</button>}
               </div>
               <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : "启动真实 Run"}</button>

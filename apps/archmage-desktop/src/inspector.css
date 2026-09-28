@@ -129,6 +129,15 @@
   color: var(--danger);
 }
 
+.preflight.preview {
+  border-color: #3e4f68;
+  background: #111926;
+}
+
+.preflight.preview svg {
+  color: #86a8d8;
+}
+
 .preflight > button {
   margin-left: auto;
   border: 1px solid #654047;
