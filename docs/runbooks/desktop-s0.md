@@ -28,19 +28,29 @@ codex --version
 codex login status
 ```
 
-在 Archmage 仓库根目录执行：
+在 Archmage 仓库根目录一键启动：
 
 ```bash
-npm install --prefix apps/archmage-desktop
-npm run tauri dev --prefix apps/archmage-desktop
+./scripts/dev-desktop.sh
 ```
 
-第一次启动会编译 Tauri/Rust 依赖，因此会比后续启动慢。看到 `Running .../archmage-desktop` 后，桌面窗口会打开。
+脚本会检查 Git、Cargo、Node.js、npm 和 Codex CLI；仅当 `node_modules` 不存在时安装前端依赖，然后启动 Tauri。Tauri 会同时启动 Vite 界面和内嵌 `archmage-core` 的 Rust Runtime，不需要单独启动后端 daemon。
+
+第一次启动会安装或编译依赖，因此会比后续启动慢。看到 Vite local URL 和 `Running .../archmage-desktop` 后，桌面窗口会打开。
 
 如果需要隔离数据，在启动前设置专用目录：
 
 ```bash
 export ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-desktop-dev"
+./scripts/dev-desktop.sh
+```
+
+脚本会原样传递 `ARCHMAGE_HOME` 和当前 Codex 配置。
+
+如果需要排查 npm 或 Tauri 启动问题，可以分步执行底层命令：
+
+```bash
+npm install --prefix apps/archmage-desktop
 npm run tauri dev --prefix apps/archmage-desktop
 ```
 

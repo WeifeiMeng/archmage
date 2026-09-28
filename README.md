@@ -12,7 +12,15 @@ archmage doctor --offline
 archmage run --repo /absolute/path/to/repository --goal "your goal" --check "cargo test"
 ```
 
-To start the desktop workbench:
+Start the complete desktop development application from the repository root:
+
+```bash
+./scripts/dev-desktop.sh
+```
+
+This one command checks the local toolchain, installs missing frontend dependencies, and starts both the Vite UI and the Tauri process containing the Rust Runtime. Archmage does not require a separate backend daemon.
+
+For troubleshooting, the underlying commands are:
 
 ```bash
 npm install --prefix apps/archmage-desktop
