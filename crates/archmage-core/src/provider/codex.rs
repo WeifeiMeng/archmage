@@ -2,9 +2,11 @@ use crate::{
     error::{Error, Result},
     process::{Stream, capture, capture_observed},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     ffi::OsString,
+    fs,
+    io::{Read, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -39,6 +41,198 @@ pub struct LocalTools {
     pub codex_version: String,
     pub git_binary: PathBuf,
     pub git_version: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Sandbox {
+    ReadOnly,
+    WorkspaceWrite,
+}
+
+impl Sandbox {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::WorkspaceWrite => "workspace-write",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CodexInvocation {
+    pub repository: PathBuf,
+    pub schema_path: PathBuf,
+    pub result_path: PathBuf,
+    pub diagnostics_dir: PathBuf,
+    pub sandbox: Sandbox,
+    pub deadline: Duration,
+    pub max_line_bytes: usize,
+    pub max_stream_bytes: usize,
+    pub max_result_bytes: usize,
+}
+
+impl CodexInvocation {
+    pub fn new(
+        repository: PathBuf,
+        schema_path: PathBuf,
+        result_path: PathBuf,
+        diagnostics_dir: PathBuf,
+        sandbox: Sandbox,
+    ) -> Self {
+        Self {
+            repository,
+            schema_path,
+            result_path,
+            diagnostics_dir,
+            sandbox,
+            deadline: Duration::from_secs(30 * 60),
+            max_line_bytes: 8 * 1024 * 1024,
+            max_stream_bytes: 128 * 1024 * 1024,
+            max_result_bytes: 8 * 1024 * 1024,
+        }
+    }
+
+    pub fn argv(&self) -> Vec<OsString> {
+        vec![
+            "exec".into(),
+            "--cd".into(),
+            self.repository.as_os_str().into(),
+            "--sandbox".into(),
+            self.sandbox.as_str().into(),
+            "--json".into(),
+            "--output-schema".into(),
+            self.schema_path.as_os_str().into(),
+            "--output-last-message".into(),
+            self.result_path.as_os_str().into(),
+            "-".into(),
+        ]
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct CodexOutcome {
+    pub thread_id: String,
+    pub exit_code: i32,
+    pub result: serde_json::Value,
+    pub events_path: PathBuf,
+    pub stderr_path: PathBuf,
+}
+
+pub async fn invoke(
+    tools: &LocalTools,
+    invocation: &CodexInvocation,
+    prompt: &[u8],
+) -> Result<CodexOutcome> {
+    if !invocation.repository.is_dir() || !invocation.schema_path.is_file() {
+        return Err(Error::Preflight(
+            "Codex invocation repository and schema must exist".into(),
+        ));
+    }
+    private_directory(&invocation.diagnostics_dir)?;
+    let events_path = invocation.diagnostics_dir.join("events.jsonl");
+    let stderr_path = invocation.diagnostics_dir.join("stderr.log");
+    let metadata_path = invocation.diagnostics_dir.join("metadata.json");
+    let mut event_log = private_file(&events_path)?;
+    let mut stderr_log = private_file(&stderr_path)?;
+    let mut decoder = super::codex_event::Decoder::new(invocation.max_line_bytes);
+    let mut events = Vec::new();
+    let args = invocation.argv();
+    let captured = capture_observed(
+        &tools.codex_binary,
+        &args,
+        Some(&invocation.repository),
+        prompt,
+        invocation.deadline,
+        invocation.max_stream_bytes,
+        |stream, bytes| {
+            match stream {
+                Stream::Stdout => {
+                    event_log.write_all(bytes)?;
+                    events.extend(decoder.push(bytes)?);
+                }
+                Stream::Stderr => stderr_log.write_all(bytes)?,
+            }
+            Ok(())
+        },
+    )
+    .await;
+    event_log.sync_all()?;
+    stderr_log.sync_all()?;
+    let metadata = serde_json::json!({
+        "codex_version": tools.codex_version,
+        "argv": args.iter().map(|part| part.to_string_lossy()).collect::<Vec<_>>(),
+        "exit_code": captured.as_ref().ok().and_then(|value| value.code),
+        "capture_error": captured.as_ref().err().map(ToString::to_string),
+        "sandbox": invocation.sandbox.as_str(),
+    });
+    let mut metadata_file = private_file(&metadata_path)?;
+    metadata_file.write_all(metadata.to_string().as_bytes())?;
+    metadata_file.sync_all()?;
+    let captured = captured?;
+    if captured.code != Some(0) {
+        return Err(Error::Preflight(format!(
+            "Codex invocation failed with exit {:?}; inspect diagnostics at {}",
+            captured.code,
+            invocation.diagnostics_dir.display()
+        )));
+    }
+    events.extend(decoder.finish()?);
+    if events
+        .iter()
+        .any(|event| matches!(event["type"].as_str(), Some("turn.failed" | "error")))
+        || !events.iter().any(|event| event["type"] == "turn.completed")
+    {
+        return Err(Error::Preflight(
+            "Codex invocation did not complete successfully".into(),
+        ));
+    }
+    let thread_id = events
+        .iter()
+        .find(|event| event["type"] == "thread.started")
+        .and_then(|event| event["thread_id"].as_str())
+        .filter(|id| !id.is_empty())
+        .ok_or_else(|| Error::Preflight("missing Codex thread ID".into()))?
+        .to_owned();
+    let mut bytes = Vec::new();
+    fs::File::open(&invocation.result_path)?
+        .take(invocation.max_result_bytes as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > invocation.max_result_bytes {
+        return Err(Error::Limit("Codex result limit exceeded".into()));
+    }
+    let result = serde_json::from_slice(&bytes)
+        .map_err(|_| Error::Preflight("invalid Codex result JSON".into()))?;
+    Ok(CodexOutcome {
+        thread_id,
+        exit_code: 0,
+        result,
+        events_path,
+        stderr_path,
+    })
+}
+
+fn private_directory(path: &Path) -> Result<()> {
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)?;
+    Ok(())
+}
+
+fn private_file(path: &Path) -> Result<fs::File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    Ok(options.open(path)?)
 }
 
 pub fn find_executable(name: &str) -> Result<PathBuf> {

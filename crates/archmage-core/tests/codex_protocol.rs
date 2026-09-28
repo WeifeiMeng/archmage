@@ -1,4 +1,4 @@
-use archmage_core::provider::codex::validate_help;
+use archmage_core::provider::codex::{CodexInvocation, Sandbox, validate_help};
 use archmage_core::provider::codex_event::Decoder;
 
 #[test]
@@ -47,4 +47,32 @@ fn all_required_flags_must_be_present() {
     assert!(validate_help(flags).is_ok());
     let error = validate_help("--json").unwrap_err().to_string();
     assert!(error.contains("--output-schema"));
+}
+
+#[test]
+fn invocation_builds_schema_bound_argv_without_prompt_text() {
+    let temp = tempfile::tempdir().unwrap();
+    let invocation = CodexInvocation::new(
+        temp.path().join("repo"),
+        temp.path().join("schema.json"),
+        temp.path().join("result.json"),
+        temp.path().join("diagnostics"),
+        Sandbox::WorkspaceWrite,
+    );
+    let argv = invocation
+        .argv()
+        .iter()
+        .map(|part| part.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert!(
+        argv.windows(2)
+            .any(|pair| pair == ["--sandbox", "workspace-write"])
+    );
+    assert!(argv.windows(2).any(|pair| pair[0] == "--output-schema"));
+    assert!(
+        argv.windows(2)
+            .any(|pair| pair[0] == "--output-last-message")
+    );
+    assert_eq!(argv.last().map(String::as_str), Some("-"));
+    assert!(!argv.iter().any(|part| part.contains("secret goal")));
 }
