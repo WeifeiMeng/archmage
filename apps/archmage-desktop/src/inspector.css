@@ -115,3 +115,26 @@
   max-height: calc(100vh - 260px);
   overflow: auto;
 }
+
+.preflight.checking svg {
+  color: var(--warning);
+}
+
+.preflight.failed {
+  border-color: #63363b;
+  background: #211316;
+}
+
+.preflight.failed svg {
+  color: var(--danger);
+}
+
+.preflight > button {
+  margin-left: auto;
+  border: 1px solid #654047;
+  border-radius: 7px;
+  background: transparent;
+  color: #ffadb2;
+  padding: 0 10px;
+  font-size: 10px;
+}

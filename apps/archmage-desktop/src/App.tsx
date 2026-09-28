@@ -52,6 +52,7 @@ export default function App() {
   const [goal, setGoal] = useState("");
   const [checks, setChecks] = useState([""]);
   const [busy, setBusy] = useState(false);
+  const [environment, setEnvironment] = useState<"checking" | "ready" | "failed">("checking");
   const [error, setError] = useState<string | null>(null);
 
   const refreshRuns = useCallback(async () => {
@@ -79,6 +80,25 @@ export default function App() {
       .then((items) => items[0] && setSelectedId(items[0].id))
       .catch((reason) => setError(String(reason)));
   }, [refreshRuns]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      setEnvironment("ready");
+      return;
+    }
+    checkEnvironment();
+  }, []);
+
+  async function checkEnvironment() {
+    setEnvironment("checking");
+    try {
+      await api.doctor(false);
+      setEnvironment("ready");
+    } catch (reason) {
+      setEnvironment("failed");
+      setError(String(reason));
+    }
+  }
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -125,7 +145,7 @@ export default function App() {
   }, [refreshRun, snapshot]);
 
   const request = useMemo(() => toRunRequest(repository, goal, checks), [repository, goal, checks]);
-  const canStart = request.repository.length > 0 && request.goal.length > 0 && request.checks.length > 0 && !busy;
+  const canStart = environment === "ready" && request.repository.length > 0 && request.goal.length > 0 && request.checks.length > 0 && !busy;
 
   async function chooseRepository() {
     const chosen = await open({ directory: true, multiple: false, title: "选择 Git 仓库" });
@@ -177,7 +197,11 @@ export default function App() {
               <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望四种能力协作完成的具体结果……" rows={5} />
               <div className="field-heading"><label>验收命令<span>至少一条</span></label><button className="text-button" onClick={() => setChecks([...checks, ""])}><Plus size={15} />添加命令</button></div>
               <div className="check-list">{checks.map((check, index) => <div className="command-field" key={index}><span>$</span><input aria-label={`验收命令 ${index + 1}`} value={check} onChange={(event) => setChecks(checks.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder="cargo test / npm test / ./scripts/check.sh" />{checks.length > 1 && <button aria-label="移除命令" onClick={() => setChecks(checks.filter((_, itemIndex) => itemIndex !== index))}>×</button>}</div>)}</div>
-              <div className="preflight"><Check size={17} /><div><strong>启动时执行环境检查</strong><span>Git、Codex CLI、schema 和数据目录均通过后才创建 Run。</span></div></div>
+              <div className={`preflight ${environment}`}>
+                {environment === "checking" ? <LoaderCircle className="spin" size={17} /> : environment === "ready" ? <Check size={17} /> : <Circle size={17} />}
+                <div><strong>{environment === "checking" ? "正在检查本地环境" : environment === "ready" ? "本地 Runtime 已就绪" : "环境检查未通过"}</strong><span>{environment === "ready" ? "Git、Codex CLI、schema 和数据目录可以使用。" : environment === "failed" ? "请处理顶部错误后重试，未通过前不会创建 Run。" : "正在确认 Git、Codex CLI、schema 和数据目录。"}</span></div>
+                {environment === "failed" && <button type="button" onClick={checkEnvironment}>重试</button>}
+              </div>
               <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : "启动真实 Run"}</button>
             </div>
           </section>
