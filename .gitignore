@@ -1,3 +1,10 @@
 .superpowers/
 .worktrees/
 /target/
+apps/archmage-desktop/node_modules/
+apps/archmage-desktop/dist/
+apps/archmage-desktop/*.tsbuildinfo
+apps/archmage-desktop/vite.config.js
+apps/archmage-desktop/vite.config.d.ts
+apps/archmage-desktop/src-tauri/gen/
+apps/archmage-desktop/src-tauri/icons/

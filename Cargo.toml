@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/archmage-core", "crates/archmage-cli"]
+members = ["crates/archmage-core", "crates/archmage-cli", "apps/archmage-desktop/src-tauri"]
 resolver = "3"
 
 [workspace.package]

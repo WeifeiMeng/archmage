@@ -14,10 +14,10 @@ fn setup() -> (tempfile::TempDir, Store, String, String) {
 #[test]
 fn migration_and_pragmas_survive_reopen() {
     let (dir, store, run, _) = setup();
-    assert_eq!(store.schema_version().unwrap(), 6);
+    assert_eq!(store.schema_version().unwrap(), 7);
     drop(store);
     let store = Store::open(&dir.path().join("state.db")).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 6);
+    assert_eq!(store.schema_version().unwrap(), 7);
     assert_eq!(store.run(&run).unwrap().state, "running");
     let db = rusqlite::Connection::open(dir.path().join("state.db")).unwrap();
     assert_eq!(
@@ -158,6 +158,37 @@ fn invalid_create_is_atomic_and_active_query_is_read_only() {
     let events = store.events(&run, 0).unwrap();
     assert_eq!(store.active_attempts().unwrap()[0].id, a.id);
     assert_eq!(store.events(&run, 0).unwrap(), events);
+}
+
+#[test]
+fn cancellation_is_idempotent_and_emits_one_request_and_terminal_event() {
+    let (_dir, mut store, run, _) = setup();
+    store.request_cancel(&run).unwrap();
+    store.request_cancel(&run).unwrap();
+    store.apply_cancel(&run).unwrap();
+    store.apply_cancel(&run).unwrap();
+
+    assert_eq!(store.run(&run).unwrap().state, "cancelled");
+    let kinds = store
+        .events(&run, 0)
+        .unwrap()
+        .into_iter()
+        .map(|event| event.event_type)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kinds
+            .iter()
+            .filter(|kind| *kind == "cancel.requested")
+            .count(),
+        1
+    );
+    assert_eq!(
+        kinds
+            .iter()
+            .filter(|kind| *kind == "workflow.cancelled")
+            .count(),
+        1
+    );
 }
 
 #[test]

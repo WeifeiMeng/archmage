@@ -19,7 +19,7 @@ pub enum Commands {
         #[arg(long)]
         offline: bool,
     },
-    /// Execute the built-in workflow (available in a later batch).
+    /// Execute the four-capability workflow with real local Codex.
     Run {
         #[arg(long)]
         repo: PathBuf,

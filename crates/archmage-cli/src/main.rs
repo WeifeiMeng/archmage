@@ -123,7 +123,12 @@ async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
             Ok(())
         }
         args::Commands::Resume { .. } => Err(Error::NotImplemented("resume")),
-        args::Commands::Cancel { .. } => Err(Error::NotImplemented("cancel")),
+        args::Commands::Cancel { run_id } => {
+            let runtime = open_runtime()?;
+            runtime.cancel(&run_id).await?;
+            println!("Run {run_id} cancelled.");
+            Ok(())
+        }
     }
 }
 

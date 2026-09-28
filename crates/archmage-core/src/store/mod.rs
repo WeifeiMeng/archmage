@@ -5,6 +5,7 @@ use crate::{
     error::{Error, Result},
     event::Event,
 };
+use rusqlite::OptionalExtension;
 use rusqlite::{Connection, TransactionBehavior};
 use serde::Serialize;
 use serde_json::Value;
@@ -133,6 +134,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0004_contexts.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0005_checks.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0006_runtime.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0007_control.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -159,7 +161,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0006_runtime.sql"))?;
                 version = 6;
             }
-            if version != 6 {
+            if version == 6 {
+                tx.execute_batch(include_str!("../../migrations/0007_control.sql"))?;
+                version = 7;
+            }
+            if version != 7 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -286,6 +292,28 @@ impl Store {
                 })
             },
         )?)
+    }
+
+    pub fn optional_node_result(&self, run: &str, node_key: &str) -> Result<Option<NodeResult>> {
+        Ok(self
+            .db
+            .query_row(
+                "SELECT a.id,a.thread_id,a.result_artifact_id,a.changeset_artifact_id,a.output_json
+                 FROM attempts a JOIN node_runs n ON n.id=a.node_run_id
+                 WHERE n.run_id=?1 AND n.node_key=?2 AND a.state='succeeded'
+                 ORDER BY a.attempt_number DESC LIMIT 1",
+                rusqlite::params![run, node_key],
+                |row| {
+                    Ok(NodeResult {
+                        attempt_id: row.get(0)?,
+                        thread_id: row.get(1)?,
+                        result_artifact_id: row.get(2)?,
+                        changeset_artifact_id: row.get(3)?,
+                        output: parse_json(row.get(4)?, 4)?,
+                    })
+                },
+            )
+            .optional()?)
     }
 }
 fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {

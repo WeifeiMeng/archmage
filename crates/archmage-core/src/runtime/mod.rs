@@ -1,5 +1,6 @@
 pub mod control;
 mod dispatch;
+mod recovery;
 pub mod scheduler;
 
 use crate::{
@@ -92,6 +93,17 @@ pub struct NodeSnapshot {
     pub key: String,
     pub state: String,
     pub revision: i64,
+    pub result: Option<NodeResultSnapshot>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NodeResultSnapshot {
+    pub attempt_id: String,
+    pub thread_id: String,
+    pub result_artifact_id: String,
+    pub changeset_artifact_id: Option<String>,
+    pub output: serde_json::Value,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -178,13 +190,25 @@ impl Runtime {
         let nodes = store
             .nodes(run_id)?
             .into_iter()
-            .map(|node| NodeSnapshot {
-                id: node.id,
-                key: node.key,
-                state: node.state,
-                revision: node.revision,
+            .map(|node| {
+                let result = store
+                    .optional_node_result(run_id, &node.key)?
+                    .map(|result| NodeResultSnapshot {
+                        attempt_id: result.attempt_id,
+                        thread_id: result.thread_id,
+                        result_artifact_id: result.result_artifact_id,
+                        changeset_artifact_id: result.changeset_artifact_id,
+                        output: result.output,
+                    });
+                Ok(NodeSnapshot {
+                    id: node.id,
+                    key: node.key,
+                    state: node.state,
+                    revision: node.revision,
+                    result,
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         let workspace = store
             .workspace_for_run(run_id)
             .ok()

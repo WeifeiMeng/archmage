@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Archmage",
+  "version": "0.1.0",
+  "identifier": "dev.archmage.workbench",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "security": { "csp": null },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Archmage",
+        "width": 1320,
+        "height": 860,
+        "minWidth": 860,
+        "minHeight": 620,
+        "center": true
+      }
+    ]
+  },
+  "bundle": { "active": false }
+}

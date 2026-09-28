@@ -75,6 +75,48 @@ fn process_started(pid: u32) -> Result<String> {
     Ok(started)
 }
 
+#[cfg(unix)]
+pub fn identity_is_alive(identity: &ProcessIdentity) -> bool {
+    process_started(identity.pid).is_ok_and(|started| started == identity.started)
+        && group_exists(identity.pgid)
+}
+
+#[cfg(not(unix))]
+pub fn identity_is_alive(_identity: &ProcessIdentity) -> bool {
+    false
+}
+
+#[cfg(unix)]
+pub async fn cancel_process(identity: &ProcessIdentity, grace: Duration) -> Result<()> {
+    if !identity_is_alive(identity) {
+        return Ok(());
+    }
+    signal_group(identity.pgid, libc::SIGTERM)?;
+    let deadline = Instant::now() + grace;
+    while Instant::now() < deadline && group_exists(identity.pgid) {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    if group_exists(identity.pgid) {
+        signal_group(identity.pgid, libc::SIGKILL)?;
+    }
+    for _ in 0..50 {
+        if !group_exists(identity.pgid) {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    Err(Error::Preflight(
+        "cancelled process group did not exit".into(),
+    ))
+}
+
+#[cfg(not(unix))]
+pub async fn cancel_process(_identity: &ProcessIdentity, _grace: Duration) -> Result<()> {
+    Err(Error::Preflight(
+        "process cancellation is supported on Unix in S0".into(),
+    ))
+}
+
 pub async fn spawn_owned(
     binary: &Path,
     args: &[OsString],
@@ -177,7 +219,7 @@ async fn bounded(
     mut stream: impl AsyncRead + Unpin,
     max: usize,
     kind: Stream,
-    observer: &std::cell::RefCell<impl FnMut(Stream, &[u8]) -> Result<()>>,
+    observer: &std::sync::Mutex<impl FnMut(Stream, &[u8]) -> Result<()> + Send>,
 ) -> Result<Vec<u8>> {
     let mut result = Vec::new();
     let mut chunk = [0u8; 8192];
@@ -190,7 +232,7 @@ async fn bounded(
             return Err(Error::Limit("process output limit exceeded".into()));
         }
         result.extend_from_slice(&chunk[..count]);
-        (observer.borrow_mut())(kind, &chunk[..count])?;
+        (observer.lock().expect("process observer lock"))(kind, &chunk[..count])?;
     }
     Ok(result)
 }
@@ -214,7 +256,7 @@ pub async fn capture_clean(
     max: usize,
     environment: &[(OsString, OsString)],
 ) -> Result<Captured> {
-    let observer = std::cell::RefCell::new(|_: Stream, _: &[u8]| Ok(()));
+    let observer = std::sync::Mutex::new(|_: Stream, _: &[u8]| Ok(()));
     let mut command = Command::new(binary);
     command
         .args(args)
@@ -269,7 +311,7 @@ pub async fn capture_observed(
     input: &[u8],
     deadline: Duration,
     max: usize,
-    observer: impl FnMut(Stream, &[u8]) -> Result<()>,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
 ) -> Result<Captured> {
     capture_observed_with_identity(
         binary,
@@ -292,10 +334,10 @@ pub async fn capture_observed_with_identity(
     input: &[u8],
     deadline: Duration,
     max: usize,
-    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
-    observer: impl FnMut(Stream, &[u8]) -> Result<()>,
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
 ) -> Result<Captured> {
-    let observer = std::cell::RefCell::new(observer);
+    let observer = std::sync::Mutex::new(observer);
     let mut command = Command::new(binary);
     command
         .args(args)

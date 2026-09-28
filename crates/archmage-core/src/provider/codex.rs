@@ -144,7 +144,7 @@ pub async fn invoke_with_identity(
     tools: &LocalTools,
     invocation: &CodexInvocation,
     prompt: &[u8],
-    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
 ) -> Result<CodexOutcome> {
     if !invocation.repository.is_dir() || !invocation.schema_path.is_file() {
         return Err(Error::Preflight(

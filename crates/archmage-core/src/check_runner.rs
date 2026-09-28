@@ -111,42 +111,44 @@ impl<'a> CheckRunner<'a> {
             return Ok(existing);
         }
         let evidence_id = uuid::Uuid::new_v4().to_string();
-        let tx = self
-            .store
-            .db
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let inserted = tx.execute(
-            "INSERT INTO check_runs(evidence_id,attempt_id,check_id,command,state)
+        {
+            let tx = self
+                .store
+                .db
+                .transaction_with_behavior(TransactionBehavior::Immediate)?;
+            let inserted = tx.execute(
+                "INSERT INTO check_runs(evidence_id,attempt_id,check_id,command,state)
              SELECT ?1,?2,?3,?4,'in_progress'
              WHERE EXISTS(SELECT 1 FROM attempts a JOIN node_runs n ON n.id=a.node_run_id
                           JOIN runs r ON r.id=n.run_id WHERE a.id=?2 AND a.state='running'
                           AND a.owner_generation=?5 AND r.owner_generation=?5 AND r.state='running')",
-            params![evidence_id, self.attempt, check_id, check.command, self.generation],
-        )?;
-        if inserted != 1 {
-            return Err(Error::Conflict);
+                params![evidence_id, self.attempt, check_id, check.command, self.generation],
+            )?;
+            if inserted != 1 {
+                return Err(Error::Conflict);
+            }
+            let (node, run): (String, String) = tx.query_row(
+                "SELECT n.id,n.run_id FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1",
+                [self.attempt],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            transitions::event(
+                &tx,
+                &run,
+                "check.started",
+                Some(&node),
+                Some(self.attempt),
+                serde_json::json!({
+                    "evidence_id": evidence_id,
+                    "check_id": check_id,
+                    "shell": "/bin/sh",
+                    "command": check.command,
+                    "cwd": self.repo.root,
+                    "timeout_ms": check.timeout.as_millis()
+                }),
+            )?;
+            tx.commit()?;
         }
-        let (node, run): (String, String) = tx.query_row(
-            "SELECT n.id,n.run_id FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1",
-            [self.attempt],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
-        transitions::event(
-            &tx,
-            &run,
-            "check.started",
-            Some(&node),
-            Some(self.attempt),
-            serde_json::json!({
-                "evidence_id": evidence_id,
-                "check_id": check_id,
-                "shell": "/bin/sh",
-                "command": check.command,
-                "cwd": self.repo.root,
-                "timeout_ms": check.timeout.as_millis()
-            }),
-        )?;
-        tx.commit()?;
         let before = snapshot(self.repo)?.id;
         let started_ms = now_ms()?;
         let config = permission_config(&self.repo.root)?;

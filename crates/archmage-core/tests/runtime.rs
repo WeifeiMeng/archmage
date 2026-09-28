@@ -23,6 +23,7 @@ fn node(key: &str, state: &str) -> NodeSnapshot {
         key: key.to_owned(),
         state: state.to_owned(),
         revision: 0,
+        result: None,
     }
 }
 
@@ -93,6 +94,31 @@ fn persisted_run_only_completes_after_all_nodes_succeed() {
     assert_eq!(
         store.events(&run, 0).unwrap().last().unwrap().event_type,
         "workflow.completed"
+    );
+}
+
+#[test]
+fn reconciliation_marks_an_abandoned_attempt_interrupted() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), None).unwrap()).unwrap();
+    let mut store = Store::open(&data.join("archmage.db")).unwrap();
+    let run = store.create_run("recover", &["designer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let node = store.nodes(&run).unwrap().remove(0);
+    store.ready_node(&node.id, node.revision).unwrap();
+    store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    drop(store);
+
+    runtime.reconcile_interrupted().unwrap();
+
+    assert_eq!(
+        Store::open(&data.join("archmage.db"))
+            .unwrap()
+            .run(&run)
+            .unwrap()
+            .state,
+        "interrupted"
     );
 }
 

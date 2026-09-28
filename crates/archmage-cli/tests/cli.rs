@@ -100,6 +100,69 @@ fn status_reads_a_persisted_run_without_starting_codex() {
 }
 
 #[test]
+fn cancel_marks_a_persisted_run_cancelled_without_starting_codex() {
+    use archmage_core::{
+        config::Config,
+        runtime::{CheckSpec, RunRequest, Runtime},
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    for args in [
+        vec!["init", "--quiet"],
+        vec!["config", "user.email", "archmage@example.invalid"],
+        vec!["config", "user.name", "Archmage Test"],
+    ] {
+        assert!(
+            Command::new("git")
+                .args(args)
+                .current_dir(&repo)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
+    assert!(
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        Command::new("git")
+            .args(["commit", "--quiet", "-m", "fixture"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
+    let request = RunRequest::new(
+        &repo,
+        "cancel me",
+        vec![CheckSpec::new("check-1", "true").unwrap()],
+    )
+    .unwrap();
+    let run_id = runtime.create_run_definition(&request).unwrap();
+
+    let output = cli()
+        .args(["cancel", &run_id])
+        .env("ARCHMAGE_HOME", &data)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(runtime.snapshot(&run_id).unwrap().state, "cancelled");
+}
+
+#[test]
 fn blank_goal_is_rejected() {
     let output = cli()
         .args(["run", "--repo", ".", "--goal", "  ", "--check", "true"])
@@ -136,7 +199,7 @@ fn offline_doctor_opens_database_without_auth_probe() {
         .unwrap();
     assert!(out.status.success());
     let value: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(value["database"]["schema_version"], 6);
+    assert_eq!(value["database"]["schema_version"], 7);
     assert_eq!(value["authentication"], "not_verified_offline");
     assert!(root.join("archmage.db").is_file());
 }
