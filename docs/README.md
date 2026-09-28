@@ -4,20 +4,20 @@ This directory is the maintained source of truth for product scope, concepts, ar
 
 ## Recommended reading order
 
-Latest development increment: [Online Doctor guide (中文)](guide-online-doctor.md).
+Latest development increment: [Desktop runtime vertical slice](superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md).
 
-**Want to run the current code?** Install it and check the exact available surface in the [CLI command reference (中文)](cli-reference.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
+**Want to run the current code?** Use the [CLI command reference (中文)](cli-reference.md) or [desktop client guide (中文)](runbooks/desktop-s0.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
 
 1. [CLI command reference](cli-reference.md)
-2. [Product vision](product/vision.md)
-3. [MVP definition](product/mvp-definition.md)
-4. [Glossary](concepts/glossary.md)
-5. [Collaboration model](concepts/collaboration-model.md)
-6. [Architecture overview](architecture/overview.md)
-7. [Delivery roadmap](roadmap/README.md)
-8. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
-9. [Approved S0 design](superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
-10. [S0 implementation plan](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md) — 14 tasks, four delivery batches, real Codex acceptance gates
+2. [Desktop client guide](runbooks/desktop-s0.md)
+3. [Product vision](product/vision.md)
+4. [MVP definition](product/mvp-definition.md)
+5. [Glossary](concepts/glossary.md)
+6. [Collaboration model](concepts/collaboration-model.md)
+7. [Architecture overview](architecture/overview.md)
+8. [Delivery roadmap](roadmap/README.md)
+9. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
+10. [Desktop runtime implementation plan](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
 
 ## Documentation layers
 

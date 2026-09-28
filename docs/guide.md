@@ -1,205 +1,132 @@
 # 当前版本使用指南
 
-更新日期：2026-09-18。本文以 `main` 分支为准，描述当前代码实际可用的入口。安装和日常命令优先查阅 [CLI 命令手册](cli-reference.md)。
+更新日期：2026-09-28。本文描述当前源码的真实入口；日常参数以 [CLI 命令手册](cli-reference.md) 为准，图形界面以 [桌面客户端使用手册](runbooks/desktop-s0.md) 为准。
 
-## 当前可以做什么
+## 当前能力
 
-当前版本可以安装 CLI、检查本机 Git/Codex 环境、初始化本地 SQLite 数据库，并通过在线 `doctor` 调用真实 Codex。Core 已具备事务执行账本、不可变 Artifact、真实 Git Worktree、Capability Contract/Context/Handoff，以及由真实 Codex Tester 发起的受限 Check Runner。
+Archmage 已具备一条可运行的纵向主链：连接本机真实 Codex CLI，在每个 Run 的隔离 Git worktree 中依次调度 Designer、Coder、Tester、Reviewer 四种逻辑能力，并持久化 Run、Node、Attempt、Artifact、Handoff、ChangeSet、检查证据和事件。
 
-`run`、`status`、`logs`、`resume`、`cancel` 仍只有参数解析，尚未连到完整的四能力工作流。看到帮助项不代表该工作流已经可用。
+可用入口：
 
-## 1. 进入仓库
+- CLI：`doctor`、`run`、`status`、`logs`、`cancel`；
+- Tauri 桌面客户端：新建 Run、查看四节点进度和时间线、打开工作区、取消 Run；
+- 进程恢复：启动时将无法确认存活的遗留 Attempt 收敛为 `interrupted`。
+
+暂未提供：`resume`、`logs --follow`、后台 daemon、任意工作流编排。
+
+## 1. 准备环境
 
 ```bash
 cd /Users/mengweifei/Desktop/code/github/archmage
-git branch --show-current
-git log -1 --oneline
-```
-
-本指南描述 `main` 的当前行为。开发新功能时可以使用独立 Worktree，但用户不需要进入功能分支才能安装 CLI。
-
-## 2. 检查依赖
-
-```bash
 rustc --version
 cargo --version
 git --version
+node --version
+npm --version
 codex --version
 codex login status
 ```
 
-当前验证环境是 macOS、Rust/Cargo 1.95.0、Codex CLI 0.154.0。在线探针使用 Codex 当前登录和默认模型配置；Archmage 不会静默切换模型。
+Archmage 使用当前 `PATH` 中的 Git/Codex 和当前 Codex 登录、模型配置，不会静默切换账号或模型。
 
-## 3. 安装与查看命令
-
-```bash
-cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
-command -v archmage
-archmage --help
-archmage --version
-archmage doctor --help
-```
-
-只想使用仓库内的开发构建时：
-
-```bash
-cargo build -p archmage-cli
-./target/debug/archmage --help
-```
-
-`cargo build` 不会把 executable 安装进 `PATH`。标准安装、更新、卸载和退出码见 [CLI 命令手册](cli-reference.md)。
-
-## 4. 设置独立数据目录
-
-建议为开发验证指定仓库外的专用目录：
+如需隔离开发数据：
 
 ```bash
 export ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-dev"
 ```
 
-该目录保存 `archmage.db` 和在线探针诊断。Unix 上新目录为 `0700`，敏感日志为 `0600`。不要把 `ARCHMAGE_HOME` 设为家目录、系统临时目录根或源码仓库目录，也不要提交或上传其中的原始诊断日志。
+CLI 与桌面端必须使用相同的 `ARCHMAGE_HOME`，才能看到同一批 Run。
 
-## 5. 不调用模型的离线诊断
+## 2. 安装并运行 CLI
 
 ```bash
+cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
+export PATH="$HOME/.local/bin:$PATH"
 archmage doctor --offline
-```
-
-这条命令会检查 Git、Codex executable、必要 flags、数据目录和 SQLite。它不会请求模型，也不会验证账号是否真的能完成推理。成功 JSON 中应包含：
-
-```json
-{
-  "authentication": "not_verified_offline",
-  "database": {
-    "schema_version": 5,
-    "foreign_keys": true,
-    "synchronous": 2,
-    "journal_mode": "wal",
-    "busy_timeout_ms": 5000
-  }
-}
-```
-
-离线 doctor 会创建或打开 `$ARCHMAGE_HOME/archmage.db`，但不会创建 Workflow Run。
-
-## 6. 调用真实 Codex
-
-```bash
 archmage doctor
 ```
 
-该命令会明确提示即将进行在线请求，然后以 `read-only` sandbox 调用真实 `codex exec`。它使用本机账号和当前模型配置，可能消耗 Codex 使用额度。成功结果包含：
-
-- `authentication=verified`
-- 非空的 `probe.thread_id`
-- `probe.exit_code=0`
-- `probe.result={"ok":true}`
-- `probe.diagnostics_dir`
-
-每次调用都会在数据目录创建独立 `probe-*` 目录，保存 JSONL 事件、stderr、最终结果、Schema 和元数据。失败时目录同样保留，以便诊断。
-
-还可以直接运行两层真实接入测试：
+执行真实四能力流程：
 
 ```bash
-cargo test -p archmage-core --test codex_live real_readonly_probe \
-  -- --ignored --nocapture
-
-cargo test -p archmage-cli --test doctor_live \
-  -- --ignored --nocapture
+archmage run \
+  --repo /absolute/path/to/repository \
+  --goal "实现一个可验证的小功能" \
+  --check "cargo test"
 ```
 
-这两条命令都会实际访问模型服务；普通 `cargo test` 默认忽略它们。
-
-## 7. 查看本地数据库
-
-先确保已运行一次 doctor，然后可用系统 `sqlite3` 做只读检查：
+查询和取消：
 
 ```bash
-sqlite3 "$ARCHMAGE_HOME/archmage.db" \
-  'SELECT version, applied_at FROM schema_migrations ORDER BY version;'
-
-sqlite3 "$ARCHMAGE_HOME/archmage.db" \
-  'SELECT id, state, created_at FROM runs ORDER BY created_at DESC LIMIT 10;'
+archmage status <run-id> --json
+archmage logs <run-id>
+archmage cancel <run-id>
 ```
 
-当前 doctor 不创建 Run，所以第二条通常没有输出。不要手工修改数据库；后续 Runtime 依赖 revision、外键和事件事务保持一致。
+`run` 会等待终态；`logs` 读取持久化事件但暂不支持 `--follow`；`resume` 暂未实现。
 
-## 8. 验证持久化、Artifact 与真实 Worktree
-
-这些命令不调用模型，但会使用临时 SQLite 数据库和临时真实 Git 仓库：
+## 3. 启动桌面客户端
 
 ```bash
-cargo test -p archmage-core --test persistence
-cargo test -p archmage-core --test artifacts
-cargo test -p archmage-core --test workspace
-cargo test -p archmage-core --test processes
-cargo test -p archmage-core --test ownership
-cargo test -p archmage-core --test contracts
-cargo test -p archmage-core --test context
-cargo test -p archmage-core --test checks
+npm install --prefix apps/archmage-desktop
+npm run tauri dev --prefix apps/archmage-desktop
 ```
 
-Worktree 测试验证 committed baseline 隔离、partial provisioning 对账和 ChangeSet Artifact。进程测试验证双流读取、输出上限、进程启动身份，以及 TERM → bounded wait → KILL 对整个进程组的清理。ownership 测试验证单 Run OS lock 和旧 generation 不能提交结果；contracts 测试验证四个 Capability 的严格输出和业务不变量；checks 测试用真实 Codex sandbox 执行普通 shell check，但不调用模型。
+在窗口中选择已有 commit 的 Git 仓库，填写目标和至少一条验收命令，然后点击“启动真实 Run”。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
 
-要运行真实 Codex Tester 验收，先构建 CLI，再显式运行 ignored 测试：
+## 4. Runtime 的关键语义
 
-```bash
-cargo build -p archmage-cli
-cargo test -p archmage-core --test checks_live \
-  real_tester_requests_success_and_failure_evidence \
-  -- --ignored --nocapture
-```
+- 一个 Run 包含多个 Node，当前内置四个能力节点；
+- 多能力不等于必须启动多个长期 Agent 实例，当前节点均可共享同一个真实 Codex provider；
+- 每个节点有独立 Codex thread/result 与显式 Context/Handoff；
+- Tester 只能请求启动 Run 时冻结的 check ID，命令由 Runtime 执行并形成 canonical evidence；
+- 所有状态转换与事件写入 SQLite；
+- 每个 Run 使用独立 Git worktree，用户仓库 checkout 不作为执行工作区；
+- 没有 daemon：客户端或 CLI 退出后不会继续调度新节点。
 
-该测试会产生真实模型调用。Tester 只能通过 attempt 专属 Unix socket 请求冻结的 check ID；命令、cwd、timeout、exit/signal、stdout/stderr hash 与 Artifact、执行时间和工作区前后 Snapshot 都由 Runtime 形成 canonical evidence。失败 check 仍返回 evidence，只有传输或证据故障才视为能力失败。`archmage internal check` 是隐藏的内部协议，不是面向用户手工运行的命令。
+## 5. 开发验证
 
-当前这些 Worktree API 仍是 Core 能力，尚未暴露为可执行的 `archmage run`。
-
-## 9. 完整开发检查
+不调用模型的常规检查：
 
 ```bash
 cargo fmt --all --check
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+npm test --prefix apps/archmage-desktop
+npm run build --prefix apps/archmage-desktop
+cargo check -p archmage-desktop
 git diff --check
 ```
 
-普通测试不会调用真实 Codex；输出中的 ignored 是额度保护，不代表在线门禁已通过。
-
-## 10. 尚未可用的工作流命令
-
-以下命令已经定义参数，但当前会返回退出码 `20` 和 `not implemented`：
+需要真实 Codex 的测试默认标记为 ignored，普通 `cargo test` 不会消耗模型额度。在线环境探针：
 
 ```bash
-archmage run \
-  --repo /absolute/path/to/repository \
-  --goal "实现目标" \
-  --check "cargo test"
-
-archmage status <run-id> --json
-archmage logs <run-id> --follow
-archmage resume <run-id>
-archmage cancel <run-id>
+cargo test -p archmage-core --test codex_live real_readonly_probe \
+  -- --ignored --nocapture
 ```
 
-这些命令列在这里是为了说明最终接口形态，不是当前可用示例。现在还没有通过 CLI 产生的 Run ID。
+Runtime 主链的最终验收应使用一个临时 Git fixture、真实 Codex 和至少一条冻结 check，确认四个节点都进入成功终态并由 Reviewer 给出 outcome。
+
+## 6. 数据与诊断
+
+`archmage doctor --offline` 输出的 `config.data_root` 是实际数据目录。主要内容包括：
+
+- `archmage.db`：schema v7 的执行账本与事件；
+- Run worktree 与 Artifact；
+- Codex JSONL、stderr 和 metadata 诊断。
+
+诊断可能包含本机路径、目标代码或模型上下文，不要未经脱敏就上传或提交 Git。不要手工修改 SQLite；Runtime 依赖 revision、事务、外键和事件顺序维持状态一致性。
 
 ## 常见问题
 
-### `codex executable not found on PATH`
+### CLI 查不到桌面端创建的 Run
 
-```bash
-command -v codex
-codex --version
-```
+检查两边的 `ARCHMAGE_HOME` 是否一致。未显式设置时，两者都使用系统应用数据目录。
 
-Archmage 使用当前终端的 `PATH`。如果尚未登录，运行 `codex login`；不要把 token 或认证文件内容复制到项目中。
+### 离线 Doctor 成功，在线 Doctor 失败
 
-### 在线 doctor 失败但离线 doctor 成功
+离线检查不验证登录、网络、额度或模型服务。查看错误给出的 diagnostics 路径，并在分享前脱敏。
 
-离线检查只证明 executable 和本地参数存在。网络、账号、额度、默认模型或 CLI/模型兼容性仍可能让真实请求失败。查看错误中给出的 `probe.diagnostics_dir`，但不要直接公开原始日志。
+### 关闭客户端后 Run 会继续吗
 
-### `workflow command is not implemented in this batch`
-
-这是 `run/status/logs/resume/cancel` 的当前预期行为。owner generation、Run lock、四个 Capability Contract、Context/Handoff 和 Check Runner 已在 Core 完成；还需要 Ready Set 调度器与 Runtime 主链，才会开放纵向工作流。
-
-详细进度见 [C 批次进度](acceptance/s0/batch-c-progress.md)，总体范围见 [S0 实现计划](superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)。
+不会。正常关闭时客户端会提示并取消当前会话启动的活跃 Run；异常退出留下的 Attempt 会在下次启动时被标记为 `interrupted`。当前需要重新创建 Run，等待后续实现 `resume`。
