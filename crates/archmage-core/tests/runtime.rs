@@ -1,6 +1,10 @@
 use archmage_core::{
     config::Config,
-    runtime::{CheckSpec, RunRequest, Runtime},
+    runtime::{
+        CheckSpec, NodeSnapshot, RunRequest, Runtime,
+        scheduler::{TerminalDecision, ready_keys, terminal_decision},
+    },
+    store::{AttemptOutcome, Store},
 };
 use std::{path::Path, process::Command};
 
@@ -11,6 +15,85 @@ fn git(repo: &Path, args: &[&str]) {
         .status()
         .unwrap();
     assert!(status.success());
+}
+
+fn node(key: &str, state: &str) -> NodeSnapshot {
+    NodeSnapshot {
+        id: key.to_owned(),
+        key: key.to_owned(),
+        state: state.to_owned(),
+        revision: 0,
+    }
+}
+
+#[test]
+fn ready_set_advances_from_persisted_dependencies() {
+    let initial = [
+        node("designer", "pending"),
+        node("coder", "pending"),
+        node("tester", "pending"),
+        node("reviewer", "pending"),
+    ];
+    assert_eq!(ready_keys(&initial), ["designer"]);
+
+    let after_design = [
+        node("designer", "succeeded"),
+        node("coder", "pending"),
+        node("tester", "pending"),
+        node("reviewer", "pending"),
+    ];
+    assert_eq!(ready_keys(&after_design), ["coder"]);
+
+    let failed = [
+        node("designer", "failed"),
+        node("coder", "pending"),
+        node("tester", "pending"),
+        node("reviewer", "pending"),
+    ];
+    assert!(ready_keys(&failed).is_empty());
+    assert_eq!(terminal_decision(&failed), TerminalDecision::Failed);
+
+    let complete = [
+        node("designer", "succeeded"),
+        node("coder", "succeeded"),
+        node("tester", "succeeded"),
+        node("reviewer", "succeeded"),
+    ];
+    assert_eq!(terminal_decision(&complete), TerminalDecision::Completed);
+}
+
+#[test]
+fn persisted_run_only_completes_after_all_nodes_succeed() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store
+        .create_run(
+            "finish the workflow",
+            &["designer", "coder", "tester", "reviewer"],
+        )
+        .unwrap();
+    store.start_run(&run, 0).unwrap();
+    assert!(store.complete_run(&run, 1).is_err());
+
+    for node in store.nodes(&run).unwrap() {
+        store.ready_node(&node.id, node.revision).unwrap();
+        let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+        store.mark_running(&attempt.id, attempt.revision).unwrap();
+        store
+            .finish_attempt(
+                &attempt.id,
+                attempt.revision + 1,
+                AttemptOutcome::Succeeded(serde_json::json!({"ok": true})),
+            )
+            .unwrap();
+    }
+
+    store.complete_run(&run, 1).unwrap();
+    assert_eq!(store.run(&run).unwrap().state, "completed");
+    assert_eq!(
+        store.events(&run, 0).unwrap().last().unwrap().event_type,
+        "workflow.completed"
+    );
 }
 
 #[test]

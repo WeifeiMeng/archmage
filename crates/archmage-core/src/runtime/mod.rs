@@ -1,4 +1,5 @@
 pub mod control;
+pub mod scheduler;
 
 use crate::{
     config::Config,

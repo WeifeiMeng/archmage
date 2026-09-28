@@ -260,6 +260,21 @@ impl Store {
         tx.commit()?;
         Ok(())
     }
+
+    pub fn complete_run(&mut self, id: &str, revision: i64) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        changed(tx.execute(
+            "UPDATE runs SET state='completed',revision=revision+1
+             WHERE id=?1 AND revision=?2 AND state='running'
+             AND NOT EXISTS(SELECT 1 FROM node_runs WHERE run_id=?1 AND state!='succeeded')",
+            params![id, revision],
+        )?)?;
+        event(&tx, id, "workflow.completed", None, None, json!({}))?;
+        tx.commit()?;
+        Ok(())
+    }
     pub fn ready_node(&mut self, id: &str, revision: i64) -> Result<()> {
         let tx = self
             .db
