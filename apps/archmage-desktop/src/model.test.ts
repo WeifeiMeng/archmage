@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityDisplayName, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, shouldConfirmCapabilityExit, toRunRequest, type AgentManagementSnapshot } from "./model";
+import { bindingOnlyUpdate, capabilityDisplayName, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, shouldConfirmCapabilityExit, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration } from "./model";
 
 describe("capability topology", () => {
   it("keeps execution dependencies separate from extra context handoffs", () => {
@@ -18,6 +18,17 @@ describe("capability topology", () => {
     expect(shouldConfirmCapabilityExit("capabilities", "runs", true)).toBe(true);
     expect(shouldConfirmCapabilityExit("capabilities", "agents", false)).toBe(false);
     expect(shouldConfirmCapabilityExit("runs", "agents", true)).toBe(false);
+  });
+  it("changes only the Agent binding when saving a Capability", () => {
+    const current: CapabilityConfiguration = {
+      key: "designer", displayName: "Designer", description: "内置职责",
+      extraInstructions: "existing instruction", agentInstanceId: "codex-a",
+      revision: 3, promptVersion: "v1",
+    };
+    expect(bindingOnlyUpdate(current, "codex-b")).toEqual({
+      key: "designer", displayName: "Designer", description: "内置职责",
+      extraInstructions: "existing instruction", agentInstanceId: "codex-b", revision: 3,
+    });
   });
 });
 

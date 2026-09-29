@@ -50,6 +50,11 @@ export type CapabilityConfiguration = {
 
 export type CapabilityConfigurationInput = Omit<CapabilityConfiguration, "promptVersion">;
 
+export function bindingOnlyUpdate(current: CapabilityConfiguration, agentInstanceId: string): CapabilityConfigurationInput {
+  const { promptVersion: _promptVersion, ...input } = current;
+  return { ...input, agentInstanceId };
+}
+
 export function capabilityDisplayName(configuration: Pick<CapabilityConfiguration, "displayName"> | undefined, key: CapabilityKey): string {
   return configuration?.displayName || key[0].toUpperCase() + key.slice(1);
 }

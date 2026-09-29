@@ -19,7 +19,7 @@
 .cap-node:hover { border-color:#7baac0; background:#1c3041; }
 .cap-node.selected { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); background:#19332b; }
 .cap-node:disabled { cursor:wait; opacity:.72; }
-.cap-node:focus-visible,.cap-heading-actions button:focus-visible,.cap-fields input:focus-visible,.cap-fields textarea:focus-visible,.cap-fields select:focus-visible,.cap-editor-actions button:focus-visible,.cap-feedback button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.cap-node:focus-visible,.cap-heading-actions button:focus-visible,.cap-fields select:focus-visible,.cap-editor-actions button:focus-visible,.cap-feedback button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .cap-node-key { color:#9ac0d6; font:10px ui-monospace,SFMono-Regular,monospace; letter-spacing:.08em; }
 .cap-node strong { margin-top:5px; font-size:15px; max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .cap-node-agent { margin-top:7px; color:#afbdc8; font-size:10px; max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
@@ -43,13 +43,11 @@
 .cap-editor-heading .eyebrow { margin:0 0 5px; }
 .cap-editor-heading h2 { margin:0 0 4px; font-size:18px; }
 .cap-editor-heading span:last-child { color:var(--muted); font-size:11px; }
-.cap-fields { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px; }
+.cap-role-description { margin:18px 0 0; color:#bac8d4; font-size:13px; line-height:1.6; }
+.cap-fields { max-width:520px; margin-top:20px; }
 .cap-fields label { display:flex; flex-direction:column; gap:8px; color:#bac8d4; font-size:12px; }
-.cap-fields input,.cap-fields textarea,.cap-fields select { width:100%; border:1px solid var(--border); border-radius:8px; background:#0c1117; color:var(--text); font-size:13px; font-family:inherit; padding:11px 12px; outline:0; }
-.cap-fields input,.cap-fields select { min-height:44px; }
-.cap-fields textarea { resize:vertical; line-height:1.55; }
+.cap-fields select { width:100%; min-height:44px; border:1px solid var(--border); border-radius:8px; background:#0c1117; color:var(--text); font-size:13px; font-family:inherit; padding:11px 12px; outline:0; }
 .cap-fields small { color:var(--muted); font-size:11px; line-height:1.5; }
-.cap-fields .cap-wide-field { grid-column:1 / -1; }
 .cap-message { margin:18px 0 0; font-size:12px; }
 .cap-message.error { color:#ffadb2; }
 .cap-message.success { color:#72d9a2; }
@@ -60,5 +58,5 @@
 .cap-feedback { display:flex; align-items:center; gap:10px; margin-top:28px; padding:18px; border:1px solid var(--border); border-radius:10px; color:var(--muted); font-size:13px; }
 .inline-cap-link { margin-top:8px; padding:0; border:0; background:none; color:var(--accent); font-size:11px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
 .inline-cap-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-@media(max-width:780px) { .capabilities-view { padding-top:26px; } .cap-fields { grid-template-columns:1fr; } .cap-fields .cap-wide-field { grid-column:auto; } .cap-editor-actions { align-items:flex-start; flex-direction:column; } .cap-section-heading { align-items:flex-start; flex-direction:column; } }
+@media(max-width:780px) { .capabilities-view { padding-top:26px; } .cap-editor-actions { align-items:flex-start; flex-direction:column; } .cap-section-heading { align-items:flex-start; flex-direction:column; } }
 @media(prefers-reduced-motion:reduce) { .cap-node { transition:none; } }

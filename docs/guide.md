@@ -70,13 +70,13 @@ archmage cancel <run-id>
 ./scripts/dev-desktop.sh
 ```
 
-第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后进入“Capability 管理”，在固定拓扑中确认 Designer、Coder、Tester、Reviewer 的 Agent 绑定，也可编辑显示名称、职责说明和补充指令。回到“新建 Run”，选择已有 commit 的 Git 仓库并填写目标即可。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
+第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后进入独立的“Capability 管理”页面，在固定拓扑中确认 Designer、Coder、Tester、Reviewer 各自绑定的 Agent。能力的职责提示词由 Runtime 内置，本版暂不编辑。回到“新建 Run”，选择已有 commit 的 Git 仓库并填写目标即可。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
 
 ## 4. Runtime 的关键语义
 
 - 一个 Run 包含多个 Node，当前内置四个能力节点；
 - 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
-- 能力绑定和补充指令在 Capability 管理页全局配置，不支持 Run 级临时覆盖；
+- Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；能力提示词暂由 Runtime 内置；
 - 固定拓扑的实线表示执行依赖，虚线表示额外上下文传递；当前不能拖动节点或编辑连线，团队 Canvas 属于后续阶段；
 - Run 启动时冻结当前能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
 - 每个节点有独立 Codex thread/result 与显式 Context/Handoff；

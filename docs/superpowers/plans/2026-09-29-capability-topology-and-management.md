@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Show the four built-in Capability roles as a truthful fixed topology and let users configure each role, including its Agent binding, without changing existing Runs.
+**Goal:** Show the four built-in Capability roles as a truthful fixed topology and let users bind each role to an Agent without changing existing Runs. Follow-up scope decision: prompt and metadata editing are deferred.
 
 **Architecture:** Core owns built-in topology and capability configuration. SQLite persists configuration, Runtime freezes it into each Run, and Tauri exposes typed commands. React draws the fixed graph and edits one selected capability at a time.
 
@@ -45,7 +45,7 @@
 - [ ] Add a failing frontend test for topology metadata: four stable nodes, three execution edges, three additional context edges, and no edge-edit action.
 - [ ] Run `npm test` from `apps/archmage-desktop` and confirm the new test fails.
 - [ ] Add a `Capabilities` sidebar destination. Draw a fixed left-to-right SVG/HTML topology with solid execution arrows and dashed extra handoffs, a legend, accessible node buttons, and horizontal overflow at narrow widths.
-- [ ] Add selected-node fields for display name, description, extra instructions, and Agent binding. Save only on explicit action; preserve edits on failure and show revision conflicts. Show real connection status only from Runtime.
+- [ ] Show read-only role metadata and a single editable Agent binding. Save only on explicit action; preserve the selection on failure and show revision conflicts. Show real connection status only from Runtime.
 - [ ] Remove the binding table from `AgentManagement` and link to `Capabilities`. Link Run binding warnings to the new page.
 - [ ] Run frontend tests/build and commit this unit.
 

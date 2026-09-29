@@ -56,7 +56,7 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
       {snapshot.adapters.filter((adapter) => !adapter.supported).map((adapter) => <article className="agent-card unsupported" key={adapter.kind}><div className="agent-card-top"><span className="agent-logo"><Unplug size={19} /></span><div><h3>{adapter.displayName}</h3><span>Provider Adapter</span></div><span className="status-chip unsupported">尚未支持</span></div><p>Adapter 类型已保留，但当前版本不会创建连接、执行探测或承载能力。</p></article>)}
     </div>
 
-    <div className="agents-section-heading routing-heading"><div><h2>能力路由</h2><p>四个 Capability 的职责、补充指令和 Agent 绑定现在统一在 Capability 管理中配置。</p></div><button className="secondary-action" onClick={onOpenCapabilities}>打开 Capability 管理</button></div>
+    <div className="agents-section-heading routing-heading"><div><h2>能力路由</h2><p>在独立的 Capability 管理页查看固定拓扑，并为四个能力分别绑定执行 Agent。</p></div><button className="secondary-action" onClick={onOpenCapabilities}>打开 Capability 管理</button></div>
   </section>;
 }
 

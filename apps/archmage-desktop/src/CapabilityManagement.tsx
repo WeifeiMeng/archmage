@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { ArrowRight, CircleAlert, LoaderCircle, RefreshCw, Save, Settings2 } from "lucide-react";
 import { api } from "./api";
 import {
+  bindingOnlyUpdate,
   connectionLabel,
   groupTopologyEdges,
-  type CapabilityConfiguration,
   type CapabilityKey,
   type CapabilityManagementSnapshot,
   type TopologyEdge,
@@ -61,7 +61,7 @@ function Topology({ snapshot, selected, onSelect, busy }: {
 export function CapabilityManagement({ onError, onDirtyChange }: { onError: (message: string) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [snapshot, setSnapshot] = useState<CapabilityManagementSnapshot | null>(null);
   const [selected, setSelected] = useState<CapabilityKey>("designer");
-  const [draft, setDraft] = useState<CapabilityConfiguration | null>(null);
+  const [draftAgentId, setDraftAgentId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -70,7 +70,7 @@ export function CapabilityManagement({ onError, onDirtyChange }: { onError: (mes
     try {
       const next = await api.getCapabilityManagement();
       setSnapshot(next);
-      setDraft(next.configurations.find((item) => item.key === selected) ?? null);
+      setDraftAgentId(next.configurations.find((item) => item.key === selected)?.agentInstanceId ?? null);
       setMessage(null);
     } catch (reason) {
       setMessage(`读取 Capability 配置失败：${String(reason)}`);
@@ -84,23 +84,22 @@ export function CapabilityManagement({ onError, onDirtyChange }: { onError: (mes
     if (!isTauri()) return;
     api.getCapabilityManagement().then((next) => {
       setSnapshot(next);
-      setDraft(next.configurations.find((item) => item.key === "designer") ?? null);
+      setDraftAgentId(next.configurations.find((item) => item.key === "designer")?.agentInstanceId ?? null);
     }).catch((reason) => { setMessage(`读取 Capability 配置失败：${String(reason)}`); onError(String(reason)); });
   }, [onError]);
 
   const saved = snapshot?.configurations.find((item) => item.key === selected);
-  const dirty = useMemo(() => !!draft && !!saved && (
-    draft.displayName !== saved.displayName || draft.description !== saved.description ||
-    draft.extraInstructions !== saved.extraInstructions || draft.agentInstanceId !== saved.agentInstanceId
-  ), [draft, saved]);
+  const dirty = !!saved && draftAgentId !== null && draftAgentId !== saved.agentInstanceId;
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
-  const instance = snapshot?.instances.find((item) => item.id === draft?.agentInstanceId);
+  const instance = snapshot?.instances.find((item) => item.id === draftAgentId);
+  const availableInstances = snapshot?.instances.filter((item) => item.enabled && item.providerKind === "codex") ?? [];
+  const canSave = !!instance?.enabled && instance.providerKind === "codex";
 
   async function select(key: CapabilityKey) {
     if (key === selected || !snapshot) return;
     if (dirty && !await confirm("当前 Capability 有未保存的修改，确定放弃吗？", { title: "切换 Capability", kind: "warning" })) return;
     setSelected(key);
-    setDraft(snapshot.configurations.find((item) => item.key === key) ?? null);
+    setDraftAgentId(snapshot.configurations.find((item) => item.key === key)?.agentInstanceId ?? null);
     setMessage(null);
   }
 
@@ -110,51 +109,42 @@ export function CapabilityManagement({ onError, onDirtyChange }: { onError: (mes
   }
 
   async function save() {
-    if (!draft || !dirty) return;
+    if (!saved || !draftAgentId || !dirty || !canSave) return;
     setBusy(true);
     setMessage(null);
     try {
-      const next = await api.saveCapabilityConfiguration({
-        key: draft.key,
-        displayName: draft.displayName,
-        description: draft.description,
-        extraInstructions: draft.extraInstructions,
-        agentInstanceId: draft.agentInstanceId,
-        revision: draft.revision,
-      });
+      const next = await api.saveCapabilityConfiguration(bindingOnlyUpdate(saved, draftAgentId));
       setSnapshot(next);
-      setDraft(next.configurations.find((item) => item.key === selected) ?? null);
-      setMessage("配置已保存，仅影响之后创建的 Run。");
+      setDraftAgentId(next.configurations.find((item) => item.key === selected)?.agentInstanceId ?? null);
+      setMessage("Agent 绑定已保存，仅影响之后创建的 Run。");
     } catch (reason) {
       const detail = String(reason);
-      setMessage(detail.includes("refresh and retry") ? "配置已在别处更新。请刷新后重新编辑。" : `保存失败：${detail}`);
+      setMessage(detail.includes("refresh and retry") ? "绑定已在别处更新。请刷新后重新选择。" : `保存失败：${detail}`);
       onError(detail);
     } finally {
       setBusy(false);
     }
   }
 
-  if (!isTauri()) return <section className="capabilities-view"><header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1></header><div className="cap-feedback">当前是浏览器预览。请在 Tauri 桌面窗口查看真实拓扑与 Agent 配置。</div></section>;
+  if (!isTauri()) return <section className="capabilities-view"><header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1></header><div className="cap-feedback">当前是浏览器预览。请在 Tauri 桌面窗口查看真实拓扑与 Agent 绑定。</div></section>;
   if (!snapshot) return <section className="capabilities-view"><header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1></header><div className="cap-feedback">{busy ? <LoaderCircle className="spin" size={18} /> : <CircleAlert size={18} />}{message ?? "正在读取 Capability 配置…"}{!busy && <button onClick={reload}>重试</button>}</div></section>;
 
   return <section className="capabilities-view">
-    <header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1><p>四个能力组成当前固定流程。它们可以共用同一个本地 Agent 实例；这里配置的是职责，而不是创建四个进程。</p></header>
-    <div className="cap-section-heading"><div><h2>协作拓扑</h2><p>点击节点查看和配置能力。当前拓扑只读，不能拖动或编辑连线。</p></div><div className="cap-heading-actions"><span className="cap-fixed-badge">内置固定拓扑</span><button disabled={busy} onClick={refresh}><RefreshCw size={14} />重新加载</button></div></div>
+    <header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1><p>能力由职责提示词和执行它的 Agent 组成。四个能力可以共用同一个本地 Agent 实例；当前只配置 Agent 绑定。</p></header>
+    <div className="cap-section-heading"><div><h2>协作拓扑</h2><p>点击节点查看能力并选择执行 Agent。当前拓扑只读，不能拖动或编辑连线。</p></div><div className="cap-heading-actions"><span className="cap-fixed-badge">内置固定拓扑</span><button disabled={busy} onClick={refresh}><RefreshCw size={14} />重新加载</button></div></div>
     <div className="cap-topology-card">
       <Topology snapshot={snapshot} selected={selected} onSelect={select} busy={busy} />
       <div className="cap-legend"><span><i className="cap-legend-solid" />执行依赖</span><span><i className="cap-legend-dashed" />额外上下文传递</span></div>
       <p className="cap-handoff-note">Designer 的设计会交给 Coder、Tester 和 Reviewer；Coder 的实现会交给 Tester 和 Reviewer；Tester 的结果会交给 Reviewer。实线相邻节点也传递上下文。</p>
     </div>
-    {draft && <div className="cap-editor" key={selected}>
-      <div className="cap-editor-heading"><span className="cap-editor-icon"><Settings2 size={19} /></span><div><p className="eyebrow">SELECTED CAPABILITY</p><h2>{saved?.displayName ?? selected}</h2><span>稳定标识：{selected} · 基础指令、输入和输出契约由 Runtime 固定</span></div></div>
+    {saved && <div className="cap-editor" key={selected}>
+      <div className="cap-editor-heading"><span className="cap-editor-icon"><Settings2 size={19} /></span><div><p className="eyebrow">SELECTED CAPABILITY</p><h2>{saved.displayName}</h2><span>稳定标识：{selected} · 能力提示词由 Runtime 内置，当前不可编辑</span></div></div>
+      <p className="cap-role-description">{saved.description}</p>
       <div className="cap-fields">
-        <label>显示名称<input maxLength={80} value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} /><small>仅用于界面和新 Run 的历史快照。</small></label>
-        <label>职责说明<textarea maxLength={500} rows={3} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /><small>帮助团队理解该能力的任务，不会替换内置 Prompt。</small></label>
-        <label className="cap-wide-field">补充指令<textarea maxLength={8000} rows={5} value={draft.extraInstructions} onChange={(event) => setDraft({ ...draft, extraInstructions: event.target.value })} placeholder="可选：补充这个能力的工作偏好" /><small>会作为独立字段加入之后创建的 Run；不能改变固定输出 Schema。</small></label>
-        <label>执行 Agent<select value={draft.agentInstanceId} onChange={(event) => setDraft({ ...draft, agentInstanceId: event.target.value })}>{snapshot.instances.filter((item) => item.enabled && item.providerKind === "codex").map((item) => <option key={item.id} value={item.id}>{item.displayName} · Codex</option>)}</select><small>{instance ? `当前连接：${connectionLabel(instance.connectionState)}` : "当前绑定不可用，请选择其他 Agent。"}</small></label>
+        <label>执行 Agent<select value={draftAgentId ?? ""} onChange={(event) => setDraftAgentId(event.target.value)}>{!availableInstances.some((item) => item.id === draftAgentId) && <option value={draftAgentId ?? ""} disabled>{instance ? `${instance.displayName} · 已禁用` : "当前绑定不可用"}</option>}{availableInstances.map((item) => <option key={item.id} value={item.id}>{item.displayName} · Codex</option>)}</select><small>{instance ? `当前连接：${connectionLabel(instance.connectionState)}` : "当前绑定不可用，请先到 Agent 管理添加或启用实例。"}</small></label>
       </div>
-      {message && <p className={`cap-message ${message.startsWith("配置已保存") ? "success" : "error"}`} role="status">{message}</p>}
-      <div className="cap-editor-actions"><p>修改只影响新 Run；已有 Run 保留当时冻结的配置。</p><button disabled={busy || !dirty || !draft.displayName.trim()} onClick={save}>{busy ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存 Capability <ArrowRight size={14} /></button></div>
+      {message && <p className={`cap-message ${message.startsWith("Agent 绑定已保存") ? "success" : "error"}`} role="status">{message}</p>}
+      <div className="cap-editor-actions"><p>绑定修改只影响新 Run；已有 Run 保留当时冻结的配置。</p><button disabled={busy || !dirty || !canSave} onClick={save}>{busy ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存 Agent 绑定 <ArrowRight size={14} /></button></div>
     </div>}
   </section>;
 }
