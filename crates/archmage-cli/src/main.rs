@@ -14,7 +14,7 @@ async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
         config::Config,
         error::Error,
         provider::codex,
-        runtime::{CheckSpec, RunRequest, Runtime},
+        runtime::{RunRequest, Runtime},
     };
     match args.command {
         args::Commands::Internal { command } => match command {
@@ -68,15 +68,10 @@ async fn execute(args: args::Args) -> archmage_core::error::Result<()> {
             );
             Ok(())
         }
-        args::Commands::Run { repo, goal, check } => {
+        args::Commands::Run { repo, goal } => {
             let root = std::env::var_os("ARCHMAGE_HOME").map(std::path::PathBuf::from);
             let runtime = Runtime::open(Config::resolve(root.as_deref(), Some(&repo))?)?;
-            let checks = check
-                .into_iter()
-                .enumerate()
-                .map(|(index, command)| CheckSpec::new(format!("check-{}", index + 1), command))
-                .collect::<archmage_core::error::Result<Vec<_>>>()?;
-            let request = RunRequest::new(repo, goal, checks)?;
+            let request = RunRequest::new(repo, goal)?;
             let run_id = runtime.start_run(&request).await?;
             eprintln!("Run {run_id} started with real Codex.");
             let snapshot = runtime.run_to_terminal(&run_id).await?;

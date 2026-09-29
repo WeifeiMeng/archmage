@@ -1,6 +1,6 @@
 use archmage_core::{
     capability::CapabilityKind,
-    contract::{ContractContext, RequiredCheck, validate_builtin_schemas, validate_output},
+    contract::{ContractContext, validate_builtin_schemas, validate_output},
 };
 use serde_json::json;
 
@@ -42,42 +42,50 @@ fn designer_requires_nonempty_design_and_criteria() {
 }
 
 #[test]
-fn tester_must_supply_exact_canonical_evidence() {
-    let context = ContractContext {
-        required_checks: vec![RequiredCheck {
-            check_id: "unit".into(),
-            evidence_id: "artifact-1".into(),
-            passed: false,
+fn tester_reports_commands_it_selected_without_required_check_ids() {
+    let valid = json!({
+        "schema_version":"1",
+        "summary_markdown":"Tests passed",
+        "status":"passed",
+        "commands":[{
+            "command":"cargo test",
+            "exit_code":0,
+            "status":"passed",
+            "summary":"12 passed"
         }],
-        ..Default::default()
-    };
-    let valid = json!({"schema_version":"1","summary_markdown":"failed as expected","status":"failed","checks":[{"check_id":"unit","evidence_id":"artifact-1","status":"failed"}]});
+        "limitations":[]
+    });
     assert!(
         validate_output(
             CapabilityKind::Tester,
             &serde_json::to_vec(&valid).unwrap(),
-            &context
+            &ContractContext::default()
         )
         .is_ok()
     );
-    let forged = json!({"schema_version":"1","summary_markdown":"x","status":"passed","checks":[{"check_id":"unit","evidence_id":"fake","status":"passed"}]});
+    let contradictory = json!({
+        "schema_version":"1",
+        "summary_markdown":"Claims success",
+        "status":"passed",
+        "commands":[{"command":"cargo test","exit_code":1,"status":"failed","summary":"failed"}],
+        "limitations":[]
+    });
     assert!(
         validate_output(
             CapabilityKind::Tester,
-            &serde_json::to_vec(&forged).unwrap(),
-            &context
+            &serde_json::to_vec(&contradictory).unwrap(),
+            &ContractContext::default()
         )
         .is_err()
     );
 }
 
 #[test]
-fn reviewer_cannot_approve_failed_checks_or_unsafe_paths() {
+fn reviewer_cannot_approve_failed_or_blocked_testing_or_unsafe_paths() {
     let approved =
         json!({"schema_version":"1","summary_markdown":"ok","status":"approved","issues":[]});
     let failed = ContractContext {
-        checks_failed: true,
-        ..Default::default()
+        tester_accepted: false,
     };
     assert!(
         validate_output(
@@ -92,7 +100,9 @@ fn reviewer_cannot_approve_failed_checks_or_unsafe_paths() {
         validate_output(
             CapabilityKind::Reviewer,
             &serde_json::to_vec(&unsafe_path).unwrap(),
-            &ContractContext::default()
+            &ContractContext {
+                tester_accepted: true,
+            }
         )
         .is_err()
     );

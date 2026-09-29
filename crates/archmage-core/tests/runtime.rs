@@ -1,7 +1,7 @@
 use archmage_core::{
     config::Config,
     runtime::{
-        CheckSpec, NodeSnapshot, RunRequest, Runtime,
+        NodeSnapshot, RunRequest, Runtime,
         scheduler::{TerminalDecision, ready_keys, terminal_decision},
     },
     store::{AttemptOutcome, Store},
@@ -136,12 +136,7 @@ fn start_definition_is_queryable_as_one_four_node_run() {
 
     let config = Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap();
     let runtime = Runtime::open(config).unwrap();
-    let request = RunRequest::new(
-        &repo,
-        "add health endpoint",
-        vec![CheckSpec::new("check-1", "cargo test").unwrap()],
-    )
-    .unwrap();
+    let request = RunRequest::new(&repo, "add health endpoint").unwrap();
 
     let run_id = runtime.create_run_definition(&request).unwrap();
     let snapshot = runtime.snapshot(&run_id).unwrap();
@@ -156,6 +151,46 @@ fn start_definition_is_queryable_as_one_four_node_run() {
             .collect::<Vec<_>>(),
         ["designer", "coder", "tester", "reviewer"]
     );
-    assert_eq!(snapshot.checks[0].command, "cargo test");
+    assert_eq!(snapshot.agent_bindings.len(), 4);
+    assert_eq!(
+        snapshot.agent_bindings["tester"].agent_instance_id,
+        "codex-default"
+    );
     assert_eq!(runtime.list_runs().unwrap()[0].id, run_id);
+}
+
+#[test]
+fn changing_global_binding_does_not_change_existing_run() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--quiet"]);
+    git(&repo, &["config", "user.email", "archmage@example.invalid"]);
+    git(&repo, &["config", "user.name", "Archmage Test"]);
+    std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
+    git(&repo, &["add", "README.md"]);
+    git(&repo, &["commit", "--quiet", "-m", "fixture"]);
+
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
+    let run_id = runtime
+        .create_run_definition(&RunRequest::new(&repo, "goal").unwrap())
+        .unwrap();
+    let mut store = Store::open(&data.join("archmage.db")).unwrap();
+    store
+        .save_agent_instance(&archmage_core::agent::AgentInstanceInput {
+            id: "codex-work".into(),
+            provider_kind: archmage_core::agent::ProviderKind::Codex,
+            display_name: "Codex Work".into(),
+            executable_path: None,
+            model: None,
+            enabled: true,
+        })
+        .unwrap();
+    store.bind_capability("tester", "codex-work").unwrap();
+
+    assert_eq!(
+        runtime.snapshot(&run_id).unwrap().agent_bindings["tester"].agent_instance_id,
+        "codex-default"
+    );
 }

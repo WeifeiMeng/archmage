@@ -1,4 +1,5 @@
 //! UI-independent collaboration runtime.
+pub mod agent;
 pub mod artifact;
 pub mod capability;
 pub mod check_runner;

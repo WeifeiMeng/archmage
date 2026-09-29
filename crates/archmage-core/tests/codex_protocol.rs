@@ -1,5 +1,8 @@
-use archmage_core::provider::codex::{CodexInvocation, Sandbox, validate_help};
+use archmage_core::provider::codex::{self, CodexInvocation, Sandbox, validate_help};
 use archmage_core::provider::codex_event::Decoder;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn sanitized_real_cli_fixture_decodes() {
@@ -94,4 +97,41 @@ fn custom_permission_profile_omits_builtin_sandbox_override() {
         .map(|part| part.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     assert!(!argv.iter().any(|part| part == "--sandbox"));
+}
+
+#[test]
+fn configured_model_is_passed_as_an_explicit_argument() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut invocation = CodexInvocation::new(
+        temp.path().join("repo"),
+        temp.path().join("schema.json"),
+        temp.path().join("result.json"),
+        temp.path().join("diagnostics"),
+        Sandbox::ReadOnly,
+    );
+    invocation.model = Some("gpt-5.4".into());
+    let argv = invocation
+        .argv()
+        .iter()
+        .map(|part| part.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert!(argv.windows(2).any(|pair| pair == ["--model", "gpt-5.4"]));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn discovery_uses_the_instances_explicit_executable() {
+    let temp = tempfile::tempdir().unwrap();
+    let binary = temp.path().join("custom-codex");
+    std::fs::write(
+        &binary,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'codex 1.2.3'; exit 0; fi\nprintf '%s\\n' '--cd --sandbox --json --output-schema --output-last-message'\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+    let tools = codex::inspect_at(Some(&binary)).await.unwrap();
+
+    assert_eq!(tools.codex_binary, binary);
+    assert_eq!(tools.codex_version, "codex 1.2.3");
 }

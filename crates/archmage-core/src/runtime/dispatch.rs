@@ -1,12 +1,11 @@
-use super::{CheckSpec, Runtime, scheduler};
+use super::{Runtime, scheduler};
 use crate::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
-    check_runner::{CheckRunner, FrozenCheck, load_evidence, serve_check_once},
     context::{ContextRef, resolve_context},
-    contract::{ContractContext, RequiredCheck, validate_output},
+    contract::{ContractContext, validate_output},
     error::{Error, Result},
-    provider::codex::{self, CodexInvocation, LocalTools, Sandbox},
+    provider::codex::{self, CodexInvocation, Sandbox},
     store::{AttemptOutcome, Store},
     workspace::{GitRepository, inspect_repository, publish_changeset, snapshot},
 };
@@ -17,7 +16,6 @@ impl Runtime {
     pub async fn run_to_terminal(&self, run_id: &str) -> Result<super::RunSnapshot> {
         let _owner =
             super::control::RunOwnerLock::acquire(&self.config.data_root.join("locks"), run_id)?;
-        let tools = codex::inspect().await?;
         let mut store = self.store()?;
         let generation = store.claim_run_owner(run_id)?;
         drop(store);
@@ -60,7 +58,7 @@ impl Runtime {
                 .find(|node| node.key == key)
                 .ok_or(Error::Conflict)?;
             self.store()?.ready_node(&node.id, node.revision)?;
-            if let Err(error) = self.dispatch_node(run_id, key, generation, &tools).await {
+            if let Err(error) = self.dispatch_node(run_id, key, generation).await {
                 let failed = self.snapshot(run_id)?;
                 if failed.state == "running"
                     && failed.nodes.iter().any(|node| node.state == "failed")
@@ -74,13 +72,7 @@ impl Runtime {
         }
     }
 
-    async fn dispatch_node(
-        &self,
-        run_id: &str,
-        node_key: &str,
-        generation: i64,
-        tools: &LocalTools,
-    ) -> Result<()> {
+    async fn dispatch_node(&self, run_id: &str, node_key: &str, generation: i64) -> Result<()> {
         let kind = capability(node_key)?;
         let mut store = self.store()?;
         let node = store
@@ -96,23 +88,18 @@ impl Runtime {
                 &attempt.id,
                 attempt.revision,
                 generation,
-                tools,
                 &mut store,
             )
             .await;
-        if let Err(error) = &result {
-            if let Ok(active) = store.attempt(&attempt.id) {
-                let outcome = AttemptOutcome::Failed(error_code(error).into());
-                if active.state == "running" {
-                    let _ = store.finish_attempt_owned(
-                        &attempt.id,
-                        active.revision,
-                        generation,
-                        outcome,
-                    );
-                } else if active.state == "starting" {
-                    let _ = store.finish_attempt(&attempt.id, active.revision, outcome);
-                }
+        if let Err(error) = &result
+            && let Ok(active) = store.attempt(&attempt.id)
+        {
+            let outcome = AttemptOutcome::Failed(error_code(error).into());
+            if active.state == "running" {
+                let _ =
+                    store.finish_attempt_owned(&attempt.id, active.revision, generation, outcome);
+            } else if active.state == "starting" {
+                let _ = store.finish_attempt(&attempt.id, active.revision, outcome);
             }
         }
         result
@@ -126,10 +113,13 @@ impl Runtime {
         attempt_id: &str,
         attempt_revision: i64,
         generation: i64,
-        tools: &LocalTools,
         store: &mut Store,
     ) -> Result<()> {
         let run = self.snapshot(run_id)?;
+        let binding = run.agent_bindings.get(kind.key()).ok_or_else(|| {
+            Error::Preflight(format!("missing frozen Agent binding for {}", kind.key()))
+        })?;
+        let tools = codex::inspect_at(binding.executable_path.as_deref()).await?;
         let workspace_record = store.workspace_for_run(run_id)?;
         let repository = inspect_repository(Path::new(&workspace_record.path))?;
         let artifacts = ArtifactStore::open(&self.config.data_root.join("artifacts"))?;
@@ -160,32 +150,17 @@ impl Runtime {
         invocation.max_line_bytes = self.config.max_line_bytes;
         invocation.max_result_bytes = self.config.max_result_bytes;
         invocation.max_stream_bytes = self.config.max_stream_bytes;
+        invocation.model = binding.model.clone();
 
-        let mut prompt = context.rendered;
-        let outcome = if kind == CapabilityKind::Tester {
-            self.invoke_tester(
-                tools,
-                &mut invocation,
-                &mut prompt,
-                attempt_id,
-                attempt_revision,
-                generation,
-                &run.checks,
-                &repository,
-                store,
-                &artifacts,
-            )
-            .await?
-        } else {
-            codex::invoke_with_identity(tools, &invocation, &prompt, |identity| {
+        let outcome =
+            codex::invoke_with_identity(&tools, &invocation, &context.rendered, |identity| {
                 store.attach_attempt_process(attempt_id, attempt_revision, generation, identity)
             })
-            .await?
-        };
+            .await?;
 
         let bytes = serde_json::to_vec(&outcome.result)
             .map_err(|error| Error::Preflight(error.to_string()))?;
-        let contract = contract_context(kind, run_id, attempt_id, &run.checks, store)?;
+        let contract = contract_context(kind, run_id, store)?;
         let validated = validate_output(kind, &bytes, &contract)?;
         if kind == CapabilityKind::Coder && validated["status"] == "blocked" {
             return Err(Error::Preflight("coder reported blocked".into()));
@@ -206,121 +181,6 @@ impl Runtime {
             &result_artifact,
             changeset_artifact.as_deref(),
         )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn invoke_tester(
-        &self,
-        tools: &LocalTools,
-        invocation: &mut CodexInvocation,
-        prompt: &mut Vec<u8>,
-        attempt_id: &str,
-        attempt_revision: i64,
-        generation: i64,
-        checks: &[CheckSpec],
-        repository: &GitRepository,
-        store: &mut Store,
-        artifacts: &ArtifactStore,
-    ) -> Result<codex::CodexOutcome> {
-        #[cfg(not(unix))]
-        {
-            let _ = (
-                tools,
-                invocation,
-                prompt,
-                attempt_id,
-                attempt_revision,
-                generation,
-                checks,
-                repository,
-                store,
-                artifacts,
-            );
-            return Err(Error::Preflight(
-                "Tester check socket is supported on Unix in S0".into(),
-            ));
-        }
-        #[cfg(unix)]
-        {
-            let socket = invocation
-                .diagnostics_dir
-                .parent()
-                .unwrap()
-                .join("check.sock");
-            let listener = tokio::net::UnixListener::bind(&socket)?;
-            let helper = codex::find_executable("archmage")?;
-            prompt.extend_from_slice(
-                b"\nUse these exact frozen check helper commands before returning JSON:\n",
-            );
-            for check in checks {
-                prompt.extend_from_slice(
-                    format!(
-                        "{} internal check --endpoint {} --attempt {} --check {}\n",
-                        shell_quote(&helper.to_string_lossy()),
-                        shell_quote(&socket.to_string_lossy()),
-                        shell_quote(attempt_id),
-                        shell_quote(&check.check_id),
-                    )
-                    .as_bytes(),
-                );
-            }
-            let socket_policy = format!(
-                "permissions.archmage_tester.network.unix_sockets={{{}=\"allow\"}}",
-                serde_json::to_string(&socket.to_string_lossy())
-                    .map_err(|error| Error::Preflight(error.to_string()))?
-            );
-            invocation.extra_args = vec![
-                "--strict-config".into(),
-                "-c".into(),
-                "default_permissions=\"archmage_tester\"".into(),
-                "-c".into(),
-                "permissions.archmage_tester.extends=\":workspace\"".into(),
-                "-c".into(),
-                "permissions.archmage_tester.network.enabled=true".into(),
-                "-c".into(),
-                "features.network_proxy.enabled=true".into(),
-                "-c".into(),
-                socket_policy.into(),
-            ];
-            invocation.use_custom_permissions();
-            let mut check_store = self.store()?;
-            let frozen = checks
-                .iter()
-                .map(|check| {
-                    FrozenCheck::new(
-                        &check.check_id,
-                        &check.command,
-                        Duration::from_secs(10 * 60),
-                    )
-                })
-                .collect();
-            let mut runner = CheckRunner::new(
-                &mut check_store,
-                artifacts,
-                attempt_id,
-                generation,
-                repository,
-                frozen,
-            )?;
-            let invoke = codex::invoke_with_identity(tools, invocation, prompt, |identity| {
-                store.attach_attempt_process(attempt_id, attempt_revision, generation, identity)
-            });
-            let serve = async {
-                for _ in checks {
-                    serve_check_once(&listener, &mut runner).await?;
-                }
-                Ok::<(), Error>(())
-            };
-            tokio::pin!(invoke);
-            tokio::pin!(serve);
-            tokio::select! {
-                result = &mut invoke => result,
-                served = &mut serve => {
-                    served?;
-                    invoke.await
-                }
-            }
-        }
     }
 }
 
@@ -372,11 +232,13 @@ fn context_inputs(
         CapabilityKind::Tester => {
             insert_result(&mut inputs, store, &run.id, "designer", "design")?;
             insert_result(&mut inputs, store, &run.id, "coder", "implementation")?;
+            let coder = store.node_result(&run.id, "coder")?;
             inputs.insert(
-                "check_policy".into(),
-                ContextRef::WorkflowInput {
-                    value: serde_json::to_value(&run.checks)
-                        .map_err(|error| Error::Preflight(error.to_string()))?,
+                "changeset".into(),
+                ContextRef::Artifact {
+                    artifact_id: coder.changeset_artifact_id.ok_or_else(|| {
+                        Error::Preflight("coder changeset artifact is missing".into())
+                    })?,
                 },
             );
             inputs.insert(
@@ -423,34 +285,11 @@ fn insert_result(
     Ok(())
 }
 
-fn contract_context(
-    kind: CapabilityKind,
-    run_id: &str,
-    attempt_id: &str,
-    checks: &[CheckSpec],
-    store: &Store,
-) -> Result<ContractContext> {
-    if kind == CapabilityKind::Tester {
-        let required_checks = checks
-            .iter()
-            .map(|check| {
-                let evidence = load_evidence(store, attempt_id, &check.check_id)?;
-                Ok(RequiredCheck {
-                    check_id: check.check_id.clone(),
-                    evidence_id: evidence.evidence_id,
-                    passed: evidence.exit_code == Some(0) && !evidence.timed_out,
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(ContractContext {
-            required_checks,
-            checks_failed: false,
-        })
-    } else if kind == CapabilityKind::Reviewer {
+fn contract_context(kind: CapabilityKind, run_id: &str, store: &Store) -> Result<ContractContext> {
+    if kind == CapabilityKind::Reviewer {
         let tester = store.node_result(run_id, "tester")?;
         Ok(ContractContext {
-            required_checks: Vec::new(),
-            checks_failed: tester.output["status"] == "failed",
+            tester_accepted: tester.output["status"] == "passed",
         })
     } else {
         Ok(ContractContext::default())
@@ -467,10 +306,6 @@ fn private_dir(path: &Path) -> Result<()> {
     }
     builder.create(path)?;
     Ok(())
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 fn error_code(error: &Error) -> &'static str {

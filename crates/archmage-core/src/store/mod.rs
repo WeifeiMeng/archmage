@@ -2,6 +2,10 @@
 mod recovery;
 pub(crate) mod transitions;
 use crate::{
+    agent::{
+        AgentInstance, AgentInstanceInput, AgentManagementSnapshot, CapabilityBinding,
+        adapter_descriptors,
+    },
     error::{Error, Result},
     event::Event,
 };
@@ -13,6 +17,16 @@ use std::{path::Path, time::Duration};
 
 pub struct Store {
     pub(crate) db: Connection,
+}
+
+pub(crate) enum AgentObservation<'a> {
+    Discovered(&'a str),
+    DiscoveryFailed,
+    Ready {
+        version: &'a str,
+        thread_id: &'a str,
+    },
+    Failed(&'a str),
 }
 
 #[derive(Debug, Serialize)]
@@ -135,6 +149,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0005_checks.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0006_runtime.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0007_control.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0008_agents.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -165,7 +180,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0007_control.sql"))?;
                 version = 7;
             }
-            if version != 7 {
+            if version == 7 {
+                tx.execute_batch(include_str!("../../migrations/0008_agents.sql"))?;
+                version = 8;
+            }
+            if version != 8 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -315,6 +334,320 @@ impl Store {
             )
             .optional()?)
     }
+
+    pub fn agent_management_snapshot(&self) -> Result<AgentManagementSnapshot> {
+        Ok(AgentManagementSnapshot {
+            adapters: adapter_descriptors(),
+            instances: self.agent_instances()?,
+            bindings: self.capability_bindings()?,
+        })
+    }
+
+    pub fn agent_instances(&self) -> Result<Vec<AgentInstance>> {
+        let mut query = self.db.prepare(
+            "SELECT id,provider_kind,display_name,executable_path,model,enabled,
+                    connection_state,discovered_version,last_verified_at,last_error,
+                    verification_thread_id
+             FROM agent_instances ORDER BY created_at,id",
+        )?;
+        Ok(query
+            .query_map([], agent_instance_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn agent_instance(&self, id: &str) -> Result<AgentInstance> {
+        Ok(self.db.query_row(
+            "SELECT id,provider_kind,display_name,executable_path,model,enabled,
+                    connection_state,discovered_version,last_verified_at,last_error,
+                    verification_thread_id
+             FROM agent_instances WHERE id=?1",
+            [id],
+            agent_instance_row,
+        )?)
+    }
+
+    pub fn save_agent_instance(&mut self, input: &AgentInstanceInput) -> Result<()> {
+        input.validate()?;
+        if !input.enabled {
+            let bound: bool = self.db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM capability_bindings WHERE agent_instance_id=?1)",
+                [&input.id],
+                |row| row.get(0),
+            )?;
+            if bound {
+                return Err(Error::Preflight(
+                    "a bound agent instance cannot be disabled".into(),
+                ));
+            }
+        }
+        let executable_path = input
+            .executable_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned());
+        self.db.execute(
+            "INSERT INTO agent_instances(
+                id,provider_kind,display_name,executable_path,model,enabled
+             ) VALUES(?1,?2,?3,?4,?5,?6)
+             ON CONFLICT(id) DO UPDATE SET
+                display_name=excluded.display_name,
+                executable_path=excluded.executable_path,
+                model=excluded.model,
+                enabled=excluded.enabled,
+                connection_state=CASE
+                    WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.model IS excluded.model
+                    THEN agent_instances.connection_state ELSE 'unverified' END,
+                discovered_version=CASE
+                    WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.model IS excluded.model
+                    THEN agent_instances.discovered_version ELSE NULL END,
+                last_verified_at=CASE
+                    WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.model IS excluded.model
+                    THEN agent_instances.last_verified_at ELSE NULL END,
+                last_error=CASE
+                    WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.model IS excluded.model
+                    THEN agent_instances.last_error ELSE NULL END,
+                verification_thread_id=CASE
+                    WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.model IS excluded.model
+                    THEN agent_instances.verification_thread_id ELSE NULL END,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+            rusqlite::params![
+                input.id,
+                input.provider_kind.as_str(),
+                input.display_name.trim(),
+                executable_path,
+                input.model.as_ref().map(|value| value.trim()),
+                input.enabled,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_agent_instance(&mut self, id: &str) -> Result<()> {
+        let bound: bool = self.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM capability_bindings WHERE agent_instance_id=?1)",
+            [id],
+            |row| row.get(0),
+        )?;
+        if bound {
+            return Err(Error::Preflight(
+                "a bound agent instance cannot be deleted".into(),
+            ));
+        }
+        let changed = self
+            .db
+            .execute("DELETE FROM agent_instances WHERE id=?1", [id])?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(Error::Preflight(format!("unknown agent instance: {id}")))
+        }
+    }
+
+    pub fn capability_bindings(&self) -> Result<Vec<CapabilityBinding>> {
+        let mut query = self.db.prepare(
+            "SELECT capability,agent_instance_id FROM capability_bindings ORDER BY
+             CASE capability WHEN 'designer' THEN 0 WHEN 'coder' THEN 1
+                  WHEN 'tester' THEN 2 ELSE 3 END",
+        )?;
+        Ok(query
+            .query_map([], |row| {
+                Ok(CapabilityBinding {
+                    capability: row.get(0)?,
+                    agent_instance_id: row.get(1)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn bind_capability(&mut self, capability: &str, agent_instance_id: &str) -> Result<()> {
+        if !crate::agent::BUILTIN_CAPABILITIES.contains(&capability) {
+            return Err(Error::Preflight(format!(
+                "unknown capability: {capability}"
+            )));
+        }
+        let instance = self.agent_instance(agent_instance_id)?;
+        if !instance.enabled || !instance.provider_kind.supported() {
+            return Err(Error::Preflight(
+                "capability requires an enabled supported agent instance".into(),
+            ));
+        }
+        self.db.execute(
+            "INSERT INTO capability_bindings(capability,agent_instance_id,updated_at)
+             VALUES(?1,?2,strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+             ON CONFLICT(capability) DO UPDATE SET
+                agent_instance_id=excluded.agent_instance_id,
+                updated_at=excluded.updated_at",
+            rusqlite::params![capability, agent_instance_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn record_agent_ready(&mut self, id: &str, version: &str, thread_id: &str) -> Result<()> {
+        let changed = self.db.execute(
+            "UPDATE agent_instances SET
+                connection_state='ready', discovered_version=?2,
+                last_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                last_error=NULL, verification_thread_id=?3,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id=?1",
+            rusqlite::params![id, version, thread_id],
+        )?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(Error::Preflight(format!("unknown agent instance: {id}")))
+        }
+    }
+
+    pub fn record_agent_discovered(&mut self, id: &str, version: &str) -> Result<()> {
+        let changed = self.db.execute(
+            "UPDATE agent_instances SET
+                connection_state=CASE WHEN discovered_version=?2 AND connection_state='ready' THEN 'ready' ELSE 'unverified' END,
+                last_verified_at=CASE WHEN discovered_version=?2 AND connection_state='ready' THEN last_verified_at ELSE NULL END,
+                verification_thread_id=CASE WHEN discovered_version=?2 AND connection_state='ready' THEN verification_thread_id ELSE NULL END,
+                discovered_version=?2, last_error=NULL,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
+            rusqlite::params![id, version],
+        )?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(Error::Preflight(format!("unknown agent instance: {id}")))
+        }
+    }
+
+    pub fn record_agent_discovery_failed(&mut self, id: &str) -> Result<()> {
+        let changed = self.db.execute(
+            "UPDATE agent_instances SET connection_state='failed', discovered_version=NULL,
+                last_verified_at=NULL, last_error='Codex executable inspection failed',
+                verification_thread_id=NULL,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
+            [id],
+        )?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(Error::Preflight(format!("unknown agent instance: {id}")))
+        }
+    }
+
+    pub(crate) fn record_agent_observation_if_current(
+        &mut self,
+        expected: &AgentInstance,
+        observation: AgentObservation<'_>,
+    ) -> Result<bool> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let current: Option<(String, Option<String>, Option<String>, bool)> = tx
+            .query_row(
+                "SELECT provider_kind,executable_path,model,enabled FROM agent_instances WHERE id=?1",
+                [&expected.id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .optional()?;
+        let Some((provider, path, model, enabled)) = current else {
+            return Ok(false);
+        };
+        let expected_path = expected
+            .executable_path
+            .as_ref()
+            .map(|value| value.to_string_lossy().into_owned());
+        if provider != expected.provider_kind.as_str()
+            || path != expected_path
+            || model != expected.model
+            || enabled != expected.enabled
+        {
+            return Ok(false);
+        }
+        match observation {
+            AgentObservation::Discovered(version) => {
+                tx.execute(
+                    "UPDATE agent_instances SET
+                        connection_state=CASE WHEN discovered_version=?2 AND connection_state='ready' THEN 'ready' ELSE 'unverified' END,
+                        last_verified_at=CASE WHEN discovered_version=?2 AND connection_state='ready' THEN last_verified_at ELSE NULL END,
+                        verification_thread_id=CASE WHEN discovered_version=?2 AND connection_state='ready' THEN verification_thread_id ELSE NULL END,
+                        discovered_version=?2, last_error=NULL,
+                        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
+                    rusqlite::params![expected.id, version],
+                )?;
+            }
+            AgentObservation::DiscoveryFailed => {
+                tx.execute(
+                    "UPDATE agent_instances SET connection_state='failed', discovered_version=NULL,
+                        last_verified_at=NULL, last_error='Codex executable inspection failed',
+                        verification_thread_id=NULL,
+                        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
+                    [&expected.id],
+                )?;
+            }
+            AgentObservation::Ready { version, thread_id } => {
+                tx.execute(
+                    "UPDATE agent_instances SET connection_state='ready', discovered_version=?2,
+                        last_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                        last_error=NULL, verification_thread_id=?3,
+                        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
+                    rusqlite::params![expected.id, version, thread_id],
+                )?;
+            }
+            AgentObservation::Failed(message) => {
+                tx.execute(
+                    "UPDATE agent_instances SET connection_state='failed',
+                        last_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                        last_error=?2, verification_thread_id=NULL,
+                        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
+                    rusqlite::params![expected.id, message],
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    pub fn record_agent_failed(&mut self, id: &str, message: &str) -> Result<()> {
+        let changed = self.db.execute(
+            "UPDATE agent_instances SET
+                connection_state='failed', last_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                last_error=?2, verification_thread_id=NULL,
+                updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE id=?1",
+            rusqlite::params![id, message],
+        )?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(Error::Preflight(format!("unknown agent instance: {id}")))
+        }
+    }
+}
+
+fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance> {
+    let provider: String = row.get(1)?;
+    let connection: String = row.get(6)?;
+    let provider_kind = provider.parse().map_err(|error: Error| {
+        rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(error))
+    })?;
+    let connection_state = connection.parse().map_err(|error: Error| {
+        rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(error))
+    })?;
+    let executable_path: Option<String> = row.get(3)?;
+    Ok(AgentInstance {
+        id: row.get(0)?,
+        provider_kind,
+        display_name: row.get(2)?,
+        executable_path: executable_path.map(Into::into),
+        model: row.get(4)?,
+        enabled: row.get(5)?,
+        connection_state,
+        discovered_version: row.get(7)?,
+        last_verified_at: row.get(8)?,
+        last_error: row.get(9)?,
+        verification_thread_id: row.get(10)?,
+    })
 }
 fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {
     Ok(WorkspaceRecord {

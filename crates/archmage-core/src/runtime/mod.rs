@@ -4,6 +4,7 @@ mod recovery;
 pub mod scheduler;
 
 use crate::{
+    agent::{AgentManagementSnapshot, AgentService, ProviderKind},
     config::Config,
     contract::validate_builtin_schemas,
     error::{Error, Result},
@@ -12,7 +13,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
@@ -45,34 +46,29 @@ impl CheckSpec {
 pub struct RunRequest {
     pub repository: PathBuf,
     pub goal: String,
-    pub checks: Vec<CheckSpec>,
 }
 
 impl RunRequest {
-    pub fn new(
-        repository: impl AsRef<Path>,
-        goal: impl Into<String>,
-        checks: Vec<CheckSpec>,
-    ) -> Result<Self> {
+    pub fn new(repository: impl AsRef<Path>, goal: impl Into<String>) -> Result<Self> {
         let goal = goal.into();
-        if goal.trim().is_empty() || checks.is_empty() {
-            return Err(Error::Preflight(
-                "goal and at least one check are required".into(),
-            ));
-        }
-        let mut ids = BTreeSet::new();
-        if checks
-            .iter()
-            .any(|check| !ids.insert(check.check_id.as_str()))
-        {
-            return Err(Error::Preflight("check IDs must be unique".into()));
+        if goal.trim().is_empty() {
+            return Err(Error::Preflight("goal is required".into()));
         }
         Ok(Self {
             repository: repository.as_ref().to_path_buf(),
             goal,
-            checks,
         })
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrozenAgentBinding {
+    pub agent_instance_id: String,
+    pub display_name: String,
+    pub provider_kind: ProviderKind,
+    pub executable_path: Option<PathBuf>,
+    pub model: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -113,6 +109,7 @@ pub struct RunSnapshot {
     pub goal: String,
     pub repository: PathBuf,
     pub checks: Vec<CheckSpec>,
+    pub agent_bindings: BTreeMap<String, FrozenAgentBinding>,
     pub state: String,
     pub outcome: Option<String>,
     pub revision: i64,
@@ -131,7 +128,10 @@ pub struct Runtime {
 struct FrozenRunDefinition {
     pub(crate) version: u32,
     pub(crate) repository: PathBuf,
+    #[serde(default)]
     pub(crate) checks: Vec<CheckSpec>,
+    #[serde(default)]
+    pub(crate) agent_bindings: BTreeMap<String, FrozenAgentBinding>,
     pub(crate) nodes: Vec<String>,
 }
 
@@ -149,10 +149,21 @@ impl Runtime {
 
     pub fn create_run_definition(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
+        let bindings = self.frozen_agent_bindings()?;
+        self.create_run_definition_with_bindings(request, repository, bindings)
+    }
+
+    fn create_run_definition_with_bindings(
+        &self,
+        request: &RunRequest,
+        repository: PathBuf,
+        agent_bindings: BTreeMap<String, FrozenAgentBinding>,
+    ) -> Result<String> {
         let definition = FrozenRunDefinition {
-            version: 1,
+            version: 2,
             repository,
-            checks: request.checks.clone(),
+            checks: Vec::new(),
+            agent_bindings,
             nodes: BUILTIN_NODES.iter().map(|key| (*key).to_owned()).collect(),
         };
         let value = serde_json::to_value(definition)
@@ -162,8 +173,30 @@ impl Runtime {
     }
 
     pub async fn start_run(&self, request: &RunRequest) -> Result<String> {
-        crate::provider::codex::inspect().await?;
-        let run_id = self.create_run_definition(request)?;
+        let repository = inspect_repository(&request.repository)?.root;
+        let mut bindings = self.frozen_agent_bindings()?;
+        for (capability, binding) in &mut bindings {
+            match binding.provider_kind {
+                ProviderKind::Codex => {
+                    let tools =
+                        crate::provider::codex::inspect_at(binding.executable_path.as_deref())
+                            .await
+                            .map_err(|error| {
+                                Error::Preflight(format!(
+                                    "capability {capability} uses Agent {}: {error}",
+                                    binding.agent_instance_id
+                                ))
+                            })?;
+                    binding.executable_path = Some(tools.codex_binary);
+                }
+                kind => {
+                    return Err(Error::Preflight(format!(
+                        "capability {capability} uses unsupported {kind} provider"
+                    )));
+                }
+            }
+        }
+        let run_id = self.create_run_definition_with_bindings(request, repository, bindings)?;
         let mut store = self.store()?;
         crate::workspace::provision(
             &mut store,
@@ -218,6 +251,7 @@ impl Runtime {
             goal: record.goal,
             repository: definition.repository,
             checks: definition.checks,
+            agent_bindings: definition.agent_bindings,
             state: record.state,
             outcome: record.outcome,
             revision: record.revision,
@@ -230,6 +264,45 @@ impl Runtime {
 
     pub fn events(&self, run_id: &str, after_sequence: i64) -> Result<Vec<crate::event::Event>> {
         self.store()?.events(run_id, after_sequence)
+    }
+
+    pub fn agent_management(&self) -> Result<AgentManagementSnapshot> {
+        AgentService::new(self.config.data_root.clone()).snapshot()
+    }
+
+    pub fn agent_service(&self) -> AgentService {
+        AgentService::new(self.config.data_root.clone())
+    }
+
+    fn frozen_agent_bindings(&self) -> Result<BTreeMap<String, FrozenAgentBinding>> {
+        let store = self.store()?;
+        let bindings = store.capability_bindings()?;
+        let mut frozen = BTreeMap::new();
+        for capability in BUILTIN_NODES {
+            let binding = bindings
+                .iter()
+                .find(|binding| binding.capability == capability)
+                .ok_or_else(|| {
+                    Error::Preflight(format!("capability {capability} has no Agent binding"))
+                })?;
+            let instance = store.agent_instance(&binding.agent_instance_id)?;
+            if !instance.enabled || !instance.provider_kind.supported() {
+                return Err(Error::Preflight(format!(
+                    "capability {capability} is bound to an unavailable Agent"
+                )));
+            }
+            frozen.insert(
+                capability.to_owned(),
+                FrozenAgentBinding {
+                    agent_instance_id: instance.id,
+                    display_name: instance.display_name,
+                    provider_kind: instance.provider_kind,
+                    executable_path: instance.executable_path,
+                    model: instance.model,
+                },
+            );
+        }
+        Ok(frozen)
     }
 }
 

@@ -7,6 +7,15 @@ pub enum CapabilityKind {
 }
 
 impl CapabilityKind {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Designer => "designer",
+            Self::Coder => "coder",
+            Self::Tester => "tester",
+            Self::Reviewer => "reviewer",
+        }
+    }
+
     pub fn prompt(self) -> &'static str {
         match self {
             Self::Designer => include_str!("../capabilities/v1/designer.md"),

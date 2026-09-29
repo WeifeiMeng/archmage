@@ -32,8 +32,7 @@ archmage doctor
 ```bash
 archmage run \
   --repo /absolute/path/to/your-repository \
-  --goal "实现一个可验证的小功能" \
-  --check "cargo test"
+  --goal "实现一个可验证的小功能"
 ```
 
 `run` 会调用本机真实 Codex，并依次执行 Designer、Coder、Tester、Reviewer。命令会一直等待到 Run 结束，最后输出完整 JSON snapshot。记录输出中的 `id`，可用于后续查询。
@@ -43,7 +42,7 @@ archmage run \
 当前可用：
 
 - `archmage doctor [--offline]`
-- `archmage run --repo ... --goal ... --check ...`
+- `archmage run --repo ... --goal ...`
 - `archmage status <run-id> [--json]`
 - `archmage logs <run-id>`
 - `archmage cancel <run-id>`
@@ -140,30 +139,21 @@ Doctor 只验证环境，不修改目标仓库，也不执行四能力 Workflow�
 ```bash
 archmage run \
   --repo /absolute/path/to/repository \
-  --goal "为解析器增加空输入错误" \
-  --check "cargo test -p parser"
+  --goal "为解析器增加空输入错误并验证行为"
 ```
 
-多条验收命令需要重复 `--check`：
-
-```bash
-archmage run \
-  --repo /absolute/path/to/repository \
-  --goal "实现接口并更新前端" \
-  --check "cargo test --workspace" \
-  --check "npm test --prefix apps/web"
-```
+`run` 不接受预制验收命令。Tester 能力背后的 Agent 会根据目标、仓库和上游产物自行决定测试与检查方法。
 
 运行语义：
 
 1. 为 Run 创建隔离 Git worktree；
 2. Designer 产出设计和显式 handoff；
 3. Coder 在该工作区实现并产出 ChangeSet；
-4. Tester 只能通过 Archmage 注入的受控检查协议执行启动时冻结的 `--check`；
-5. Reviewer 根据实现、证据和 handoff 给出 `approved` 或 `changes_requested`；
+4. Tester 自主选择测试命令，并在结构化结果中记录命令、退出码、结果和限制；
+5. Reviewer 根据实现、Tester 结果和 handoff 给出 `approved` 或 `changes_requested`；
 6. 全部状态和事件持久化到 SQLite。
 
-这里的四个 Agent 是四种逻辑能力，并不要求四套不同的 provider 或常驻进程；当前它们都通过真实的本地 Codex CLI 执行。
+这里的四个 Agent 是四种逻辑能力，并不要求四套不同的 provider 或常驻进程。当前可在桌面端把它们绑定到一个或多个真实 Codex 实例；CLI 使用已持久化的全局绑定，并在 Run 创建时冻结绑定快照。
 
 ## `status`：查看 Run
 
@@ -237,4 +227,4 @@ Archmage 使用当前 `PATH` 和 Codex 配置，不读取或打印认证凭据�
 
 `archmage run` 启动时会在 stderr 打印 Run ID，结束后的 JSON 也包含 `id`。也可以在桌面客户端左侧的“最近运行”中查看。
 
-`archmage internal check` 是 Runtime 与 Tester 的隐藏协议，不是用户命令，不应手工调用或依赖其接口稳定性。
+`archmage internal check` 是保留的底层 CheckRunner 协议，不是当前内置主链的用户入口，不应手工调用或依赖其接口稳定性。

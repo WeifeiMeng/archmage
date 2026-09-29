@@ -1,5 +1,50 @@
-export type CheckSpec = { checkId: string; command: string };
-export type RunRequest = { repository: string; goal: string; checks: CheckSpec[] };
+export type RunRequest = { repository: string; goal: string };
+export type ProviderKind = "codex" | "claude" | "openclaw" | "hermes";
+export type ConnectionState = "unverified" | "ready" | "failed";
+
+export type AdapterDescriptor = {
+  kind: ProviderKind;
+  displayName: string;
+  supported: boolean;
+};
+
+export type AgentInstance = {
+  id: string;
+  providerKind: ProviderKind;
+  displayName: string;
+  executablePath: string | null;
+  model: string | null;
+  enabled: boolean;
+  connectionState: ConnectionState;
+  discoveredVersion: string | null;
+  lastVerifiedAt: string | null;
+  lastError: string | null;
+  verificationThreadId: string | null;
+};
+
+export type AgentInstanceInput = Pick<
+  AgentInstance,
+  "id" | "providerKind" | "displayName" | "executablePath" | "model" | "enabled"
+>;
+
+export type CapabilityBinding = {
+  capability: NodeSnapshot["key"];
+  agentInstanceId: string;
+};
+
+export type AgentManagementSnapshot = {
+  adapters: AdapterDescriptor[];
+  instances: AgentInstance[];
+  bindings: CapabilityBinding[];
+};
+
+export type FrozenAgentBinding = {
+  agentInstanceId: string;
+  displayName: string;
+  providerKind: ProviderKind;
+  executablePath: string | null;
+  model: string | null;
+};
 
 export type NodeSnapshot = {
   id: string;
@@ -19,7 +64,8 @@ export type RunSnapshot = {
   id: string;
   goal: string;
   repository: string;
-  checks: CheckSpec[];
+  checks: { checkId: string; command: string }[];
+  agentBindings: Record<NodeSnapshot["key"], FrozenAgentBinding>;
   state: string;
   outcome: string | null;
   revision: number;
@@ -57,12 +103,24 @@ export const initialTimelineState: TimelineState = {
   needsRefresh: false,
 };
 
-export function toRunRequest(repository: string, goal: string, rows: string[]): RunRequest {
-  const checks = rows
-    .map((command) => command.trim())
-    .filter(Boolean)
-    .map((command, index) => ({ checkId: `check-${index + 1}`, command }));
-  return { repository: repository.trim(), goal: goal.trim(), checks };
+export function toRunRequest(repository: string, goal: string): RunRequest {
+  return { repository: repository.trim(), goal: goal.trim() };
+}
+
+export const connectionLabel = (state: ConnectionState) =>
+  ({ unverified: "连接未验证", ready: "可用", failed: "连接失败" })[state];
+
+export function runBindingIssues(snapshot: AgentManagementSnapshot): string[] {
+  const capabilities: NodeSnapshot["key"][] = ["designer", "coder", "tester", "reviewer"];
+  return capabilities.flatMap((capability) => {
+    const binding = snapshot.bindings.find((item) => item.capability === capability);
+    if (!binding) return [`${capability}: 未绑定 Agent`];
+    const instance = snapshot.instances.find((item) => item.id === binding.agentInstanceId);
+    if (!instance) return [`${capability}: Agent 实例不存在`];
+    if (!instance.enabled) return [`${capability}: Agent 实例已禁用`];
+    if (instance.providerKind !== "codex") return [`${capability}: Provider 尚未支持`];
+    return [];
+  });
 }
 
 export function reduceEvent(state: TimelineState, event: RunEvent): TimelineState {

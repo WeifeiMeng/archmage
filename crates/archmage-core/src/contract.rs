@@ -4,22 +4,11 @@ use crate::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use std::{
-    collections::BTreeMap,
-    path::{Component, Path},
-};
-
-#[derive(Clone, Debug)]
-pub struct RequiredCheck {
-    pub check_id: String,
-    pub evidence_id: String,
-    pub passed: bool,
-}
+use std::path::{Component, Path};
 
 #[derive(Clone, Debug, Default)]
 pub struct ContractContext {
-    pub required_checks: Vec<RequiredCheck>,
-    pub checks_failed: bool,
+    pub tester_accepted: bool,
 }
 
 #[derive(Deserialize)]
@@ -52,20 +41,23 @@ struct Tester {
     schema_version: String,
     summary_markdown: String,
     status: CheckStatus,
-    checks: Vec<CheckResult>,
+    commands: Vec<TestCommand>,
+    limitations: Vec<String>,
 }
 #[derive(Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum CheckStatus {
     Passed,
     Failed,
+    Blocked,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CheckResult {
-    check_id: String,
-    evidence_id: String,
+struct TestCommand {
+    command: String,
+    exit_code: Option<i32>,
     status: CheckStatus,
+    summary: String,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -187,27 +179,37 @@ pub fn validate_output(
                 serde_json::from_value(value.clone()).map_err(|e| invalid(e.to_string()))?;
             version(&v.schema_version)?;
             nonblank(&v.summary_markdown, "summary_markdown")?;
-            let expected: BTreeMap<_, _> = context
-                .required_checks
-                .iter()
-                .map(|c| (c.check_id.as_str(), c))
-                .collect();
-            if v.checks.len() != expected.len() {
-                return Err(invalid("required checks do not match"));
-            }
-            for check in &v.checks {
-                let required = expected
-                    .get(check.check_id.as_str())
-                    .ok_or_else(|| invalid("unknown check ID"))?;
-                if check.evidence_id != required.evidence_id
-                    || (check.status == CheckStatus::Passed) != required.passed
-                {
-                    return Err(invalid("check evidence mismatch"));
+            for command in &v.commands {
+                nonblank(&command.command, "test command")?;
+                nonblank(&command.summary, "test command summary")?;
+                if (command.status == CheckStatus::Passed) != (command.exit_code == Some(0)) {
+                    return Err(invalid("test command status contradicts exit code"));
                 }
             }
-            let all_passed = context.required_checks.iter().all(|c| c.passed);
-            if (v.status == CheckStatus::Passed) != all_passed {
-                return Err(invalid("tester status contradicts evidence"));
+            if v.limitations.iter().any(|item| item.trim().is_empty()) {
+                return Err(invalid("tester limitations must be nonblank"));
+            }
+            match v.status {
+                CheckStatus::Passed
+                    if v.commands.is_empty()
+                        || v.commands
+                            .iter()
+                            .any(|command| command.status != CheckStatus::Passed) =>
+                {
+                    return Err(invalid("passed testing requires successful commands"));
+                }
+                CheckStatus::Failed
+                    if !v
+                        .commands
+                        .iter()
+                        .any(|command| command.status == CheckStatus::Failed) =>
+                {
+                    return Err(invalid("failed testing requires a failed command"));
+                }
+                CheckStatus::Blocked if v.limitations.is_empty() => {
+                    return Err(invalid("blocked testing requires a limitation"));
+                }
+                _ => {}
             }
         }
         CapabilityKind::Reviewer => {
@@ -215,8 +217,8 @@ pub fn validate_output(
                 serde_json::from_value(value.clone()).map_err(|e| invalid(e.to_string()))?;
             version(&v.schema_version)?;
             nonblank(&v.summary_markdown, "summary_markdown")?;
-            if context.checks_failed && v.status == ReviewStatus::Approved {
-                return Err(invalid("failed checks cannot be approved"));
+            if !context.tester_accepted && v.status == ReviewStatus::Approved {
+                return Err(invalid("failed or blocked testing cannot be approved"));
             }
             for issue in v.issues {
                 let path = Path::new(&issue.path);

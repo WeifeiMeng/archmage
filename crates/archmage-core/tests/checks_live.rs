@@ -4,7 +4,7 @@ use archmage_core::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
     check_runner::{CheckRunner, FrozenCheck, load_evidence, serve_check_once},
-    contract::{ContractContext, RequiredCheck, validate_output},
+    contract::{ContractContext, validate_output},
     process::ProcessIdentity,
     store::Store,
     workspace::inspect_repository,
@@ -89,7 +89,7 @@ async fn real_tester_requests_success_and_failure_evidence() {
     let schema = workspace.join("crates/archmage-core/capabilities/v1/tester.schema.json");
     let result = dir.path().join("tester-result.json");
     let prompt = format!(
-        "Act as Tester. Run exactly these two commands, read their JSON evidence, then return schema-valid Tester JSON with status failed and both checks: {} internal check --endpoint {} --attempt {} --check pass ; {} internal check --endpoint {} --attempt {} --check fail. Do not edit files.",
+        "Act as Tester. Invoke exactly these two legacy check helpers and read their JSON evidence: {} internal check --endpoint {} --attempt {} --check pass ; {} internal check --endpoint {} --attempt {} --check fail. Return schema-valid Tester JSON with status failed. In commands report the underlying commands `printf pass` with exit_code 0/status passed and `printf fail >&2; exit 7` with exit_code 7/status failed. Include concise summaries and an empty limitations array. Do not edit files.",
         helper.display(),
         socket.display(),
         attempt.id,
@@ -162,22 +162,10 @@ async fn real_tester_requests_success_and_failure_evidence() {
     drop(runner);
     let pass = load_evidence(&store, &attempt.id, "pass").unwrap();
     let fail = load_evidence(&store, &attempt.id, "fail").unwrap();
-    let context = ContractContext {
-        required_checks: vec![
-            RequiredCheck {
-                check_id: "pass".into(),
-                evidence_id: pass.evidence_id,
-                passed: true,
-            },
-            RequiredCheck {
-                check_id: "fail".into(),
-                evidence_id: fail.evidence_id,
-                passed: false,
-            },
-        ],
-        ..Default::default()
-    };
+    assert_eq!(pass.exit_code, Some(0));
+    assert_eq!(fail.exit_code, Some(7));
     let output = fs::read(result).unwrap();
-    let validated = validate_output(CapabilityKind::Tester, &output, &context).unwrap();
+    let validated =
+        validate_output(CapabilityKind::Tester, &output, &ContractContext::default()).unwrap();
     assert_eq!(validated["status"], "failed");
 }

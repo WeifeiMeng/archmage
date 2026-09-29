@@ -327,6 +327,7 @@ pub async fn capture_observed(
 }
 
 /// Captures a process while publishing its verified OS identity before stdin is written.
+#[allow(clippy::too_many_arguments)]
 pub async fn capture_observed_with_identity(
     binary: &Path,
     args: &[OsString],

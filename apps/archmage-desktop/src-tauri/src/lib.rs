@@ -1,4 +1,5 @@
 use archmage_core::{
+    agent::{AgentInstanceInput, AgentManagementSnapshot},
     config::Config,
     event::Event,
     provider::codex,
@@ -41,6 +42,76 @@ async fn doctor(online: bool) -> Result<serde_json::Value, String> {
         "authentication": if online { "verified" } else { "not_verified_offline" },
         "probe": probe,
     }))
+}
+
+#[tauri::command]
+fn get_agent_management(state: State<'_, AppState>) -> Result<AgentManagementSnapshot, String> {
+    state
+        .runtime
+        .agent_management()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_agent_instance(
+    state: State<'_, AppState>,
+    input: AgentInstanceInput,
+) -> Result<AgentManagementSnapshot, String> {
+    state
+        .runtime
+        .agent_service()
+        .save(&input)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn verify_agent_instance(
+    state: State<'_, AppState>,
+    agent_instance_id: String,
+) -> Result<AgentManagementSnapshot, String> {
+    let service = state.runtime.agent_service();
+    service
+        .verify(&agent_instance_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn discover_agent_instance(
+    state: State<'_, AppState>,
+    agent_instance_id: String,
+) -> Result<AgentManagementSnapshot, String> {
+    state
+        .runtime
+        .agent_service()
+        .discover(&agent_instance_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn delete_agent_instance(
+    state: State<'_, AppState>,
+    agent_instance_id: String,
+) -> Result<AgentManagementSnapshot, String> {
+    state
+        .runtime
+        .agent_service()
+        .delete(&agent_instance_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn bind_capability(
+    state: State<'_, AppState>,
+    capability: String,
+    agent_instance_id: String,
+) -> Result<AgentManagementSnapshot, String> {
+    state
+        .runtime
+        .agent_service()
+        .bind(&capability, &agent_instance_id)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -170,6 +241,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             doctor,
+            get_agent_management,
+            save_agent_instance,
+            discover_agent_instance,
+            verify_agent_instance,
+            delete_agent_instance,
+            bind_capability,
             start_run,
             list_runs,
             active_run_ids,

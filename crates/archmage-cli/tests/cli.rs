@@ -38,7 +38,7 @@ fn missing_run_arguments_are_rejected_without_side_effects() {
 fn status_reads_a_persisted_run_without_starting_codex() {
     use archmage_core::{
         config::Config,
-        runtime::{CheckSpec, RunRequest, Runtime},
+        runtime::{RunRequest, Runtime},
     };
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
@@ -76,12 +76,7 @@ fn status_reads_a_persisted_run_without_starting_codex() {
     );
     let data = temp.path().join("data");
     let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
-    let request = RunRequest::new(
-        &repo,
-        "health",
-        vec![CheckSpec::new("check-1", "true").unwrap()],
-    )
-    .unwrap();
+    let request = RunRequest::new(&repo, "health").unwrap();
     let run_id = runtime.create_run_definition(&request).unwrap();
 
     let output = cli()
@@ -103,7 +98,7 @@ fn status_reads_a_persisted_run_without_starting_codex() {
 fn cancel_marks_a_persisted_run_cancelled_without_starting_codex() {
     use archmage_core::{
         config::Config,
-        runtime::{CheckSpec, RunRequest, Runtime},
+        runtime::{RunRequest, Runtime},
     };
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
@@ -141,12 +136,7 @@ fn cancel_marks_a_persisted_run_cancelled_without_starting_codex() {
     );
     let data = temp.path().join("data");
     let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
-    let request = RunRequest::new(
-        &repo,
-        "cancel me",
-        vec![CheckSpec::new("check-1", "true").unwrap()],
-    )
-    .unwrap();
+    let request = RunRequest::new(&repo, "cancel me").unwrap();
     let run_id = runtime.create_run_definition(&request).unwrap();
 
     let output = cli()
@@ -165,7 +155,7 @@ fn cancel_marks_a_persisted_run_cancelled_without_starting_codex() {
 #[test]
 fn blank_goal_is_rejected() {
     let output = cli()
-        .args(["run", "--repo", ".", "--goal", "  ", "--check", "true"])
+        .args(["run", "--repo", ".", "--goal", "  "])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(2));

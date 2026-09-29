@@ -6,6 +6,10 @@ A Workflow Definition describes nodes and dependencies. A Workflow Run snapshots
 
 A Node definition names one Capability and its Context bindings. A Node Run records execution state. Every retry or resume creates a new attempt; attempts are never overwritten.
 
+Capability bindings are global configuration but are resolved to concrete Agent instance IDs and frozen into every new Run. An Agent instance stores a Provider kind plus its executable/model configuration. Changing a global binding never rewrites active or historical Run definitions.
+
+The built-in Tester receives a testing task rather than a predeclared command list. Its bound Agent selects relevant commands inside the Run worktree and returns structured command outcomes and limitations. Runtime keeps the older CheckRunner ledger available as lower-level infrastructure, but it is not part of the built-in goal-driven workflow.
+
 ## Node states
 
 ```text

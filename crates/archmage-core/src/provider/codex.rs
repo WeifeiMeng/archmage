@@ -66,6 +66,7 @@ pub struct CodexInvocation {
     pub result_path: PathBuf,
     pub diagnostics_dir: PathBuf,
     pub sandbox: Sandbox,
+    pub model: Option<String>,
     use_builtin_sandbox: bool,
     pub deadline: Duration,
     pub max_line_bytes: usize,
@@ -88,6 +89,7 @@ impl CodexInvocation {
             result_path,
             diagnostics_dir,
             sandbox,
+            model: None,
             use_builtin_sandbox: true,
             deadline: Duration::from_secs(30 * 60),
             max_line_bytes: 8 * 1024 * 1024,
@@ -103,6 +105,9 @@ impl CodexInvocation {
             "--cd".into(),
             self.repository.as_os_str().into(),
         ];
+        if let Some(model) = &self.model {
+            args.extend(["--model".into(), model.into()]);
+        }
         if self.use_builtin_sandbox {
             args.extend(["--sandbox".into(), self.sandbox.as_str().into()]);
         }
@@ -300,7 +305,32 @@ async fn text_command(binary: &Path, args: &[&str]) -> Result<String> {
 }
 
 pub async fn inspect() -> Result<LocalTools> {
-    let codex_binary = find_executable("codex")?;
+    inspect_at(None).await
+}
+
+pub async fn inspect_at(codex_binary: Option<&Path>) -> Result<LocalTools> {
+    let codex_binary = match codex_binary {
+        Some(path) => {
+            if !path.is_file() {
+                return Err(Error::Preflight(format!(
+                    "configured Codex executable does not exist: {}",
+                    path.display()
+                )));
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if std::fs::metadata(path)?.permissions().mode() & 0o111 == 0 {
+                    return Err(Error::Preflight(format!(
+                        "configured Codex path is not executable: {}",
+                        path.display()
+                    )));
+                }
+            }
+            std::path::absolute(path)?
+        }
+        None => find_executable("codex")?,
+    };
     let git_binary = find_executable("git")?;
     let codex_version = text_command(&codex_binary, &["--version"])
         .await?
@@ -330,11 +360,19 @@ pub struct ProbeResult {
 /// Bounded, read-only connectivity check; does not execute a product workflow.
 pub async fn readonly_probe(tools: &LocalTools) -> Result<ProbeResult> {
     let temp = tempfile::tempdir()?;
-    probe_in(tools, temp.path(), None).await
+    probe_in(tools, temp.path(), None, None).await
 }
 
 /// Retain each probe in a fresh private directory, including failure diagnostics.
 pub async fn readonly_probe_logged(tools: &LocalTools, root: &Path) -> Result<ProbeResult> {
+    readonly_probe_logged_with_model(tools, root, None).await
+}
+
+pub async fn readonly_probe_logged_with_model(
+    tools: &LocalTools,
+    root: &Path,
+    model: Option<&str>,
+) -> Result<ProbeResult> {
     let dir = tempfile::Builder::new()
         .prefix("probe-")
         .tempdir_in(root)?
@@ -344,7 +382,7 @@ pub async fn readonly_probe_logged(tools: &LocalTools, root: &Path) -> Result<Pr
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
     }
-    let result = probe_in(tools, &dir, Some(dir.clone())).await;
+    let result = probe_in(tools, &dir, Some(dir.clone()), model).await;
     if let Err(error) = &result {
         let message = format!("{error}\nDiagnostics: {}", dir.display());
         return Err(Error::Preflight(message));
@@ -356,6 +394,7 @@ async fn probe_in(
     tools: &LocalTools,
     dir: &Path,
     diagnostics_dir: Option<PathBuf>,
+    model: Option<&str>,
 ) -> Result<ProbeResult> {
     use super::codex_event::Decoder;
     use std::io::Write;
@@ -389,10 +428,11 @@ async fn probe_in(
     let mut event_log = private_file(&dir.join("events.jsonl"))?;
     let mut stderr_log = private_file(&dir.join("stderr.log"))?;
     std::fs::write(&schema, br#"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}"#)?;
-    let args: Vec<OsString> = vec![
-        "exec".into(),
-        "--cd".into(),
-        repo.as_os_str().into(),
+    let mut args: Vec<OsString> = vec!["exec".into(), "--cd".into(), repo.as_os_str().into()];
+    if let Some(model) = model {
+        args.extend(["--model".into(), model.into()]);
+    }
+    args.extend([
         "--sandbox".into(),
         "read-only".into(),
         "--json".into(),
@@ -401,7 +441,7 @@ async fn probe_in(
         "--output-last-message".into(),
         output.as_os_str().into(),
         "-".into(),
-    ];
+    ]);
     let mut decoder = Decoder::new(8 * 1024 * 1024);
     let mut events = Vec::new();
     let mut metadata = private_file(&dir.join("metadata.json"))?;

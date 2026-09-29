@@ -48,7 +48,7 @@ The result includes a `summary_markdown` field for human-readable output. The ru
 
 The Reviewer result is terminal in S0. S1 adds an `approved` or `changes_requested` condition and the Fixer loop.
 
-Required validation checks are not trusted solely from agent-authored JSON. The Tester invokes each named check through an Archmage-owned check runner, which writes attempt-scoped evidence before returning the result to Codex. TestResult invariants reconcile required check IDs against that evidence.
+The built-in Tester receives the testing task rather than a predeclared command list. Its strict result records every command it relied on, exit codes, concise outcomes, and limitations. A `passed` result requires at least one successful command and cannot contradict its command outcomes; failed or blocked testing prevents Reviewer approval. The older Archmage-owned CheckRunner remains available as lower-level infrastructure but is not used by this goal-driven built-in workflow.
 
 ## Contract failure
 

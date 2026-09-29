@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import {
   Box,
+  Bot,
   Check,
   ChevronRight,
   Circle,
@@ -20,11 +21,15 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { api } from "./api";
+import { AgentManagement } from "./AgentManagement";
+import "./agents.css";
 import {
   initialTimelineState,
   isActive,
   reduceEvent,
+  runBindingIssues,
   toRunRequest,
+  type AgentManagementSnapshot,
   type RunEvent,
   type RunSnapshot,
   type RunSummary,
@@ -50,9 +55,10 @@ export default function App() {
   const [timeline, setTimeline] = useState<TimelineState>(initialTimelineState);
   const [repository, setRepository] = useState("");
   const [goal, setGoal] = useState("");
-  const [checks, setChecks] = useState([""]);
+  const [view, setView] = useState<"runs" | "agents">("runs");
   const [busy, setBusy] = useState(false);
   const [environment, setEnvironment] = useState<"checking" | "ready" | "failed" | "preview">("checking");
+  const [agents, setAgents] = useState<AgentManagementSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshRuns = useCallback(async () => {
@@ -90,10 +96,15 @@ export default function App() {
     checkEnvironment();
   }, []);
 
+  useEffect(() => {
+    if (!isTauri() || view !== "runs") return;
+    api.getAgentManagement().then(setAgents).catch((reason) => setError(String(reason)));
+  }, [view]);
+
   async function checkEnvironment() {
     setEnvironment("checking");
     try {
-      await api.doctor(false);
+      setAgents(await api.getAgentManagement());
       setEnvironment("ready");
     } catch (reason) {
       setEnvironment("failed");
@@ -146,8 +157,9 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [refreshRun, snapshot]);
 
-  const request = useMemo(() => toRunRequest(repository, goal, checks), [repository, goal, checks]);
-  const canStart = environment === "ready" && request.repository.length > 0 && request.goal.length > 0 && request.checks.length > 0 && !busy;
+  const request = useMemo(() => toRunRequest(repository, goal), [repository, goal]);
+  const bindingIssues = agents ? runBindingIssues(agents) : ["正在读取能力绑定"];
+  const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && request.repository.length > 0 && request.goal.length > 0 && !busy;
 
   async function chooseRepository() {
     const chosen = await open({ directory: true, multiple: false, title: "选择 Git 仓库" });
@@ -159,6 +171,7 @@ export default function App() {
     setError(null);
     try {
       const id = await api.startRun(request);
+      setView("runs");
       setSelectedId(id);
       await refreshRun(id);
     } catch (reason) {
@@ -172,11 +185,12 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><Box size={18} /></div><div><strong>Archmage</strong><span>Agent Workbench</span></div></div>
-        <button className={`new-run ${selectedId === null ? "active" : ""}`} onClick={() => setSelectedId(null)}><Plus size={17} />新建 Run</button>
+        <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => { setView("runs"); setSelectedId(null); }}><Plus size={17} />新建 Run</button>
+        <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => setView("agents")}><Bot size={17} />Agent 管理</button>
         <div className="section-label">最近运行</div>
         <nav className="run-list" aria-label="最近运行">
           {runs.map((run) => (
-            <button key={run.id} className={selectedId === run.id ? "active" : ""} onClick={() => setSelectedId(run.id)}>
+            <button key={run.id} className={view === "runs" && selectedId === run.id ? "active" : ""} onClick={() => { setView("runs"); setSelectedId(run.id); }}>
               <span className={`status-dot ${run.state}`} />
               <span className="run-copy"><strong>{run.goal}</strong><small>{stateLabel(run.state)} · {run.id.slice(0, 8)}</small></span>
               <ChevronRight size={15} />
@@ -189,7 +203,7 @@ export default function App() {
 
       <main className="workspace">
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
-        {!selectedId ? (
+        {view === "agents" ? <AgentManagement onError={setError} /> : !selectedId ? (
           <section className="new-run-view">
             <header><p className="eyebrow">REAL CODEX WORKFLOW</p><h1>把目标交给一组能力</h1><p>一个 Run 串联 Designer、Coder、Tester 和 Reviewer；每个节点都调用真实的本地 Codex。</p></header>
             <div className="form-card">
@@ -197,11 +211,11 @@ export default function App() {
               <div className="path-field"><FolderGit2 size={18} /><input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
               <label htmlFor="goal">目标<span>必填</span></label>
               <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望四种能力协作完成的具体结果……" rows={5} />
-              <div className="field-heading"><label>验收命令<span>至少一条</span></label><button className="text-button" onClick={() => setChecks([...checks, ""])}><Plus size={15} />添加命令</button></div>
-              <div className="check-list">{checks.map((check, index) => <div className="command-field" key={index}><span>$</span><input aria-label={`验收命令 ${index + 1}`} value={check} onChange={(event) => setChecks(checks.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} placeholder="cargo test / npm test / ./scripts/check.sh" />{checks.length > 1 && <button aria-label="移除命令" onClick={() => setChecks(checks.filter((_, itemIndex) => itemIndex !== index))}>×</button>}</div>)}</div>
+              <div className="delegated-testing"><TestTube2 size={18} /><div><strong>Tester 自主验证</strong><span>测试任务会直接交给当前绑定的 Agent，由它分析项目并选择验证命令。</span></div></div>
+              <div className="delegated-testing"><Bot size={18} /><div><strong>能力绑定</strong><span>{bindingIssues.length ? bindingIssues.join("；") : "Designer、Coder、Tester、Reviewer 均已绑定可用实例。"}</span>{agents && agents.bindings.map((binding) => { const instance = agents.instances.find((item) => item.id === binding.agentInstanceId); return instance?.connectionState !== "ready" ? <span key={binding.capability}>{binding.capability}: {instance?.displayName ?? "未知实例"} 尚未通过真实连接验证</span> : null; })}</div></div>
               <div className={`preflight ${environment}`}>
                 {environment === "checking" ? <LoaderCircle className="spin" size={17} /> : environment === "ready" ? <Check size={17} /> : <Circle size={17} />}
-                <div><strong>{environment === "checking" ? "正在检查本地环境" : environment === "ready" ? "本地 Runtime 已就绪" : environment === "preview" ? "当前是浏览器界面预览" : "环境检查未通过"}</strong><span>{environment === "ready" ? "Git、Codex CLI、schema 和数据目录可以使用。" : environment === "failed" ? "请处理顶部错误后重试，未通过前不会创建 Run。" : environment === "preview" ? "请使用 Tauri 桌面窗口连接真实 Runtime 和 Codex。" : "正在确认 Git、Codex CLI、schema 和数据目录。"}</span></div>
+                <div><strong>{environment === "checking" ? "正在检查本地环境" : environment === "ready" ? "本地 Runtime 已就绪" : environment === "preview" ? "当前是浏览器界面预览" : "环境检查未通过"}</strong><span>{environment === "ready" ? "数据库已就绪；具体 Agent 状态见上方能力绑定或 Agent 管理。" : environment === "failed" ? "请处理顶部错误后重试，未通过前不会创建 Run。" : environment === "preview" ? "请使用 Tauri 桌面窗口连接真实 Runtime 和 Codex。" : "正在读取 Runtime 和 Agent 配置。"}</span></div>
                 {environment === "failed" && <button type="button" onClick={checkEnvironment}>重试</button>}
               </div>
               <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : "启动真实 Run"}</button>
@@ -221,7 +235,7 @@ function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal }: { s
   const nodeEvents = timeline.events.filter((event) => event.node_id === node?.id);
   return <div className="run-view">
     <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span><code>{snapshot.id}</code></div></div><div className="header-actions"><button onClick={onRefresh}><RefreshCw size={16} />刷新</button><button onClick={onReveal} disabled={!snapshot.workspace}><FolderOpen size={16} />工作区</button>{isActive(snapshot.state) && <button className="danger" onClick={onCancel}><Square size={14} fill="currentColor" />取消</button>}</div></header>
-    <section className="node-strip" aria-label="能力进度">{snapshot.nodes.map((item, index) => { const meta = nodeMeta[item.key]; const Icon = meta.icon; return <button key={item.id} className={`${item.state} ${selectedNode === item.id ? "selected" : ""}`} onClick={() => setSelectedNode(item.id)}><span className="node-index">{item.state === "succeeded" ? <Check size={15} /> : item.state === "running" ? <LoaderCircle className="spin" size={15} /> : index + 1}</span><Icon size={18} /><span><strong>{meta.label}</strong><small>{stateLabel(item.state)}</small></span></button>; })}</section>
+    <section className="node-strip" aria-label="能力进度">{snapshot.nodes.map((item, index) => { const meta = nodeMeta[item.key]; const binding = snapshot.agentBindings[item.key]; const Icon = meta.icon; return <button key={item.id} className={`${item.state} ${selectedNode === item.id ? "selected" : ""}`} onClick={() => setSelectedNode(item.id)}><span className="node-index">{item.state === "succeeded" ? <Check size={15} /> : item.state === "running" ? <LoaderCircle className="spin" size={15} /> : index + 1}</span><Icon size={18} /><span><strong>{meta.label}</strong><small>{stateLabel(item.state)} · {binding ? `${binding.displayName} (${binding.providerKind})` : "历史配置"}</small></span></button>; })}</section>
     <div className="run-grid"><section className="panel timeline-panel"><div className="panel-title"><div><span>运行时间线</span><small>{timeline.events.length} 个持久化事件</small></div><span className="sequence">SEQ {timeline.lastSequence}</span></div><div className="timeline">{timeline.events.map((event) => <EventRow key={event.sequence} event={event} />)}{timeline.events.length === 0 && <p className="empty-copy">等待 Runtime 事件……</p>}</div></section><section className="panel inspector"><div className="panel-title"><div><span>节点检查器</span><small>{node ? nodeMeta[node.key].label : "—"}</small></div></div>{node ? <><div className="inspect-state"><span className={`status-dot ${node.state}`} /><strong>{stateLabel(node.state)}</strong><code>{node.id}</code></div>{node.result ? <><div className="result-meta"><MetaItem label="Codex Thread" value={node.result.threadId} /><MetaItem label="Attempt" value={node.result.attemptId} /><MetaItem label="Result Artifact" value={node.result.resultArtifactId} />{node.result.changesetArtifactId && <MetaItem label="ChangeSet" value={node.result.changesetArtifactId} />}</div><div className="inspect-section output-section"><label>结构化结果</label><ResultSummary output={node.result.output} /><details><summary>查看原始 JSON</summary><pre>{JSON.stringify(node.result.output, null, 2)}</pre></details></div></> : <div className="waiting-result"><LoaderCircle className={node.state === "running" ? "spin" : ""} size={17} /><div><strong>尚无结构化结果</strong><span>{node.state === "running" ? "Codex 正在执行，完成后会在此显示结果和 Artifact。" : "节点开始并成功完成后，结果会持久化到这里。"}</span></div></div>}<div className="inspect-section"><label>运行记录</label>{nodeEvents.length ? nodeEvents.map((event) => <div className="compact-event" key={event.sequence}><span>#{event.sequence} · {event.event_type}</span>{Object.keys(event.payload).length > 0 && <pre>{JSON.stringify(event.payload, null, 2)}</pre>}</div>) : <p className="empty-copy">该节点还没有事件。</p>}</div></> : null}</section></div>
   </div>;
 }

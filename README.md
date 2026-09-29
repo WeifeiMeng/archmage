@@ -9,7 +9,7 @@ Install the current development CLI from the repository root:
 ```bash
 cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 archmage doctor --offline
-archmage run --repo /absolute/path/to/repository --goal "your goal" --check "cargo test"
+archmage run --repo /absolute/path/to/repository --goal "your goal"
 ```
 
 Start the complete desktop development application from the repository root:

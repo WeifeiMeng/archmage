@@ -43,7 +43,7 @@ fn required(kind: CapabilityKind) -> &'static [&'static str] {
             "goal",
             "design",
             "implementation",
-            "check_policy",
+            "changeset",
             "workspace_manifest",
         ],
         CapabilityKind::Reviewer => &[

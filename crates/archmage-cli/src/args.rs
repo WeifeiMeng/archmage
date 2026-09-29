@@ -25,8 +25,6 @@ pub enum Commands {
         repo: PathBuf,
         #[arg(long, value_parser = nonblank)]
         goal: String,
-        #[arg(long, required = true, value_parser = nonblank)]
-        check: Vec<String>,
     },
     /// Inspect a persisted run.
     Status {
