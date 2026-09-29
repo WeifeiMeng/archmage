@@ -18,14 +18,14 @@ fn capability_config_is_seeded_and_saved_with_revision_guard() {
         key: "designer".into(),
         display_name: "Product Designer".into(),
         description: "Plan the change".into(),
-        extra_instructions: "Prefer concise designs".into(),
+        extra_instructions: "  Prefer concise designs\n".into(),
         agent_instance_id: "codex-default".into(),
         revision: configs[0].revision,
     };
     store.save_capability_configuration(&input).unwrap();
     let saved = &store.capability_configurations().unwrap()[0];
     assert_eq!(saved.display_name, "Product Designer");
-    assert_eq!(saved.extra_instructions, "Prefer concise designs");
+    assert_eq!(saved.extra_instructions, "  Prefer concise designs\n");
     assert_eq!(saved.revision, input.revision + 1);
     assert!(store.save_capability_configuration(&input).is_err());
     assert!(

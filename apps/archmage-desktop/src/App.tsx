@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
@@ -32,8 +32,10 @@ import {
   isActive,
   reduceEvent,
   runBindingIssues,
+  shouldConfirmCapabilityExit,
   toRunRequest,
   type AgentManagementSnapshot,
+  type AppView,
   type RunEvent,
   type RunSnapshot,
   type RunSummary,
@@ -59,11 +61,25 @@ export default function App() {
   const [timeline, setTimeline] = useState<TimelineState>(initialTimelineState);
   const [repository, setRepository] = useState("");
   const [goal, setGoal] = useState("");
-  const [view, setView] = useState<"runs" | "agents" | "capabilities">("runs");
+  const [view, setView] = useState<AppView>("runs");
+  const [capabilityDirty, setCapabilityDirty] = useState(false);
+  const capabilityDirtyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [environment, setEnvironment] = useState<"checking" | "ready" | "failed" | "preview">("checking");
   const [agents, setAgents] = useState<AgentManagementSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { capabilityDirtyRef.current = capabilityDirty; }, [capabilityDirty]);
+
+  async function navigate(nextView: AppView, nextRunId?: string | null) {
+    if (shouldConfirmCapabilityExit(view, nextView, capabilityDirty)) {
+      const discard = await confirm("Capability 有未保存的修改，确定离开并放弃吗？", { title: "离开 Capability 管理", kind: "warning" });
+      if (!discard) return;
+    }
+    if (nextView !== "capabilities") setCapabilityDirty(false);
+    setView(nextView);
+    if (nextRunId !== undefined) setSelectedId(nextRunId);
+  }
 
   const refreshRuns = useCallback(async () => {
     const next = await api.listRuns();
@@ -122,6 +138,10 @@ export default function App() {
     const window = getCurrentWindow();
     window.onCloseRequested(async (event) => {
       event.preventDefault();
+      if (capabilityDirtyRef.current) {
+        const discard = await confirm("Capability 有未保存的修改，确定放弃并关闭吗？", { title: "关闭 Archmage", kind: "warning" });
+        if (!discard) return;
+      }
       const active = await api.activeRunIds();
       if (active.length > 0) {
         const shouldClose = await confirm(
@@ -189,13 +209,13 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><Box size={18} /></div><div><strong>Archmage</strong><span>Agent Workbench</span></div></div>
-        <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => { setView("runs"); setSelectedId(null); }}><Plus size={17} />新建 Run</button>
-        <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => setView("agents")}><Bot size={17} />Agent 管理</button>
-        <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => setView("capabilities")}><Share2 size={17} />Capability 管理</button>
+        <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => navigate("runs", null)}><Plus size={17} />新建 Run</button>
+        <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => navigate("agents")}><Bot size={17} />Agent 管理</button>
+        <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => navigate("capabilities")}><Share2 size={17} />Capability 管理</button>
         <div className="section-label">最近运行</div>
         <nav className="run-list" aria-label="最近运行">
           {runs.map((run) => (
-            <button key={run.id} className={view === "runs" && selectedId === run.id ? "active" : ""} onClick={() => { setView("runs"); setSelectedId(run.id); }}>
+            <button key={run.id} className={view === "runs" && selectedId === run.id ? "active" : ""} onClick={() => navigate("runs", run.id)}>
               <span className={`status-dot ${run.state}`} />
               <span className="run-copy"><strong>{run.goal}</strong><small>{stateLabel(run.state)} · {run.id.slice(0, 8)}</small></span>
               <ChevronRight size={15} />
@@ -208,7 +228,7 @@ export default function App() {
 
       <main className="workspace">
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
-        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} /> : !selectedId ? (
+        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : !selectedId ? (
           <section className="new-run-view">
             <header><p className="eyebrow">REAL CODEX WORKFLOW</p><h1>把目标交给一组能力</h1><p>一个 Run 串联 Designer、Coder、Tester 和 Reviewer；每个节点都调用真实的本地 Codex。</p></header>
             <div className="form-card">

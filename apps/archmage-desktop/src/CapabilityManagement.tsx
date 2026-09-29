@@ -32,7 +32,7 @@ function Topology({ snapshot, selected, onSelect, busy }: {
   busy?: boolean;
 }) {
   const edges = groupTopologyEdges(snapshot.edges);
-  return <div className="cap-topology-scroll">
+  return <><div className="cap-topology-scroll">
     <div className="cap-topology" aria-label="固定 Capability 拓扑">
       <svg viewBox="0 0 920 320" aria-hidden="true" focusable="false">
         <defs>
@@ -53,10 +53,12 @@ function Topology({ snapshot, selected, onSelect, busy }: {
         </button>;
       })}
     </div>
-  </div>;
+  </div><nav className="cap-node-list" aria-label="Capability 节点列表">
+    {order.map((key) => <button key={key} type="button" aria-current={selected === key ? "true" : undefined} disabled={busy} onClick={() => onSelect(key)}>{snapshot.configurations.find((item) => item.key === key)?.displayName ?? key}</button>)}
+  </nav></>;
 }
 
-export function CapabilityManagement({ onError }: { onError: (message: string) => void }) {
+export function CapabilityManagement({ onError, onDirtyChange }: { onError: (message: string) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [snapshot, setSnapshot] = useState<CapabilityManagementSnapshot | null>(null);
   const [selected, setSelected] = useState<CapabilityKey>("designer");
   const [draft, setDraft] = useState<CapabilityConfiguration | null>(null);
@@ -91,6 +93,7 @@ export function CapabilityManagement({ onError }: { onError: (message: string) =
     draft.displayName !== saved.displayName || draft.description !== saved.description ||
     draft.extraInstructions !== saved.extraInstructions || draft.agentInstanceId !== saved.agentInstanceId
   ), [draft, saved]);
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
   const instance = snapshot?.instances.find((item) => item.id === draft?.agentInstanceId);
 
   async function select(key: CapabilityKey) {

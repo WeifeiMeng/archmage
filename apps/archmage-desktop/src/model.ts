@@ -2,6 +2,11 @@ export type RunRequest = { repository: string; goal: string };
 export type ProviderKind = "codex" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
 export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
+export type AppView = "runs" | "agents" | "capabilities";
+
+export function shouldConfirmCapabilityExit(current: AppView, next: AppView, dirty: boolean): boolean {
+  return current === "capabilities" && next !== "capabilities" && dirty;
+}
 
 export type AdapterDescriptor = {
   kind: ProviderKind;

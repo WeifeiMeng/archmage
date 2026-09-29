@@ -71,6 +71,8 @@ npm run tauri dev --prefix apps/archmage-desktop
 
 拓扑中的实线是执行依赖：Designer → Coder → Tester → Reviewer。虚线是额外的上下文传递：Designer → Tester/Reviewer、Coder → Reviewer；相邻节点的实线也会传递上下文。这一版不能拖动节点或改线，之后的团队管理 Canvas 才会设计可编辑拓扑。
 
+修改未保存时，切换节点、离开 Capability 页面或关闭窗口都会先询问是否放弃；若另一处已更新同一能力，保存会提示冲突，可点击“重新加载”后再编辑。
+
 未绑定的实例可以禁用或删除；已绑定的实例需要先把相关能力切换到其他实例。新建 Run 页面会显示缺失或不可用的能力绑定，并提示尚未通过真实连接验证的实例。
 
 Claude、OpenClaw 和 Hermes 在当前页面只显示“尚未支持”，不会执行假探测或被绑定到能力。

@@ -59,7 +59,7 @@ impl Store {
                 input.key,
                 input.display_name.trim(),
                 input.description.trim(),
-                input.extra_instructions.trim(),
+                input.extra_instructions,
                 input.revision
             ],
         )?;

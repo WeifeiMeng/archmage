@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityDisplayName, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, toRunRequest, type AgentManagementSnapshot } from "./model";
+import { capabilityDisplayName, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, shouldConfirmCapabilityExit, toRunRequest, type AgentManagementSnapshot } from "./model";
 
 describe("capability topology", () => {
   it("keeps execution dependencies separate from extra context handoffs", () => {
@@ -13,6 +13,11 @@ describe("capability topology", () => {
   it("uses the frozen Run label instead of the current global label", () => {
     expect(capabilityDisplayName({ displayName: "QA" }, "tester")).toBe("QA");
     expect(capabilityDisplayName(undefined, "tester")).toBe("Tester");
+  });
+  it("guards sidebar navigation away from a dirty Capability editor", () => {
+    expect(shouldConfirmCapabilityExit("capabilities", "runs", true)).toBe(true);
+    expect(shouldConfirmCapabilityExit("capabilities", "agents", false)).toBe(false);
+    expect(shouldConfirmCapabilityExit("runs", "agents", true)).toBe(false);
   });
 });
 
