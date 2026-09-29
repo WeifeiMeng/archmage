@@ -1,6 +1,6 @@
 # 当前版本使用指南
 
-更新日期：2026-09-28。本文描述当前源码的真实入口；日常参数以 [CLI 命令手册](cli-reference.md) 为准，图形界面以 [桌面客户端使用手册](runbooks/desktop-s0.md) 为准。
+更新日期：2026-09-29。本文描述当前源码的真实入口；日常参数以 [CLI 命令手册](cli-reference.md) 为准，图形界面以 [桌面客户端使用手册](runbooks/desktop-s0.md) 为准。
 
 ## 当前能力
 
@@ -9,7 +9,7 @@ Archmage 已具备一条可运行的纵向主链：连接本机真实 Codex CLI�
 可用入口：
 
 - CLI：`doctor`、`run`、`status`、`logs`、`cancel`；
-- Tauri 桌面客户端：管理本地 Agent 与能力绑定、新建 Run、查看四节点进度和时间线、打开工作区、取消 Run；
+- Tauri 桌面客户端：管理本地 Agent、查看固定能力拓扑并配置四个 Capability、新建 Run、查看四节点进度和时间线、打开工作区、取消 Run；
 - 进程恢复：启动时将无法确认存活的遗留 Attempt 收敛为 `interrupted`。
 
 暂未提供：`resume`、`logs --follow`、后台 daemon、任意工作流编排。
@@ -70,14 +70,15 @@ archmage cancel <run-id>
 ./scripts/dev-desktop.sh
 ```
 
-第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。确认 Designer、Coder、Tester、Reviewer 都绑定到可用实例后，回到“新建 Run”，选择已有 commit 的 Git 仓库并填写目标即可。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
+第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后进入“Capability 管理”，在固定拓扑中确认 Designer、Coder、Tester、Reviewer 的 Agent 绑定，也可编辑显示名称、职责说明和补充指令。回到“新建 Run”，选择已有 commit 的 Git 仓库并填写目标即可。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
 
 ## 4. Runtime 的关键语义
 
 - 一个 Run 包含多个 Node，当前内置四个能力节点；
 - 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
-- 能力绑定只在 Agent 管理页全局配置，不支持 Run 级临时覆盖；
-- Run 启动时冻结当前能力到具体 Agent 实例的绑定，后续修改全局设置不会改变历史 Run；
+- 能力绑定和补充指令在 Capability 管理页全局配置，不支持 Run 级临时覆盖；
+- 固定拓扑的实线表示执行依赖，虚线表示额外上下文传递；当前不能拖动节点或编辑连线，团队 Canvas 属于后续阶段；
+- Run 启动时冻结当前能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
 - 每个节点有独立 Codex thread/result 与显式 Context/Handoff；
 - Tester 直接获得测试任务、工作区和上游产物，由绑定的真实 Codex 自主选择测试方式与命令；
 - 所有状态转换与事件写入 SQLite；
@@ -111,7 +112,7 @@ Runtime 主链的最终验收应使用一个临时 Git fixture 和真实 Codex�
 
 `archmage doctor --offline` 输出的 `config.data_root` 是实际数据目录。主要内容包括：
 
-- `archmage.db`：schema v8 的执行账本、Agent 实例、能力绑定与事件；
+- `archmage.db`：schema v9 的执行账本、Agent 实例、能力配置与绑定、事件；
 - Run worktree 与 Artifact；
 - Codex JSONL、stderr 和 metadata 诊断。
 

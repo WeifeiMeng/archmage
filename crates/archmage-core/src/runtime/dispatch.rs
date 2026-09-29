@@ -2,7 +2,7 @@ use super::{Runtime, scheduler};
 use crate::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
-    context::{ContextRef, resolve_context},
+    context::{ContextRef, resolve_context_with_instructions},
     contract::{ContractContext, validate_output},
     error::{Error, Result},
     provider::codex::{self, CodexInvocation, Sandbox},
@@ -124,7 +124,21 @@ impl Runtime {
         let repository = inspect_repository(Path::new(&workspace_record.path))?;
         let artifacts = ArtifactStore::open(&self.config.data_root.join("artifacts"))?;
         let inputs = context_inputs(kind, &run, store, &artifacts, &repository)?;
-        let context = resolve_context(kind, "v1", inputs, &artifacts, store)?;
+        let configuration = run.capability_configurations.get(kind.key());
+        let extra_instructions = configuration
+            .map(|item| item.extra_instructions.as_str())
+            .unwrap_or("");
+        let prompt_version = configuration
+            .map(|item| item.prompt_version.as_str())
+            .unwrap_or(crate::capability::BUILTIN_PROMPT_VERSION);
+        let context = resolve_context_with_instructions(
+            kind,
+            prompt_version,
+            extra_instructions,
+            inputs,
+            &artifacts,
+            store,
+        )?;
         let context_id =
             store.persist_context(run_id, &node_for(store, run_id, kind)?.id, &context)?;
         store.bind_attempt_context(attempt_id, &context_id)?;

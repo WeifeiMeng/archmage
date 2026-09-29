@@ -6,7 +6,7 @@
 
 - 选择本地 Git 仓库；
 - 配置本地 Codex Agent 实例并执行真实连通验证；
-- 查看 Designer、Coder、Tester、Reviewer 分别绑定到哪个实例；
+- 在 Capability 管理页查看四个职责的固定拓扑、配置说明/补充指令，并选择各自的 Agent 实例；
 - 只输入仓库和目标即可创建 Run；
 - 启动 Designer → Coder → Tester → Reviewer 的真实 Codex Run；
 - 查看最近 Run、四个能力节点状态和持久化事件时间线；
@@ -15,7 +15,7 @@
 - 取消正在运行的 Run；
 - 客户端重启时收敛遗留的 interrupted Attempt。
 
-当前不包含图形化 resume、工作流编辑器、节点自由编排和后台常驻执行。
+当前不包含图形化 resume、团队 Canvas、工作流编辑器、节点自由编排和后台常驻执行。
 
 ## 启动开发客户端
 
@@ -65,9 +65,11 @@ npm run tauri dev --prefix apps/archmage-desktop
 3. 模型覆盖可以留空，此时沿用 Codex 自身配置；填写后仅该 Agent 实例使用指定模型。
 4. 点击“检查 CLI”，只检查可执行文件、版本、必需参数和 Git；此时状态是“CLI 可用 · 未验证”，不能据此判断账号已连通。
 5. 点击“验证连接”。该操作会使用当前实例的可执行文件和模型覆盖发起一次真实、只读的 Codex 请求，并展示版本、可用状态和上次验证时间。
-6. 在“能力绑定”中确认需求设计、编码实现、测试验证和代码审查都指向预期的具体实例。
+6. 点击侧栏“Capability 管理”，在拓扑中逐个选择 Designer、Coder、Tester、Reviewer，确认其“执行 Agent”指向预期实例。可以同时编辑显示名称、职责说明和补充指令，点击“保存 Capability”。
 
-“添加 Codex 实例”允许创建例如 `codex-personal` 和 `codex-work` 的多个配置。能力绑定是全局设置，不在单个 Run 中临时覆盖；Run 启动时会冻结当时的绑定。
+“添加 Codex 实例”允许创建例如 `codex-personal` 和 `codex-work` 的多个配置。能力绑定是全局设置，不在单个 Run 中临时覆盖；Run 启动时会冻结当时的绑定及能力配置。修改只影响之后创建的 Run。
+
+拓扑中的实线是执行依赖：Designer → Coder → Tester → Reviewer。虚线是额外的上下文传递：Designer → Tester/Reviewer、Coder → Reviewer；相邻节点的实线也会传递上下文。这一版不能拖动节点或改线，之后的团队管理 Canvas 才会设计可编辑拓扑。
 
 未绑定的实例可以禁用或删除；已绑定的实例需要先把相关能力切换到其他实例。新建 Run 页面会显示缺失或不可用的能力绑定，并提示尚未通过真实连接验证的实例。
 

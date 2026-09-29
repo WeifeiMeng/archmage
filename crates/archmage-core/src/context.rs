@@ -74,6 +74,17 @@ pub fn resolve_context(
     artifacts: &ArtifactStore,
     store: &Store,
 ) -> Result<ContextSnapshot> {
+    resolve_context_with_instructions(kind, prompt_version, "", inputs, artifacts, store)
+}
+
+pub fn resolve_context_with_instructions(
+    kind: CapabilityKind,
+    prompt_version: &str,
+    extra_instructions: &str,
+    inputs: HashMap<String, ContextRef>,
+    artifacts: &ArtifactStore,
+    store: &Store,
+) -> Result<ContextSnapshot> {
     if prompt_version.trim().is_empty() {
         return Err(Error::Preflight("context prompt version is blank".into()));
     }
@@ -107,9 +118,11 @@ pub fn resolve_context(
         bindings.insert(key, resolved);
     }
     handoffs.sort_by(|a, b| a.input_key.cmp(&b.input_key));
-    let manifest = canonical(
-        json!({"schema_version":1,"capability":format!("{kind:?}").to_lowercase(),"prompt_version":prompt_version,"instructions":kind.prompt(),"bindings":bindings}),
-    );
+    let mut manifest = json!({"schema_version":1,"capability":format!("{kind:?}").to_lowercase(),"prompt_version":prompt_version,"instructions":kind.prompt(),"bindings":bindings});
+    if !extra_instructions.is_empty() {
+        manifest["extra_instructions"] = extra_instructions.into();
+    }
+    let manifest = canonical(manifest);
     let rendered = serde_json::to_vec(&manifest).map_err(|e| Error::Preflight(e.to_string()))?;
     let hash = format!("{:x}", Sha256::digest(&rendered));
     Ok(ContextSnapshot {

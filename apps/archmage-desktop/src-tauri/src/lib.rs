@@ -1,5 +1,6 @@
 use archmage_core::{
     agent::{AgentInstanceInput, AgentManagementSnapshot},
+    capability::{CapabilityConfigurationInput, CapabilityManagementSnapshot},
     config::Config,
     event::Event,
     provider::codex,
@@ -111,6 +112,29 @@ fn bind_capability(
         .runtime
         .agent_service()
         .bind(&capability, &agent_instance_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_capability_management(
+    state: State<'_, AppState>,
+) -> Result<CapabilityManagementSnapshot, String> {
+    state
+        .runtime
+        .capability_service()
+        .snapshot()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_capability_configuration(
+    state: State<'_, AppState>,
+    input: CapabilityConfigurationInput,
+) -> Result<CapabilityManagementSnapshot, String> {
+    state
+        .runtime
+        .capability_service()
+        .save(&input)
         .map_err(|error| error.to_string())
 }
 
@@ -247,6 +271,8 @@ pub fn run() {
             verify_agent_instance,
             delete_agent_instance,
             bind_capability,
+            get_capability_management,
+            save_capability_configuration,
             start_run,
             list_runs,
             active_run_ids,

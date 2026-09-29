@@ -1,6 +1,6 @@
 # Capability Topology and Management Design
 
-**Status:** Awaiting written-spec review
+**Status:** Approved for implementation
 
 ## Goal and scope
 

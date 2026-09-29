@@ -1,6 +1,7 @@
 export type RunRequest = { repository: string; goal: string };
 export type ProviderKind = "codex" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
+export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
 
 export type AdapterDescriptor = {
   kind: ProviderKind;
@@ -28,8 +29,43 @@ export type AgentInstanceInput = Pick<
 >;
 
 export type CapabilityBinding = {
-  capability: NodeSnapshot["key"];
+  capability: CapabilityKey;
   agentInstanceId: string;
+};
+
+export type CapabilityConfiguration = {
+  key: CapabilityKey;
+  displayName: string;
+  description: string;
+  extraInstructions: string;
+  agentInstanceId: string;
+  revision: number;
+  promptVersion: string;
+};
+
+export type CapabilityConfigurationInput = Omit<CapabilityConfiguration, "promptVersion">;
+
+export function capabilityDisplayName(configuration: Pick<CapabilityConfiguration, "displayName"> | undefined, key: CapabilityKey): string {
+  return configuration?.displayName || key[0].toUpperCase() + key.slice(1);
+}
+
+export type TopologyEdge = {
+  from: CapabilityKey;
+  to: CapabilityKey;
+  kind: "execution" | "context";
+};
+
+export function groupTopologyEdges(edges: TopologyEdge[]) {
+  return {
+    execution: edges.filter((edge) => edge.kind === "execution"),
+    context: edges.filter((edge) => edge.kind === "context"),
+  };
+}
+
+export type CapabilityManagementSnapshot = {
+  configurations: CapabilityConfiguration[];
+  instances: AgentInstance[];
+  edges: TopologyEdge[];
 };
 
 export type AgentManagementSnapshot = {
@@ -48,7 +84,7 @@ export type FrozenAgentBinding = {
 
 export type NodeSnapshot = {
   id: string;
-  key: "designer" | "coder" | "tester" | "reviewer";
+  key: CapabilityKey;
   state: string;
   revision: number;
   result: {
@@ -66,6 +102,7 @@ export type RunSnapshot = {
   repository: string;
   checks: { checkId: string; command: string }[];
   agentBindings: Record<NodeSnapshot["key"], FrozenAgentBinding>;
+  capabilityConfigurations: Record<CapabilityKey, CapabilityConfiguration>;
   state: string;
   outcome: string | null;
   revision: number;

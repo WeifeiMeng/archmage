@@ -1,4 +1,5 @@
 //! Transactional execution ledger. Scheduling, contract validation and OS ownership live above it.
+mod capabilities;
 mod recovery;
 pub(crate) mod transitions;
 use crate::{
@@ -150,6 +151,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0006_runtime.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0007_control.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0008_agents.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0009_capabilities.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -184,7 +186,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0008_agents.sql"))?;
                 version = 8;
             }
-            if version != 8 {
+            if version == 8 {
+                tx.execute_batch(include_str!("../../migrations/0009_capabilities.sql"))?;
+                version = 9;
+            }
+            if version != 9 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -475,7 +481,10 @@ impl Store {
                 "capability requires an enabled supported agent instance".into(),
             ));
         }
-        self.db.execute(
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
             "INSERT INTO capability_bindings(capability,agent_instance_id,updated_at)
              VALUES(?1,?2,strftime('%Y-%m-%dT%H:%M:%fZ','now'))
              ON CONFLICT(capability) DO UPDATE SET
@@ -483,6 +492,12 @@ impl Store {
                 updated_at=excluded.updated_at",
             rusqlite::params![capability, agent_instance_id],
         )?;
+        tx.execute(
+            "UPDATE capability_configurations SET revision=revision+1,
+                    updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE key=?1",
+            [capability],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 

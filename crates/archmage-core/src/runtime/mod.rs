@@ -5,6 +5,7 @@ pub mod scheduler;
 
 use crate::{
     agent::{AgentManagementSnapshot, AgentService, ProviderKind},
+    capability::{CapabilityConfiguration, CapabilityService},
     config::Config,
     contract::validate_builtin_schemas,
     error::{Error, Result},
@@ -110,6 +111,7 @@ pub struct RunSnapshot {
     pub repository: PathBuf,
     pub checks: Vec<CheckSpec>,
     pub agent_bindings: BTreeMap<String, FrozenAgentBinding>,
+    pub capability_configurations: BTreeMap<String, CapabilityConfiguration>,
     pub state: String,
     pub outcome: Option<String>,
     pub revision: i64,
@@ -132,6 +134,8 @@ struct FrozenRunDefinition {
     pub(crate) checks: Vec<CheckSpec>,
     #[serde(default)]
     pub(crate) agent_bindings: BTreeMap<String, FrozenAgentBinding>,
+    #[serde(default)]
+    pub(crate) capability_configurations: BTreeMap<String, CapabilityConfiguration>,
     pub(crate) nodes: Vec<String>,
 }
 
@@ -149,8 +153,8 @@ impl Runtime {
 
     pub fn create_run_definition(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
-        let bindings = self.frozen_agent_bindings()?;
-        self.create_run_definition_with_bindings(request, repository, bindings)
+        let (bindings, configurations) = self.frozen_capability_settings()?;
+        self.create_run_definition_with_bindings(request, repository, bindings, configurations)
     }
 
     fn create_run_definition_with_bindings(
@@ -158,12 +162,14 @@ impl Runtime {
         request: &RunRequest,
         repository: PathBuf,
         agent_bindings: BTreeMap<String, FrozenAgentBinding>,
+        capability_configurations: BTreeMap<String, CapabilityConfiguration>,
     ) -> Result<String> {
         let definition = FrozenRunDefinition {
-            version: 2,
+            version: 3,
             repository,
             checks: Vec::new(),
             agent_bindings,
+            capability_configurations,
             nodes: BUILTIN_NODES.iter().map(|key| (*key).to_owned()).collect(),
         };
         let value = serde_json::to_value(definition)
@@ -174,7 +180,7 @@ impl Runtime {
 
     pub async fn start_run(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
-        let mut bindings = self.frozen_agent_bindings()?;
+        let (mut bindings, configurations) = self.frozen_capability_settings()?;
         for (capability, binding) in &mut bindings {
             match binding.provider_kind {
                 ProviderKind::Codex => {
@@ -196,7 +202,12 @@ impl Runtime {
                 }
             }
         }
-        let run_id = self.create_run_definition_with_bindings(request, repository, bindings)?;
+        let run_id = self.create_run_definition_with_bindings(
+            request,
+            repository,
+            bindings,
+            configurations,
+        )?;
         let mut store = self.store()?;
         crate::workspace::provision(
             &mut store,
@@ -246,12 +257,30 @@ impl Runtime {
             .workspace_for_run(run_id)
             .ok()
             .map(|item| item.path.into());
+        let configurations = if definition.capability_configurations.is_empty() {
+            definition
+                .agent_bindings
+                .iter()
+                .map(|(key, binding)| {
+                    (
+                        key.clone(),
+                        CapabilityConfiguration::legacy_default(
+                            key,
+                            binding.agent_instance_id.clone(),
+                        ),
+                    )
+                })
+                .collect()
+        } else {
+            definition.capability_configurations
+        };
         Ok(RunSnapshot {
             id: record.id,
             goal: record.goal,
             repository: definition.repository,
             checks: definition.checks,
             agent_bindings: definition.agent_bindings,
+            capability_configurations: configurations,
             state: record.state,
             outcome: record.outcome,
             revision: record.revision,
@@ -274,18 +303,28 @@ impl Runtime {
         AgentService::new(self.config.data_root.clone())
     }
 
-    fn frozen_agent_bindings(&self) -> Result<BTreeMap<String, FrozenAgentBinding>> {
+    pub fn capability_service(&self) -> CapabilityService {
+        CapabilityService::new(self.config.data_root.clone())
+    }
+
+    fn frozen_capability_settings(
+        &self,
+    ) -> Result<(
+        BTreeMap<String, FrozenAgentBinding>,
+        BTreeMap<String, CapabilityConfiguration>,
+    )> {
         let store = self.store()?;
-        let bindings = store.capability_bindings()?;
+        let configurations = store.capability_configurations()?;
         let mut frozen = BTreeMap::new();
+        let mut frozen_configurations = BTreeMap::new();
         for capability in BUILTIN_NODES {
-            let binding = bindings
+            let configuration = configurations
                 .iter()
-                .find(|binding| binding.capability == capability)
+                .find(|configuration| configuration.key == capability)
                 .ok_or_else(|| {
-                    Error::Preflight(format!("capability {capability} has no Agent binding"))
+                    Error::Preflight(format!("capability {capability} has no configuration"))
                 })?;
-            let instance = store.agent_instance(&binding.agent_instance_id)?;
+            let instance = store.agent_instance(&configuration.agent_instance_id)?;
             if !instance.enabled || !instance.provider_kind.supported() {
                 return Err(Error::Preflight(format!(
                     "capability {capability} is bound to an unavailable Agent"
@@ -301,8 +340,9 @@ impl Runtime {
                     model: instance.model,
                 },
             );
+            frozen_configurations.insert(capability.to_owned(), configuration.clone());
         }
-        Ok(frozen)
+        Ok((frozen, frozen_configurations))
     }
 }
 

@@ -1,7 +1,7 @@
 use archmage_core::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
-    context::{ContextRef, resolve_context},
+    context::{ContextRef, resolve_context, resolve_context_with_instructions},
     store::{AttemptOutcome, Store},
 };
 use serde_json::json;
@@ -86,6 +86,37 @@ fn map_order_is_canonical_but_prompt_version_changes_hash() {
     )
     .unwrap();
     assert_ne!(first.hash, newer.hash);
+}
+
+#[test]
+fn capability_config_instructions_are_rendered_and_hashed_separately() {
+    let (_dir, store, files, _, _, artifact) = committed_artifact();
+    let base = resolve_context(
+        CapabilityKind::Coder,
+        "v1",
+        coder_inputs(&artifact),
+        &files,
+        &store,
+    )
+    .unwrap();
+    let custom = resolve_context_with_instructions(
+        CapabilityKind::Coder,
+        "v1",
+        "Prefer small commits",
+        coder_inputs(&artifact),
+        &files,
+        &store,
+    )
+    .unwrap();
+    assert_ne!(base.hash, custom.hash);
+    assert_eq!(
+        custom.manifest["extra_instructions"],
+        "Prefer small commits"
+    );
+    assert_eq!(
+        custom.manifest["instructions"],
+        CapabilityKind::Coder.prompt()
+    );
 }
 
 #[test]

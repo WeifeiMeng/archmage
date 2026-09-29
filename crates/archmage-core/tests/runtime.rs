@@ -1,4 +1,5 @@
 use archmage_core::{
+    capability::CapabilityConfigurationInput,
     config::Config,
     runtime::{
         NodeSnapshot, RunRequest, Runtime,
@@ -188,9 +189,49 @@ fn changing_global_binding_does_not_change_existing_run() {
         })
         .unwrap();
     store.bind_capability("tester", "codex-work").unwrap();
+    let current = store.capability_configurations().unwrap().remove(2);
+    store
+        .save_capability_configuration(&CapabilityConfigurationInput {
+            key: "tester".into(),
+            display_name: "QA".into(),
+            description: "New description".into(),
+            extra_instructions: "Run focused checks first".into(),
+            agent_instance_id: "codex-work".into(),
+            revision: current.revision,
+        })
+        .unwrap();
 
+    let frozen = runtime.snapshot(&run_id).unwrap();
     assert_eq!(
-        runtime.snapshot(&run_id).unwrap().agent_bindings["tester"].agent_instance_id,
+        frozen.agent_bindings["tester"].agent_instance_id,
         "codex-default"
+    );
+    assert_eq!(
+        frozen.capability_configurations["tester"].display_name,
+        "Tester"
+    );
+    assert!(
+        frozen.capability_configurations["tester"]
+            .extra_instructions
+            .is_empty()
+    );
+    assert_eq!(
+        frozen.capability_configurations["tester"].prompt_version,
+        "v1"
+    );
+
+    rusqlite::Connection::open(data.join("archmage.db")).unwrap().execute(
+        "UPDATE runs SET definition_json=json_remove(definition_json,'$.capabilityConfigurations') WHERE id=?1",
+        [&run_id],
+    ).unwrap();
+    let legacy = runtime.snapshot(&run_id).unwrap();
+    assert_eq!(
+        legacy.capability_configurations["tester"].display_name,
+        "Tester"
+    );
+    assert!(
+        legacy.capability_configurations["tester"]
+            .extra_instructions
+            .is_empty()
     );
 }

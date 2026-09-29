@@ -7,17 +7,9 @@ import {
   type AgentInstance,
   type AgentInstanceInput,
   type AgentManagementSnapshot,
-  type NodeSnapshot,
 } from "./model";
 
-const capabilityLabels: Record<NodeSnapshot["key"], string> = {
-  designer: "需求设计",
-  coder: "编码实现",
-  tester: "测试验证",
-  reviewer: "代码审查",
-};
-
-export function AgentManagement({ onError }: { onError: (message: string) => void }) {
+export function AgentManagement({ onError, onOpenCapabilities }: { onError: (message: string) => void; onOpenCapabilities: () => void }) {
   const [snapshot, setSnapshot] = useState<AgentManagementSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -53,7 +45,7 @@ export function AgentManagement({ onError }: { onError: (message: string) => voi
 
   return <section className="agents-view">
     <header className="agents-header">
-      <div><p className="eyebrow">LOCAL AGENT ROUTING</p><h1>Agent 管理</h1><p>管理真实的本地连接，并明确每一种能力最终由哪个 Agent 实例执行。</p></div>
+      <div><p className="eyebrow">LOCAL AGENT CONNECTIONS</p><h1>Agent 管理</h1><p>管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。</p></div>
       <div className="agent-summary"><strong>{readyCount}/{supportedInstances.length}</strong><span>已验证 · 未验证 {unverifiedCount} · 失败 {failedCount}</span></div>
     </header>
 
@@ -64,19 +56,7 @@ export function AgentManagement({ onError }: { onError: (message: string) => voi
       {snapshot.adapters.filter((adapter) => !adapter.supported).map((adapter) => <article className="agent-card unsupported" key={adapter.kind}><div className="agent-card-top"><span className="agent-logo"><Unplug size={19} /></span><div><h3>{adapter.displayName}</h3><span>Provider Adapter</span></div><span className="status-chip unsupported">尚未支持</span></div><p>Adapter 类型已保留，但当前版本不会创建连接、执行探测或承载能力。</p></article>)}
     </div>
 
-    <div className="agents-section-heading routing-heading"><div><h2>能力绑定</h2><p>这是全局路由。Run 启动时会冻结当时的绑定，历史记录不会随这里的修改而变化。</p></div></div>
-    <div className="routing-table" role="table" aria-label="能力绑定">
-      {snapshot.bindings.map((binding) => {
-        const instance = snapshot.instances.find((item) => item.id === binding.agentInstanceId);
-        return <div className="routing-row" role="row" key={binding.capability}>
-          <div><strong>{capabilityLabels[binding.capability]}</strong><span>{binding.capability}</span></div>
-          <select aria-label={`${capabilityLabels[binding.capability]} Agent`} value={binding.agentInstanceId} disabled={busy !== null} onChange={(event) => run(`binding-${binding.capability}`, () => api.bindCapability(binding.capability, event.target.value))}>
-            {supportedInstances.filter((item) => item.enabled).map((item) => <option key={item.id} value={item.id}>{item.displayName} · Codex</option>)}
-          </select>
-          <span className={`binding-state ${instance?.connectionState ?? "failed"}`}>{instance ? connectionLabel(instance.connectionState) : "实例不可用"}</span>
-        </div>;
-      })}
-    </div>
+    <div className="agents-section-heading routing-heading"><div><h2>能力路由</h2><p>四个 Capability 的职责、补充指令和 Agent 绑定现在统一在 Capability 管理中配置。</p></div><button className="secondary-action" onClick={onOpenCapabilities}>打开 Capability 管理</button></div>
   </section>;
 }
 

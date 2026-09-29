@@ -3,6 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentInstanceInput,
   AgentManagementSnapshot,
+  CapabilityConfigurationInput,
+  CapabilityManagementSnapshot,
   NodeSnapshot,
   RunEvent,
   RunRequest,
@@ -24,6 +26,10 @@ export const api = {
     invoke<AgentManagementSnapshot>("delete_agent_instance", { agentInstanceId }),
   bindCapability: (capability: NodeSnapshot["key"], agentInstanceId: string) =>
     invoke<AgentManagementSnapshot>("bind_capability", { capability, agentInstanceId }),
+  getCapabilityManagement: () =>
+    invoke<CapabilityManagementSnapshot>("get_capability_management"),
+  saveCapabilityConfiguration: (input: CapabilityConfigurationInput) =>
+    invoke<CapabilityManagementSnapshot>("save_capability_configuration", { input }),
   listRuns: () => invoke<RunSummary[]>("list_runs"),
   activeRunIds: () => invoke<string[]>("active_run_ids"),
   snapshot: (runId: string) => invoke<RunSnapshot>("get_run_snapshot", { runId }),

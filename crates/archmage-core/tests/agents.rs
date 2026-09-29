@@ -1,8 +1,104 @@
 use archmage_core::{
     agent::{AgentInstanceInput, AgentService, ConnectionState, ProviderKind},
+    capability::{CapabilityConfigurationInput, CapabilityService},
     config::Config,
     store::Store,
 };
+
+#[test]
+fn capability_config_is_seeded_and_saved_with_revision_guard() {
+    let (_temp, mut store) = fixture_store();
+    assert_eq!(store.schema_version().unwrap(), 9);
+    let configs = store.capability_configurations().unwrap();
+    assert_eq!(configs.len(), 4);
+    assert_eq!(configs[0].key, "designer");
+    assert_eq!(configs[0].agent_instance_id, "codex-default");
+
+    let input = CapabilityConfigurationInput {
+        key: "designer".into(),
+        display_name: "Product Designer".into(),
+        description: "Plan the change".into(),
+        extra_instructions: "Prefer concise designs".into(),
+        agent_instance_id: "codex-default".into(),
+        revision: configs[0].revision,
+    };
+    store.save_capability_configuration(&input).unwrap();
+    let saved = &store.capability_configurations().unwrap()[0];
+    assert_eq!(saved.display_name, "Product Designer");
+    assert_eq!(saved.extra_instructions, "Prefer concise designs");
+    assert_eq!(saved.revision, input.revision + 1);
+    assert!(store.save_capability_configuration(&input).is_err());
+    assert!(
+        store
+            .save_capability_configuration(&CapabilityConfigurationInput {
+                key: "unknown".into(),
+                ..input
+            })
+            .is_err()
+    );
+}
+
+#[test]
+fn capability_snapshot_exposes_fixed_execution_and_handoff_edges() {
+    let temp = tempfile::tempdir().unwrap();
+    let config = Config::resolve(Some(&temp.path().join("data")), None).unwrap();
+    config.prepare().unwrap();
+    let snapshot = CapabilityService::new(config.data_root).snapshot().unwrap();
+    assert_eq!(snapshot.configurations.len(), 4);
+    assert_eq!(
+        snapshot
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == "execution")
+            .count(),
+        3
+    );
+    assert_eq!(
+        snapshot
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == "context")
+            .count(),
+        3
+    );
+    assert!(
+        snapshot
+            .edges
+            .iter()
+            .any(|edge| edge.from == "designer" && edge.to == "reviewer" && edge.kind == "context")
+    );
+}
+
+#[test]
+fn legacy_binding_update_invalidates_stale_capability_editor() {
+    let (_temp, mut store) = fixture_store();
+    let before = store.capability_configurations().unwrap()[0].revision;
+    store.bind_capability("designer", "codex-default").unwrap();
+    assert_eq!(
+        store.capability_configurations().unwrap()[0].revision,
+        before + 1
+    );
+}
+
+#[test]
+fn schema_eight_upgrade_keeps_existing_agent_bindings() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("archmage.db");
+    drop(Store::open(&path).unwrap());
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version=9;",
+        )
+        .unwrap();
+    let upgraded = Store::open(&path).unwrap();
+    assert_eq!(upgraded.schema_version().unwrap(), 9);
+    assert_eq!(upgraded.capability_configurations().unwrap().len(), 4);
+    assert_eq!(
+        upgraded.capability_bindings().unwrap()[0].agent_instance_id,
+        "codex-default"
+    );
+}
 
 fn fixture_store() -> (tempfile::TempDir, Store) {
     let temp = tempfile::tempdir().unwrap();

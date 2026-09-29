@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { initialTimelineState, reduceEvent, runBindingIssues, toRunRequest, type AgentManagementSnapshot } from "./model";
+import { capabilityDisplayName, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, toRunRequest, type AgentManagementSnapshot } from "./model";
+
+describe("capability topology", () => {
+  it("keeps execution dependencies separate from extra context handoffs", () => {
+    const edges = groupTopologyEdges([
+      { from: "designer", to: "coder", kind: "execution" },
+      { from: "designer", to: "tester", kind: "context" },
+    ]);
+    expect(edges.execution).toHaveLength(1);
+    expect(edges.context).toEqual([{ from: "designer", to: "tester", kind: "context" }]);
+  });
+  it("uses the frozen Run label instead of the current global label", () => {
+    expect(capabilityDisplayName({ displayName: "QA" }, "tester")).toBe("QA");
+    expect(capabilityDisplayName(undefined, "tester")).toBe("Tester");
+  });
+});
 
 describe("run request", () => {
   it("serializes a run from repository and goal only", () => {
