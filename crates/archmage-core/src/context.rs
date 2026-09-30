@@ -85,6 +85,49 @@ pub fn resolve_context_with_instructions(
     artifacts: &ArtifactStore,
     store: &Store,
 ) -> Result<ContextSnapshot> {
+    resolve_context_with_feedback(
+        kind,
+        prompt_version,
+        extra_instructions,
+        &[],
+        inputs,
+        artifacts,
+        store,
+    )
+}
+
+pub fn resolve_context_with_feedback(
+    kind: CapabilityKind,
+    prompt_version: &str,
+    extra_instructions: &str,
+    revision_feedback: &[String],
+    inputs: HashMap<String, ContextRef>,
+    artifacts: &ArtifactStore,
+    store: &Store,
+) -> Result<ContextSnapshot> {
+    resolve_context_with_revision(
+        kind,
+        prompt_version,
+        extra_instructions,
+        revision_feedback,
+        None,
+        inputs,
+        artifacts,
+        store,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_context_with_revision(
+    kind: CapabilityKind,
+    prompt_version: &str,
+    extra_instructions: &str,
+    revision_feedback: &[String],
+    previous_output: Option<&Value>,
+    inputs: HashMap<String, ContextRef>,
+    artifacts: &ArtifactStore,
+    store: &Store,
+) -> Result<ContextSnapshot> {
     if prompt_version.trim().is_empty() {
         return Err(Error::Preflight("context prompt version is blank".into()));
     }
@@ -121,6 +164,12 @@ pub fn resolve_context_with_instructions(
     let mut manifest = json!({"schema_version":1,"capability":format!("{kind:?}").to_lowercase(),"prompt_version":prompt_version,"instructions":kind.prompt(),"bindings":bindings});
     if !extra_instructions.is_empty() {
         manifest["extra_instructions"] = extra_instructions.into();
+    }
+    if !revision_feedback.is_empty() {
+        manifest["revision_feedback"] = json!(revision_feedback);
+    }
+    if let Some(previous_output) = previous_output {
+        manifest["previous_output"] = canonical(previous_output.clone());
     }
     let manifest = canonical(manifest);
     let rendered = serde_json::to_vec(&manifest).map_err(|e| Error::Preflight(e.to_string()))?;

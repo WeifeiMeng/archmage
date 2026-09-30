@@ -20,7 +20,7 @@ Start the complete desktop development application from the repository root:
 
 This one command checks the local toolchain, installs missing frontend dependencies, and starts both the Vite UI and the Tauri process containing the Rust Runtime. Archmage does not require a separate backend daemon.
 
-In the desktop window, use **Agent 管理** to verify a local Codex connection, then **Capability 管理** to inspect the fixed four-role topology and bind an Agent to each role. Capability prompts are built into the Runtime and are not editable in this release. Binding changes affect new Runs only; the editable Team canvas is a later stage.
+In the desktop window, use **Agent 管理** to verify a local Codex connection, **Capability 管理** to bind an Agent to each individual role, and **团队管理** to edit the four-role review topology. Select a Team when creating a Run. Capability prompts are built into the Runtime; binding and Team changes affect new Runs only.
 
 For troubleshooting, the underlying commands are:
 

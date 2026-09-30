@@ -2,7 +2,7 @@ use super::{Runtime, scheduler};
 use crate::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
-    context::{ContextRef, resolve_context_with_instructions},
+    context::{ContextRef, resolve_context_with_revision},
     contract::{ContractContext, validate_output},
     error::{Error, Result},
     provider::codex::{self, CodexInvocation, Sandbox},
@@ -22,12 +22,45 @@ impl Runtime {
 
         loop {
             let current = self.snapshot(run_id)?;
-            match scheduler::terminal_decision(&current.nodes) {
+            let terminal = scheduler::terminal_decision(&current.nodes);
+            if matches!(
+                terminal,
+                scheduler::TerminalDecision::Continue | scheduler::TerminalDecision::Completed
+            ) && current.state == "running"
+                && current.team.is_some()
+                && self.process_review_gates(&current, generation).await?
+            {
+                continue;
+            }
+            match terminal {
                 scheduler::TerminalDecision::Completed => {
                     let reviewer = self.store()?.node_result(run_id, "reviewer")?;
                     let outcome = reviewer.output["status"]
                         .as_str()
                         .ok_or_else(|| Error::Preflight("reviewer status is missing".into()))?;
+                    if current.team.is_some() && outcome == "changes_requested" {
+                        let feedback = reviewer_feedback(&reviewer.output);
+                        let mut store = self.store()?;
+                        let coder = store.node_result(run_id, "coder")?;
+                        if store.attempt(&coder.attempt_id)?.number <= 3 {
+                            store.reopen_after_reviewer(
+                                run_id,
+                                generation,
+                                &reviewer.attempt_id,
+                                &feedback,
+                            )?;
+                            continue;
+                        }
+                        let node = current
+                            .nodes
+                            .iter()
+                            .find(|node| node.key == "reviewer")
+                            .ok_or(Error::Conflict)?;
+                        store.fail_review_limit(&node.id, generation)?;
+                        let failed = self.snapshot(run_id)?;
+                        store.fail_run(run_id, failed.revision, "review_round_limit")?;
+                        return Err(Error::Preflight("review round limit reached".into()));
+                    }
                     self.store()?
                         .complete_run_with_outcome(run_id, current.revision, outcome)?;
                     return self.snapshot(run_id);
@@ -70,6 +103,86 @@ impl Runtime {
                 return Err(error);
             }
         }
+    }
+
+    async fn process_review_gates(
+        &self,
+        run: &super::RunSnapshot,
+        generation: i64,
+    ) -> Result<bool> {
+        let Some(team) = &run.team else {
+            return Ok(false);
+        };
+        for node in &run.nodes {
+            if node.state != "succeeded" {
+                continue;
+            }
+            let outgoing = team
+                .graph
+                .edges
+                .iter()
+                .filter(|edge| edge.from == node.key)
+                .map(|edge| edge.to.as_str())
+                .collect::<Vec<_>>();
+            if outgoing.is_empty() {
+                continue;
+            }
+            let result = node.result.as_ref().ok_or(Error::Conflict)?;
+            let consultations = self
+                .store()?
+                .consultations_for_attempt(&result.attempt_id)?;
+            let decisions = consultations
+                .iter()
+                .map(|item| {
+                    (
+                        item.target_capability.as_str(),
+                        item.decision.as_str(),
+                        item.suggestions.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            match scheduler::review_gate(&outgoing, &decisions) {
+                scheduler::ReviewGate::Awaiting(targets) => {
+                    if let Err(error) = self
+                        .consult_missing(
+                            &run.id,
+                            &node.key,
+                            &result.attempt_id,
+                            &targets,
+                            generation,
+                        )
+                        .await
+                    {
+                        let mut store = self.store()?;
+                        if self.snapshot(&run.id)?.state == "running" {
+                            store.fail_consultation_node(
+                                &node.id,
+                                generation,
+                                error_code(&error),
+                            )?;
+                            let failed = self.snapshot(&run.id)?;
+                            store.fail_run(&run.id, failed.revision, "consultation_failed")?;
+                        }
+                        return Err(error);
+                    }
+                    return Ok(true);
+                }
+                scheduler::ReviewGate::ChangesRequested(suggestions) => {
+                    let mut store = self.store()?;
+                    if store.attempt(&result.attempt_id)?.number <= 3 {
+                        store.reopen_node_for_feedback(&node.id, generation, &suggestions)?;
+                    } else {
+                        store.fail_review_limit(&node.id, generation)?;
+                        let failed = self.snapshot(&run.id)?;
+                        store.fail_run(&run.id, failed.revision, "review_round_limit")?;
+                        return Err(Error::Preflight("review round limit reached".into()));
+                    }
+                    return Ok(true);
+                }
+                scheduler::ReviewGate::Approved => {}
+            }
+        }
+        Ok(false)
     }
 
     async fn dispatch_node(&self, run_id: &str, node_key: &str, generation: i64) -> Result<()> {
@@ -131,16 +244,20 @@ impl Runtime {
         let prompt_version = configuration
             .map(|item| item.prompt_version.as_str())
             .unwrap_or(crate::capability::BUILTIN_PROMPT_VERSION);
-        let context = resolve_context_with_instructions(
+        let node_id = node_for(store, run_id, kind)?.id;
+        let feedback = store.feedback_for_node(&node_id)?;
+        let previous_output = store.previous_output_for_revision(&node_id)?;
+        let context = resolve_context_with_revision(
             kind,
             prompt_version,
             extra_instructions,
+            &feedback,
+            previous_output.as_ref(),
             inputs,
             &artifacts,
             store,
         )?;
-        let context_id =
-            store.persist_context(run_id, &node_for(store, run_id, kind)?.id, &context)?;
+        let context_id = store.persist_context(run_id, &node_id, &context)?;
         store.bind_attempt_context(attempt_id, &context_id)?;
 
         let attempt_dir = self.config.data_root.join("attempts").join(attempt_id);
@@ -205,6 +322,28 @@ fn capability(key: &str) -> Result<CapabilityKind> {
         "tester" => Ok(CapabilityKind::Tester),
         "reviewer" => Ok(CapabilityKind::Reviewer),
         _ => Err(Error::Preflight(format!("unknown capability node: {key}"))),
+    }
+}
+
+fn reviewer_feedback(output: &serde_json::Value) -> Vec<String> {
+    let issues = output["issues"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|issue| issue["message"].as_str())
+        .filter(|message| !message.trim().is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if issues.is_empty() {
+        vec![
+            output["summary_markdown"]
+                .as_str()
+                .filter(|item| !item.trim().is_empty())
+                .unwrap_or("Reviewer requested changes; revise the implementation and tests.")
+                .to_owned(),
+        ]
+    } else {
+        issues
     }
 }
 

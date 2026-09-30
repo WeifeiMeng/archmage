@@ -1,4 +1,12 @@
 .capabilities-view { max-width:1240px; margin:0 auto; padding:54px 0 72px; }
+.capability-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.capability-list button { min-height:116px; padding:16px; display:flex; flex-direction:column; align-items:flex-start; gap:8px; text-align:left; background:var(--surface); border:1px solid var(--border); border-radius:12px; color:var(--text); cursor:pointer; }
+.capability-list button.selected { border-color:var(--accent); background:#19332b; }
+.capability-list button:hover { border-color:#7baac0; }
+.capability-list button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.capability-list button span { font:10px ui-monospace,SFMono-Regular,monospace; color:#9ac0d6; letter-spacing:.08em; }
+.capability-list button strong { font-size:17px; }
+.capability-list button small { font-size:11px; color:var(--muted); }
 .capabilities-header { padding-bottom:28px; border-bottom:1px solid var(--border); }
 .capabilities-header h1 { font-size:34px; letter-spacing:-.035em; margin:8px 0 10px; }
 .capabilities-header>p:last-child { max-width:720px; margin:0; color:var(--muted); font-size:14px; line-height:1.65; }
@@ -58,5 +66,7 @@
 .cap-feedback { display:flex; align-items:center; gap:10px; margin-top:28px; padding:18px; border:1px solid var(--border); border-radius:10px; color:var(--muted); font-size:13px; }
 .inline-cap-link { margin-top:8px; padding:0; border:0; background:none; color:var(--accent); font-size:11px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
 .inline-cap-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-@media(max-width:780px) { .capabilities-view { padding-top:26px; } .cap-editor-actions { align-items:flex-start; flex-direction:column; } .cap-section-heading { align-items:flex-start; flex-direction:column; } }
+.run-team-select { width:100%; min-height:44px; border:1px solid var(--border); border-radius:9px; background:#0d1218; color:var(--text); padding:0 12px; }
+.run-team-hint { margin:-10px 0 21px; color:var(--muted); font-size:11px; line-height:1.5; }
+@media(max-width:780px) { .capabilities-view { padding-top:26px; } .capability-list { grid-template-columns:repeat(2,minmax(0,1fr)); } .cap-editor-actions { align-items:flex-start; flex-direction:column; } .cap-section-heading { align-items:flex-start; flex-direction:column; } }
 @media(prefers-reduced-motion:reduce) { .cap-node { transition:none; } }

@@ -1,7 +1,10 @@
 use archmage_core::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
-    context::{ContextRef, resolve_context, resolve_context_with_instructions},
+    context::{
+        ContextRef, resolve_context, resolve_context_with_feedback,
+        resolve_context_with_instructions,
+    },
     store::{AttemptOutcome, Store},
 };
 use serde_json::json;
@@ -115,6 +118,29 @@ fn capability_config_instructions_are_rendered_and_hashed_separately() {
     );
     assert_eq!(
         custom.manifest["instructions"],
+        CapabilityKind::Coder.prompt()
+    );
+}
+
+#[test]
+fn revision_feedback_is_a_separate_hashed_context_field() {
+    let (_dir, store, files, _, _, artifact) = committed_artifact();
+    let result = resolve_context_with_feedback(
+        CapabilityKind::Coder,
+        "v1",
+        "",
+        &["Handle errors".into()],
+        coder_inputs(&artifact),
+        &files,
+        &store,
+    )
+    .unwrap();
+    assert_eq!(
+        result.manifest["revision_feedback"],
+        json!(["Handle errors"])
+    );
+    assert_eq!(
+        result.manifest["instructions"],
         CapabilityKind::Coder.prompt()
     );
 }

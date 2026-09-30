@@ -1,7 +1,7 @@
 //! Transactional execution ledger. Scheduling, contract validation and OS ownership live above it.
 mod capabilities;
 mod consultations;
-pub use consultations::Consultation;
+pub use consultations::{Consultation, ConsultationProcessSnapshot};
 mod recovery;
 mod teams;
 pub(crate) mod transitions;
@@ -157,6 +157,9 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0009_capabilities.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0010_teams.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0011_consultations.sql"))?;
+            tx.execute_batch(include_str!(
+                "../../migrations/0012_consultation_provenance.sql"
+            ))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -203,7 +206,13 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0011_consultations.sql"))?;
                 version = 11;
             }
-            if version != 11 {
+            if version == 11 {
+                tx.execute_batch(include_str!(
+                    "../../migrations/0012_consultation_provenance.sql"
+                ))?;
+                version = 12;
+            }
+            if version != 12 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));

@@ -14,10 +14,10 @@ fn setup() -> (tempfile::TempDir, Store, String, String) {
 #[test]
 fn migration_and_pragmas_survive_reopen() {
     let (dir, store, run, _) = setup();
-    assert_eq!(store.schema_version().unwrap(), 11);
+    assert_eq!(store.schema_version().unwrap(), 12);
     drop(store);
     let store = Store::open(&dir.path().join("state.db")).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 11);
+    assert_eq!(store.schema_version().unwrap(), 12);
     assert_eq!(store.run(&run).unwrap().state, "running");
     let db = rusqlite::Connection::open(dir.path().join("state.db")).unwrap();
     assert_eq!(
@@ -61,6 +61,37 @@ fn store_enforces_foreign_keys_and_full_durability() {
     assert_eq!(health.synchronous, 2);
     assert_eq!(health.journal_mode, "wal");
     assert_eq!(health.busy_timeout_ms, 5000);
+}
+
+#[test]
+fn schema_eleven_upgrades_to_consultation_provenance() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("schema-11.db");
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    for migration in [
+        include_str!("../migrations/0001_initial.sql"),
+        include_str!("../migrations/0002_workspaces.sql"),
+        include_str!("../migrations/0003_ownership.sql"),
+        include_str!("../migrations/0004_contexts.sql"),
+        include_str!("../migrations/0005_checks.sql"),
+        include_str!("../migrations/0006_runtime.sql"),
+        include_str!("../migrations/0007_control.sql"),
+        include_str!("../migrations/0008_agents.sql"),
+        include_str!("../migrations/0009_capabilities.sql"),
+        include_str!("../migrations/0010_teams.sql"),
+        include_str!("../migrations/0011_consultations.sql"),
+    ] {
+        conn.execute_batch(migration).unwrap();
+    }
+    drop(conn);
+    let store = Store::open(&path).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 12);
+    assert!(
+        store
+            .active_consultation_processes("missing")
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

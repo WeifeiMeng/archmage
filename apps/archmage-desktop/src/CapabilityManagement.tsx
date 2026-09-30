@@ -6,57 +6,11 @@ import { api } from "./api";
 import {
   bindingOnlyUpdate,
   connectionLabel,
-  groupTopologyEdges,
   type CapabilityKey,
   type CapabilityManagementSnapshot,
-  type TopologyEdge,
 } from "./model";
 
 const order: CapabilityKey[] = ["designer", "coder", "tester", "reviewer"];
-const positions: Record<CapabilityKey, number> = { designer: 100, coder: 340, tester: 580, reviewer: 820 };
-
-function edgePath(edge: TopologyEdge): string {
-  const from = positions[edge.from];
-  const to = positions[edge.to];
-  if (edge.kind === "execution") return `M ${from + 82} 170 L ${to - 86} 170`;
-  const lower = edge.from === "coder";
-  const lane = lower ? 282 : edge.to === "reviewer" ? 36 : 76;
-  const startY = lower ? 222 : 118;
-  return `M ${from} ${startY} V ${lane} H ${to} V ${startY}`;
-}
-
-function Topology({ snapshot, selected, onSelect, busy }: {
-  snapshot: CapabilityManagementSnapshot;
-  selected: CapabilityKey;
-  onSelect: (key: CapabilityKey) => void;
-  busy?: boolean;
-}) {
-  const edges = groupTopologyEdges(snapshot.edges);
-  return <><div className="cap-topology-scroll">
-    <div className="cap-topology" aria-label="固定 Capability 拓扑">
-      <svg viewBox="0 0 920 320" aria-hidden="true" focusable="false">
-        <defs>
-          <marker id="cap-arrow-solid" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#72d9a2" /></marker>
-          <marker id="cap-arrow-context" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#7f9eb7" /></marker>
-        </defs>
-        {edges.context.map((edge) => <path key={`${edge.from}-${edge.to}`} className="cap-edge-context" d={edgePath(edge)} markerEnd="url(#cap-arrow-context)" />)}
-        {edges.execution.map((edge) => <path key={`${edge.from}-${edge.to}`} className="cap-edge-execution" d={edgePath(edge)} markerEnd="url(#cap-arrow-solid)" />)}
-      </svg>
-      {order.map((key, index) => {
-        const configuration = snapshot.configurations.find((item) => item.key === key);
-        const instance = snapshot.instances.find((item) => item.id === configuration?.agentInstanceId);
-        return <button key={key} type="button" className={`cap-node ${selected === key ? "selected" : ""}`} style={{ left: 20 + index * 240 }} aria-pressed={selected === key} disabled={busy} onClick={() => onSelect(key)}>
-          <span className="cap-node-key">{key.toUpperCase()}</span>
-          <strong>{configuration?.displayName ?? key}</strong>
-          <span className="cap-node-agent">{instance ? `${instance.displayName} · ${instance.providerKind}` : "Agent 未绑定"}</span>
-          <span className={`cap-node-state ${instance?.connectionState ?? "failed"}`}>{instance ? connectionLabel(instance.connectionState) : "不可用"}</span>
-        </button>;
-      })}
-    </div>
-  </div><nav className="cap-node-list" aria-label="Capability 节点列表">
-    {order.map((key) => <button key={key} type="button" aria-current={selected === key ? "true" : undefined} disabled={busy} onClick={() => onSelect(key)}>{snapshot.configurations.find((item) => item.key === key)?.displayName ?? key}</button>)}
-  </nav></>;
-}
 
 export function CapabilityManagement({ onError, onDirtyChange }: { onError: (message: string) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [snapshot, setSnapshot] = useState<CapabilityManagementSnapshot | null>(null);
@@ -126,17 +80,13 @@ export function CapabilityManagement({ onError, onDirtyChange }: { onError: (mes
     }
   }
 
-  if (!isTauri()) return <section className="capabilities-view"><header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1></header><div className="cap-feedback">当前是浏览器预览。请在 Tauri 桌面窗口查看真实拓扑与 Agent 绑定。</div></section>;
+  if (!isTauri()) return <section className="capabilities-view"><header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1></header><div className="cap-feedback">当前是浏览器预览。请在 Tauri 桌面窗口查看真实 Agent 绑定。</div></section>;
   if (!snapshot) return <section className="capabilities-view"><header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1></header><div className="cap-feedback">{busy ? <LoaderCircle className="spin" size={18} /> : <CircleAlert size={18} />}{message ?? "正在读取 Capability 配置…"}{!busy && <button onClick={reload}>重试</button>}</div></section>;
 
   return <section className="capabilities-view">
     <header className="capabilities-header"><p className="eyebrow">CAPABILITY MANAGEMENT</p><h1>Capability 管理</h1><p>能力由职责提示词和执行它的 Agent 组成。四个能力可以共用同一个本地 Agent 实例；当前只配置 Agent 绑定。</p></header>
-    <div className="cap-section-heading"><div><h2>协作拓扑</h2><p>点击节点查看能力并选择执行 Agent。当前拓扑只读，不能拖动或编辑连线。</p></div><div className="cap-heading-actions"><span className="cap-fixed-badge">内置固定拓扑</span><button disabled={busy} onClick={refresh}><RefreshCw size={14} />重新加载</button></div></div>
-    <div className="cap-topology-card">
-      <Topology snapshot={snapshot} selected={selected} onSelect={select} busy={busy} />
-      <div className="cap-legend"><span><i className="cap-legend-solid" />执行依赖</span><span><i className="cap-legend-dashed" />额外上下文传递</span></div>
-      <p className="cap-handoff-note">Designer 的设计会交给 Coder、Tester 和 Reviewer；Coder 的实现会交给 Tester 和 Reviewer；Tester 的结果会交给 Reviewer。实线相邻节点也传递上下文。</p>
-    </div>
+    <div className="cap-section-heading"><div><h2>能力列表</h2><p>每种能力独立设置执行 Agent；协作关系在团队管理中配置。</p></div><div className="cap-heading-actions"><button disabled={busy} onClick={refresh}><RefreshCw size={14} />重新加载</button></div></div>
+    <div className="capability-list" aria-label="能力列表">{order.map((key) => { const configuration = snapshot.configurations.find((item) => item.key === key); const agent = snapshot.instances.find((item) => item.id === configuration?.agentInstanceId); return <button key={key} type="button" className={selected === key ? "selected" : ""} aria-pressed={selected === key} disabled={busy} onClick={() => select(key)}><span>{key.toUpperCase()}</span><strong>{configuration?.displayName ?? key}</strong><small>{agent ? `${agent.displayName} · ${connectionLabel(agent.connectionState)}` : "Agent 未绑定"}</small></button>; })}</div>
     {saved && <div className="cap-editor" key={selected}>
       <div className="cap-editor-heading"><span className="cap-editor-icon"><Settings2 size={19} /></span><div><p className="eyebrow">SELECTED CAPABILITY</p><h2>{saved.displayName}</h2><span>稳定标识：{selected} · 能力提示词由 Runtime 内置，当前不可编辑</span></div></div>
       <p className="cap-role-description">{saved.description}</p>

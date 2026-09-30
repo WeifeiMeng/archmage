@@ -141,17 +141,35 @@ fn save_capability_configuration(
 
 #[tauri::command]
 fn list_teams(state: State<'_, AppState>) -> Result<Vec<Team>, String> {
-    state.runtime.team_service().list().map_err(|error| error.to_string())
+    state
+        .runtime
+        .team_service()
+        .list()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 fn create_team(state: State<'_, AppState>, name: String, graph: TeamGraph) -> Result<Team, String> {
-    state.runtime.team_service().create(&name, &graph).map_err(|error| error.to_string())
+    state
+        .runtime
+        .team_service()
+        .create(&name, &graph)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-fn save_team(state: State<'_, AppState>, id: String, revision: i64, name: String, graph: TeamGraph) -> Result<Team, String> {
-    state.runtime.team_service().save(&id, revision, &name, &graph).map_err(|error| error.to_string())
+fn save_team(
+    state: State<'_, AppState>,
+    id: String,
+    revision: i64,
+    name: String,
+    graph: TeamGraph,
+) -> Result<Team, String> {
+    state
+        .runtime
+        .team_service()
+        .save(&id, revision, &name, &graph)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

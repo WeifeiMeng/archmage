@@ -8,6 +8,40 @@ pub struct ActiveProcess {
     pub identity: ProcessIdentity,
 }
 impl Store {
+    pub fn running_run_ids(&self) -> Result<Vec<String>> {
+        let mut query = self
+            .db
+            .prepare("SELECT id FROM runs WHERE state='running' ORDER BY created_at,id")?;
+        Ok(query
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    pub fn interrupt_orphaned_run(&mut self, run: &str) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute("UPDATE runs SET state='interrupted',revision=revision+1 WHERE id=?1 AND state='running'", [run])?;
+        if changed == 0 {
+            tx.commit()?;
+            return Ok(());
+        }
+        tx.execute("UPDATE attempts SET state='interrupted',revision=revision+1,error_code='interrupted'
+            WHERE node_run_id IN (SELECT id FROM node_runs WHERE run_id=?1) AND state IN ('starting','running')", [run])?;
+        tx.execute("UPDATE node_runs SET state='interrupted',revision=revision+1 WHERE run_id=?1 AND state IN ('ready','running')", [run])?;
+        tx.execute("UPDATE consultation_processes SET state='cancelled' WHERE run_id=?1 AND state='running'", [run])?;
+        super::transitions::event(
+            &tx,
+            run,
+            "workflow.interrupted",
+            None,
+            None,
+            serde_json::json!({"reason":"owner_lost"}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Read-only inventory; never assumes that an unobserved process has stopped.
     pub fn active_attempts(&self) -> Result<Vec<Attempt>> {
         let mut query=self.db.prepare("SELECT id,node_run_id,attempt_number,state,revision,output_json FROM attempts WHERE state IN ('starting','running') ORDER BY id")?;
@@ -110,6 +144,7 @@ impl Store {
              WHERE state IN ('starting','running') AND node_run_id IN (SELECT id FROM node_runs WHERE run_id=?1)",
             [run],
         )?;
+        tx.execute("UPDATE consultation_processes SET state='cancelled' WHERE run_id=?1 AND state='running'", [run])?;
         tx.execute(
             "UPDATE node_runs SET state='cancelled',revision=revision+1
              WHERE run_id=?1 AND state IN ('pending','ready','running','interrupted')",

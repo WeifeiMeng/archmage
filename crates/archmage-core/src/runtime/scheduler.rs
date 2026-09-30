@@ -10,6 +10,34 @@ pub enum TerminalDecision {
     Interrupted,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReviewGate {
+    Awaiting(Vec<String>),
+    ChangesRequested(Vec<String>),
+    Approved,
+}
+
+pub fn review_gate(outgoing: &[&str], decisions: &[(&str, &str, Vec<String>)]) -> ReviewGate {
+    let missing: Vec<_> = outgoing
+        .iter()
+        .filter(|target| !decisions.iter().any(|(reviewer, _, _)| reviewer == *target))
+        .map(|target| (*target).to_owned())
+        .collect();
+    if !missing.is_empty() {
+        return ReviewGate::Awaiting(missing);
+    }
+    let suggestions = decisions
+        .iter()
+        .filter(|(_, decision, _)| *decision == "changes_requested")
+        .flat_map(|(_, _, suggestions)| suggestions.iter().cloned())
+        .collect::<Vec<_>>();
+    if suggestions.is_empty() {
+        ReviewGate::Approved
+    } else {
+        ReviewGate::ChangesRequested(suggestions)
+    }
+}
+
 fn dependencies(key: &str) -> Option<&'static [&'static str]> {
     match key {
         "designer" => Some(&[]),

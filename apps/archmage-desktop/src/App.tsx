@@ -24,6 +24,8 @@ import {
 import { api } from "./api";
 import { AgentManagement } from "./AgentManagement";
 import { CapabilityManagement } from "./CapabilityManagement";
+import { TeamManagement } from "./TeamManagement";
+import { consultationEdgeState, shouldConfirmTeamExit } from "./teamGraph";
 import "./agents.css";
 import "./capabilities.css";
 import {
@@ -40,6 +42,7 @@ import {
   type RunSnapshot,
   type RunSummary,
   type TimelineState,
+  type Team,
 } from "./model";
 
 const nodeMeta = {
@@ -63,20 +66,30 @@ export default function App() {
   const [goal, setGoal] = useState("");
   const [view, setView] = useState<AppView>("runs");
   const [capabilityDirty, setCapabilityDirty] = useState(false);
+  const [teamDirty, setTeamDirty] = useState(false);
   const capabilityDirtyRef = useRef(false);
+  const teamDirtyRef = useRef(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamId, setTeamId] = useState<string>("default");
   const [busy, setBusy] = useState(false);
   const [environment, setEnvironment] = useState<"checking" | "ready" | "failed" | "preview">("checking");
   const [agents, setAgents] = useState<AgentManagementSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { capabilityDirtyRef.current = capabilityDirty; }, [capabilityDirty]);
+  useEffect(() => { teamDirtyRef.current = teamDirty; }, [teamDirty]);
 
   async function navigate(nextView: AppView, nextRunId?: string | null) {
     if (shouldConfirmCapabilityExit(view, nextView, capabilityDirty)) {
       const discard = await confirm("Capability 有未保存的修改，确定离开并放弃吗？", { title: "离开 Capability 管理", kind: "warning" });
       if (!discard) return;
     }
+    if (shouldConfirmTeamExit(view, nextView, teamDirty)) {
+      const discard = await confirm("团队有未保存的修改，确定离开并放弃吗？", { title: "离开团队管理", kind: "warning" });
+      if (!discard) return;
+    }
     if (nextView !== "capabilities") setCapabilityDirty(false);
+    if (nextView !== "teams") setTeamDirty(false);
     setView(nextView);
     if (nextRunId !== undefined) setSelectedId(nextRunId);
   }
@@ -119,7 +132,8 @@ export default function App() {
   useEffect(() => {
     if (!isTauri() || view !== "runs") return;
     api.getAgentManagement().then(setAgents).catch((reason) => setError(String(reason)));
-  }, [view]);
+    api.listTeams().then((items) => { setTeams(items); if (items.length > 0 && !items.some((item) => item.id === teamId)) setTeamId(items[0].id); }).catch((reason) => setError(String(reason)));
+  }, [view, teamId]);
 
   async function checkEnvironment() {
     setEnvironment("checking");
@@ -138,8 +152,8 @@ export default function App() {
     const window = getCurrentWindow();
     window.onCloseRequested(async (event) => {
       event.preventDefault();
-      if (capabilityDirtyRef.current) {
-        const discard = await confirm("Capability 有未保存的修改，确定放弃并关闭吗？", { title: "关闭 Archmage", kind: "warning" });
+      if (capabilityDirtyRef.current || teamDirtyRef.current) {
+        const discard = await confirm("配置有未保存的修改，确定放弃并关闭吗？", { title: "关闭 Archmage", kind: "warning" });
         if (!discard) return;
       }
       const active = await api.activeRunIds();
@@ -181,9 +195,9 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [refreshRun, snapshot]);
 
-  const request = useMemo(() => toRunRequest(repository, goal), [repository, goal]);
+  const request = useMemo(() => toRunRequest(repository, goal, teamId), [repository, goal, teamId]);
   const bindingIssues = agents ? runBindingIssues(agents) : ["正在读取能力绑定"];
-  const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && request.repository.length > 0 && request.goal.length > 0 && !busy;
+  const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && teams.some((team) => team.id === teamId) && request.repository.length > 0 && request.goal.length > 0 && !busy;
 
   async function chooseRepository() {
     const chosen = await open({ directory: true, multiple: false, title: "选择 Git 仓库" });
@@ -212,6 +226,7 @@ export default function App() {
         <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => navigate("runs", null)}><Plus size={17} />新建 Run</button>
         <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => navigate("agents")}><Bot size={17} />Agent 管理</button>
         <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => navigate("capabilities")}><Share2 size={17} />Capability 管理</button>
+        <button className={`new-run ${view === "teams" ? "active" : ""}`} onClick={() => navigate("teams")}><Share2 size={17} />团队管理</button>
         <div className="section-label">最近运行</div>
         <nav className="run-list" aria-label="最近运行">
           {runs.map((run) => (
@@ -228,7 +243,7 @@ export default function App() {
 
       <main className="workspace">
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
-        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : !selectedId ? (
+        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : !selectedId ? (
           <section className="new-run-view">
             <header><p className="eyebrow">REAL CODEX WORKFLOW</p><h1>把目标交给一组能力</h1><p>一个 Run 串联 Designer、Coder、Tester 和 Reviewer；每个节点都调用真实的本地 Codex。</p></header>
             <div className="form-card">
@@ -236,6 +251,9 @@ export default function App() {
               <div className="path-field"><FolderGit2 size={18} /><input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
               <label htmlFor="goal">目标<span>必填</span></label>
               <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望四种能力协作完成的具体结果……" rows={5} />
+              <label htmlFor="run-team">执行团队<span>必填</span></label>
+              <select id="run-team" className="run-team-select" value={teamId} onChange={(event) => setTeamId(event.target.value)}>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
+              <p className="run-team-hint">新 Run 会冻结该团队的拓扑；之后调整团队不会改变正在运行的 Run。</p>
               <div className="delegated-testing"><TestTube2 size={18} /><div><strong>Tester 自主验证</strong><span>测试任务会直接交给当前绑定的 Agent，由它分析项目并选择验证命令。</span></div></div>
               <div className="delegated-testing"><Bot size={18} /><div><strong>能力绑定</strong><span>{bindingIssues.length ? bindingIssues.join("；") : "Designer、Coder、Tester、Reviewer 均已绑定可用实例。"}</span>{agents && agents.bindings.map((binding) => { const instance = agents.instances.find((item) => item.id === binding.agentInstanceId); return instance?.connectionState !== "ready" ? <span key={binding.capability}>{binding.capability}: {instance?.displayName ?? "未知实例"} 尚未通过真实连接验证</span> : null; })}<button type="button" className="inline-cap-link" onClick={() => setView("capabilities")}>配置 Capability</button></div></div>
               <div className={`preflight ${environment}`}>
@@ -259,10 +277,18 @@ function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal }: { s
   const node = snapshot.nodes.find((item) => item.id === selectedNode) ?? snapshot.nodes[0];
   const nodeEvents = timeline.events.filter((event) => event.node_id === node?.id);
   return <div className="run-view">
-    <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span><code>{snapshot.id}</code></div></div><div className="header-actions"><button onClick={onRefresh}><RefreshCw size={16} />刷新</button><button onClick={onReveal} disabled={!snapshot.workspace}><FolderOpen size={16} />工作区</button>{isActive(snapshot.state) && <button className="danger" onClick={onCancel}><Square size={14} fill="currentColor" />取消</button>}</div></header>
+    <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span>{snapshot.team && <span>团队：{snapshot.team.name} · v{snapshot.team.revision}</span>}<code>{snapshot.id}</code></div></div><div className="header-actions"><button onClick={onRefresh}><RefreshCw size={16} />刷新</button><button onClick={onReveal} disabled={!snapshot.workspace}><FolderOpen size={16} />工作区</button>{isActive(snapshot.state) && <button className="danger" onClick={onCancel}><Square size={14} fill="currentColor" />取消</button>}</div></header>
     <section className="node-strip" aria-label="能力进度">{snapshot.nodes.map((item, index) => { const meta = nodeMeta[item.key]; const binding = snapshot.agentBindings[item.key]; const Icon = meta.icon; return <button key={item.id} className={`${item.state} ${selectedNode === item.id ? "selected" : ""}`} onClick={() => setSelectedNode(item.id)}><span className="node-index">{item.state === "succeeded" ? <Check size={15} /> : item.state === "running" ? <LoaderCircle className="spin" size={15} /> : index + 1}</span><Icon size={18} /><span><strong>{capabilityDisplayName(snapshot.capabilityConfigurations[item.key], item.key)}</strong><small>{stateLabel(item.state)} · {binding ? `${binding.displayName} (${binding.providerKind})` : "历史配置"}</small></span></button>; })}</section>
-    <div className="run-grid"><section className="panel timeline-panel"><div className="panel-title"><div><span>运行时间线</span><small>{timeline.events.length} 个持久化事件</small></div><span className="sequence">SEQ {timeline.lastSequence}</span></div><div className="timeline">{timeline.events.map((event) => <EventRow key={event.sequence} event={event} />)}{timeline.events.length === 0 && <p className="empty-copy">等待 Runtime 事件……</p>}</div></section><section className="panel inspector"><div className="panel-title"><div><span>节点检查器</span><small>{node ? nodeMeta[node.key].label : "—"}</small></div></div>{node ? <><div className="inspect-state"><span className={`status-dot ${node.state}`} /><strong>{stateLabel(node.state)}</strong><code>{node.id}</code></div>{node.result ? <><div className="result-meta"><MetaItem label="Codex Thread" value={node.result.threadId} /><MetaItem label="Attempt" value={node.result.attemptId} /><MetaItem label="Result Artifact" value={node.result.resultArtifactId} />{node.result.changesetArtifactId && <MetaItem label="ChangeSet" value={node.result.changesetArtifactId} />}</div><div className="inspect-section output-section"><label>结构化结果</label><ResultSummary output={node.result.output} /><details><summary>查看原始 JSON</summary><pre>{JSON.stringify(node.result.output, null, 2)}</pre></details></div></> : <div className="waiting-result"><LoaderCircle className={node.state === "running" ? "spin" : ""} size={17} /><div><strong>尚无结构化结果</strong><span>{node.state === "running" ? "Codex 正在执行，完成后会在此显示结果和 Artifact。" : "节点开始并成功完成后，结果会持久化到这里。"}</span></div></div>}<div className="inspect-section"><label>运行记录</label>{nodeEvents.length ? nodeEvents.map((event) => <div className="compact-event" key={event.sequence}><span>#{event.sequence} · {event.event_type}</span>{Object.keys(event.payload).length > 0 && <pre>{JSON.stringify(event.payload, null, 2)}</pre>}</div>) : <p className="empty-copy">该节点还没有事件。</p>}</div></> : null}</section></div>
+    {snapshot.team && <section className="panel team-run-panel"><div className="panel-title"><div><span>冻结的团队拓扑</span><small>{snapshot.team.name} · v{snapshot.team.revision}</small></div></div><div className="team-run-edges">{snapshot.team.graph.edges.map((edge) => <span key={`${edge.from}-${edge.to}`}>{edge.from} → {edge.to}</span>)}</div></section>}
+    {snapshot.team && <ConsultationProgress snapshot={snapshot} />}
+    <div className="run-grid"><section className="panel timeline-panel"><div className="panel-title"><div><span>运行时间线</span><small>{timeline.events.length} 个持久化事件</small></div><span className="sequence">SEQ {timeline.lastSequence}</span></div><div className="timeline">{timeline.events.map((event) => <EventRow key={event.sequence} event={event} />)}{timeline.events.length === 0 && <p className="empty-copy">等待 Runtime 事件……</p>}</div></section><section className="panel inspector"><div className="panel-title"><div><span>节点检查器</span><small>{node ? nodeMeta[node.key].label : "—"}</small></div></div>{node ? <><div className="inspect-state"><span className={`status-dot ${node.state}`} /><strong>{stateLabel(node.state)}</strong><code>{node.id}</code></div>{node.result ? <><div className="result-meta"><MetaItem label="Codex Thread" value={node.result.threadId} /><MetaItem label="Attempt" value={node.result.attemptId} /><MetaItem label="Result Artifact" value={node.result.resultArtifactId} />{node.result.changesetArtifactId && <MetaItem label="ChangeSet" value={node.result.changesetArtifactId} />}</div><div className="inspect-section output-section"><label>结构化结果</label><ResultSummary output={node.result.output} /><details><summary>查看原始 JSON</summary><pre>{JSON.stringify(node.result.output, null, 2)}</pre></details></div></> : <div className="waiting-result"><LoaderCircle className={node.state === "running" ? "spin" : ""} size={17} /><div><strong>尚无结构化结果</strong><span>{node.state === "running" ? "Codex 正在执行，完成后会在此显示结果和 Artifact。" : "节点开始并成功完成后，结果会持久化到这里。"}</span></div></div>}<div className="inspect-section"><label>下游咨询</label>{snapshot.consultations.filter((item) => item.sourceNodeId === node.id).map((item) => <div className="consultation-card" key={item.id}><strong>{item.targetCapability} · {item.decision === "approved" ? "认可" : "要求修改"} · 第 {item.round + 1} 轮</strong><p>{item.summary}</p>{item.suggestions.map((suggestion) => <p key={suggestion}>建议：{suggestion}</p>)}<code>{item.threadId}</code></div>)}{!snapshot.consultations.some((item) => item.sourceNodeId === node.id) && <p className="empty-copy">暂无咨询结果。</p>}</div><div className="inspect-section"><label>运行记录</label>{nodeEvents.length ? nodeEvents.map((event) => <div className="compact-event" key={event.sequence}><span>#{event.sequence} · {event.event_type}</span>{Object.keys(event.payload).length > 0 && <pre>{JSON.stringify(event.payload, null, 2)}</pre>}</div>) : <p className="empty-copy">该节点还没有事件。</p>}</div></> : null}</section></div>
   </div>;
+}
+
+function ConsultationProgress({ snapshot }: { snapshot: RunSnapshot }) {
+  const team = snapshot.team;
+  if (!team) return null;
+  return <section className="panel team-run-panel"><div className="panel-title"><div><span>审阅进度</span><small>咨询与主任务分开；每条边都必须认可当前上游结果</small></div></div><div className="team-run-edges">{team.graph.edges.map((edge) => <span key={`${edge.from}-${edge.to}`}>{edge.from} → {edge.to} · {consultationEdgeState(snapshot, edge)}</span>)}</div></section>;
 }
 
 function MetaItem({ label, value }: { label: string; value: string }) {

@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["schema_version","decision","summary","suggestions"],"properties":{"schema_version":{"type":"string","const":"1"},"decision":{"type":"string","enum":["approved","changes_requested"]},"summary":{"type":"string"},"suggestions":{"type":"array","items":{"type":"string"}}}}

@@ -1,4 +1,7 @@
-use crate::{error::{Error, Result}, store::Store};
+use crate::{
+    error::{Error, Result},
+    store::Store,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
 
@@ -52,9 +55,15 @@ pub struct TeamService {
 }
 
 impl TeamService {
-    pub fn new(data_root: PathBuf) -> Self { Self { data_root } }
-    fn store(&self) -> Result<Store> { Store::open(&self.data_root.join("archmage.db")) }
-    pub fn list(&self) -> Result<Vec<Team>> { self.store()?.teams() }
+    pub fn new(data_root: PathBuf) -> Self {
+        Self { data_root }
+    }
+    fn store(&self) -> Result<Store> {
+        Store::open(&self.data_root.join("archmage.db"))
+    }
+    pub fn list(&self) -> Result<Vec<Team>> {
+        self.store()?.teams()
+    }
     pub fn create(&self, name: &str, graph: &TeamGraph) -> Result<Team> {
         self.store()?.create_team(name, graph)
     }
@@ -87,7 +96,11 @@ impl TeamGraph {
     }
 
     pub fn validate(&self) -> Result<()> {
-        let keys: BTreeSet<_> = self.nodes.iter().map(|node| node.capability.as_str()).collect();
+        let keys: BTreeSet<_> = self
+            .nodes
+            .iter()
+            .map(|node| node.capability.as_str())
+            .collect();
         if self.nodes.len() != CAPABILITIES.len()
             || keys != CAPABILITIES.into_iter().collect()
             || self
@@ -95,7 +108,9 @@ impl TeamGraph {
                 .iter()
                 .any(|node| !(0..=2000).contains(&node.x) || !(0..=2000).contains(&node.y))
         {
-            return Err(Error::Preflight("team nodes or positions are invalid".into()));
+            return Err(Error::Preflight(
+                "team nodes or positions are invalid".into(),
+            ));
         }
         let edges: BTreeSet<_> = self
             .edges

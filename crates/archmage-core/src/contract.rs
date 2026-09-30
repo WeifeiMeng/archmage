@@ -2,7 +2,7 @@ use crate::{
     capability::CapabilityKind,
     error::{Error, Result},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Component, Path};
 
@@ -80,6 +80,32 @@ struct Issue {
     path: String,
     message: String,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConsultationOutput {
+    pub schema_version: String,
+    pub decision: String,
+    pub summary: String,
+    pub suggestions: Vec<String>,
+}
+
+pub const CONSULTATION_SCHEMA: &str = include_str!("../capabilities/v1/consultation.schema.json");
+
+pub fn validate_consultation(bytes: &[u8]) -> Result<ConsultationOutput> {
+    let output: ConsultationOutput =
+        serde_json::from_slice(bytes).map_err(|error| invalid(error.to_string()))?;
+    version(&output.schema_version)?;
+    nonblank(&output.summary, "consultation summary")?;
+    if !matches!(output.decision.as_str(), "approved" | "changes_requested")
+        || output.suggestions.iter().any(|item| item.trim().is_empty())
+        || (output.decision == "changes_requested" && output.suggestions.is_empty())
+        || (output.decision == "approved" && !output.suggestions.is_empty())
+    {
+        return Err(invalid("consultation decision and suggestions disagree"));
+    }
+    Ok(output)
+}
 #[derive(Deserialize)]
 enum Severity {
     P0,
@@ -120,6 +146,12 @@ pub fn validate_builtin_schemas() -> Result<()> {
         }
         require_explicit_types(&value)?;
     }
+    let value: Value =
+        serde_json::from_str(CONSULTATION_SCHEMA).map_err(|e| invalid(e.to_string()))?;
+    if value["type"] != "object" || value["additionalProperties"] != false {
+        return Err(invalid("consultation schema root must be strict object"));
+    }
+    require_explicit_types(&value)?;
     Ok(())
 }
 

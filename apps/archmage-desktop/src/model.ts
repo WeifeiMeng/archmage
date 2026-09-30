@@ -7,7 +7,7 @@ export type TeamNode = { capability: CapabilityKey; x: number; y: number };
 export type TeamEdge = { from: CapabilityKey; to: CapabilityKey };
 export type TeamGraph = { nodes: TeamNode[]; edges: TeamEdge[] };
 export type Team = { id: string; name: string; revision: number; graph: TeamGraph };
-export type AppView = "runs" | "agents" | "capabilities";
+export type AppView = "runs" | "agents" | "capabilities" | "teams";
 
 export function shouldConfirmCapabilityExit(current: AppView, next: AppView, dirty: boolean): boolean {
   return current === "capabilities" && next !== "capabilities" && dirty;
@@ -125,6 +125,21 @@ export type RunSnapshot = {
   createdAt: string;
   lastEventSequence: number;
   nodes: NodeSnapshot[];
+  consultations: {
+    id: string;
+    runId: string;
+    sourceNodeId: string;
+    sourceAttemptId: string;
+    targetCapability: CapabilityKey;
+    round: number;
+    decision: "approved" | "changes_requested";
+    summary: string;
+    suggestions: string[];
+    result: Record<string, unknown>;
+    resultSha256: string;
+    threadId: string;
+  }[];
+  consultationProcesses: { sourceNodeId: string; sourceAttemptId: string; targetCapability: CapabilityKey }[];
   workspace: string | null;
 };
 

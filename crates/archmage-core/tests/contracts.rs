@@ -2,6 +2,14 @@ use archmage_core::{
     capability::CapabilityKind,
     contract::{ContractContext, validate_builtin_schemas, validate_output},
 };
+
+#[test]
+fn consultation_contract_requires_actionable_rejection() {
+    use archmage_core::contract::validate_consultation;
+    assert!(validate_consultation(br#"{"schema_version":"1","decision":"changes_requested","summary":"Needs work","suggestions":[]}"#).is_err());
+    assert!(validate_consultation(br#"{"schema_version":"1","decision":"changes_requested","summary":"Needs work","suggestions":["Add error cases"]}"#).is_ok());
+    assert!(validate_consultation(br#"{"schema_version":"1","decision":"approved","summary":"Looks good","suggestions":["Change this"]}"#).is_err());
+}
 use serde_json::json;
 
 #[test]

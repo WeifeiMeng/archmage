@@ -110,6 +110,37 @@ pub async fn cancel_process(identity: &ProcessIdentity, grace: Duration) -> Resu
     ))
 }
 
+#[cfg(unix)]
+pub fn cancel_process_blocking(identity: &ProcessIdentity, grace: Duration) -> Result<()> {
+    if !identity_is_alive(identity) {
+        return Ok(());
+    }
+    signal_group(identity.pgid, libc::SIGTERM)?;
+    let deadline = Instant::now() + grace;
+    while Instant::now() < deadline && group_exists(identity.pgid) {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    if group_exists(identity.pgid) {
+        signal_group(identity.pgid, libc::SIGKILL)?;
+    }
+    for _ in 0..50 {
+        if !group_exists(identity.pgid) {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    Err(Error::Preflight(
+        "cancelled process group did not exit".into(),
+    ))
+}
+
+#[cfg(not(unix))]
+pub fn cancel_process_blocking(_identity: &ProcessIdentity, _grace: Duration) -> Result<()> {
+    Err(Error::Preflight(
+        "process cancellation is supported on Unix in S0".into(),
+    ))
+}
+
 #[cfg(not(unix))]
 pub async fn cancel_process(_identity: &ProcessIdentity, _grace: Duration) -> Result<()> {
     Err(Error::Preflight(

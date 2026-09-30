@@ -6,16 +6,17 @@
 
 - 选择本地 Git 仓库；
 - 配置本地 Codex Agent 实例并执行真实连通验证；
-- 在独立的 Capability 管理页查看四个职责的固定拓扑，并选择各自的 Agent 实例；
-- 只输入仓库和目标即可创建 Run；
+- 在独立的 Capability 管理页为四个职责分别选择 Agent 实例；
+- 在团队管理页编辑节点布局和可选审阅关系；
+- 选择团队、仓库和目标创建 Run；
 - 启动 Designer → Coder → Tester → Reviewer 的真实 Codex Run；
 - 查看最近 Run、四个能力节点状态和持久化事件时间线；
 - 查看节点相关事件；
 - 打开隔离工作区；
 - 取消正在运行的 Run；
-- 客户端重启时收敛遗留的 interrupted Attempt。
+- 客户端重启时清理失去 owner 的 Codex 进程并收敛遗留 Run。
 
-当前不包含图形化 resume、团队 Canvas、工作流编辑器、节点自由编排和后台常驻执行。
+当前不包含图形化 resume、任意节点/边编排和后台常驻执行。团队画布限于四个内置能力及向前的审阅关系。
 
 ## 启动开发客户端
 
@@ -65,11 +66,11 @@ npm run tauri dev --prefix apps/archmage-desktop
 3. 模型覆盖可以留空，此时沿用 Codex 自身配置；填写后仅该 Agent 实例使用指定模型。
 4. 点击“检查 CLI”，只检查可执行文件、版本、必需参数和 Git；此时状态是“CLI 可用 · 未验证”，不能据此判断账号已连通。
 5. 点击“验证连接”。该操作会使用当前实例的可执行文件和模型覆盖发起一次真实、只读的 Codex 请求，并展示版本、可用状态和上次验证时间。
-6. 点击侧栏“Capability 管理”，在拓扑中逐个选择 Designer、Coder、Tester、Reviewer，确认其“执行 Agent”指向预期实例。需要调整时选择 Agent，点击“保存 Agent 绑定”。能力由 Agent 和职责提示词组成；本版提示词由 Runtime 内置，暂不提供编辑入口。
+6. 点击侧栏“Capability 管理”，逐个选择 Designer、Coder、Tester、Reviewer，确认其“执行 Agent”指向预期实例。需要调整时选择 Agent，点击“保存 Agent 绑定”。能力由 Agent 和职责提示词组成；本版提示词由 Runtime 内置，暂不提供编辑入口。
 
 “添加 Codex 实例”允许创建例如 `codex-personal` 和 `codex-work` 的多个配置。能力绑定是全局设置，不在单个 Run 中临时覆盖；Run 启动时会冻结当时的绑定及能力配置。修改只影响之后创建的 Run。
 
-拓扑中的实线是执行依赖：Designer → Coder → Tester → Reviewer。虚线是额外的上下文传递：Designer → Tester/Reviewer、Coder → Reviewer；相邻节点的实线也会传递上下文。这一版不能拖动节点或改线，之后的团队管理 Canvas 才会设计可编辑拓扑。
+能力页面不展示拓扑，也不设置团队关系。未来每个能力可以拥有自己的技能 scope，本版尚未实现。
 
 绑定修改未保存时，切换节点、离开 Capability 页面或关闭窗口都会先询问是否放弃；若另一处已更新同一能力，保存会提示冲突，可点击“重新加载”后重新选择。
 
@@ -77,20 +78,29 @@ npm run tauri dev --prefix apps/archmage-desktop
 
 Claude、OpenClaw 和 Hermes 在当前页面只显示“尚未支持”，不会执行假探测或被绑定到能力。
 
+## 配置团队拓扑
+
+1. 点击侧栏“团队管理”，默认团队已经包含四个能力和六条向前的审阅边。
+2. 可拖动节点排版，或聚焦节点后用方向键移动；位置只影响画布显示。
+3. Designer → Coder → Tester → Reviewer 是必需主链，不能删除。勾选或取消 Designer → Tester、Designer → Reviewer、Coder → Reviewer 三条可选审阅关系。
+4. 可修改团队名称并保存，也可从当前拓扑创建新团队。未保存修改时离开或关闭会提示；若保存遭遇版本冲突，先刷新再修改。
+
+每条边都会让下游能力用其绑定的真实 Codex 对上游结果做一次只读咨询。同一上游的多条边并行；全部认可后才继续主链。若有人要求修改，建议回给上游重新执行，初稿后最多三轮。Reviewer 最终要求修改时会让 Coder、Tester、Reviewer 重跑。咨询不是下游的主任务，也不会提前执行 Tester 验收。
+
 ## 创建第一个 Run
 
 1. 点击“新建 Run”。
 2. 点击“选择”，选一个至少已有一次 commit 的本地 Git 仓库。
 3. 在“目标”中写清希望最终实现和验证的结果。
-4. 点击“启动真实 Run”。Tester 会读取目标、设计、实现、ChangeSet 与工作区，自主选择并执行适合该项目的验证命令。
+4. 选择执行团队，点击“启动真实 Run”。Run 会冻结团队拓扑和当时的 Agent 绑定。Tester 会读取目标、设计、实现、ChangeSet 与工作区，自主选择并执行适合该项目的验证命令。
 
 启动后界面会切换到 Run 工作台：
 
-- 顶部显示 Run state、仓库和 Run ID；
+- 顶部显示 Run state、仓库、冻结团队和 Run ID；
 - 四能力状态条显示当前执行到哪一环；
 - 每个能力节点显示该 Run 冻结的 Agent 实例；
 - 时间线显示 SQLite 中的持久化事件；
-- 点击能力节点可在右侧检查相关事件；
+- 点击能力节点可在右侧检查下游咨询、建议和相关事件；冻结的团队边也在工作台显示；
 - “工作区”在 Finder 中定位该 Run 的隔离 worktree；
 - “取消”终止当前真实执行并持久化 cancelled 状态。
 
@@ -98,7 +108,7 @@ Claude、OpenClaw 和 Hermes 在当前页面只显示“尚未支持”，不会
 
 只要还有本客户端启动的 Run 在执行，关闭窗口时会询问是否取消这些 Run。选择继续关闭后，客户端先发出取消，再退出。
 
-Archmage 当前不在客户端退出后继续调度。若进程崩溃或被强制结束，下次启动会把无法确认仍存活的遗留 Attempt 标记为 `interrupted`。图形化 resume 尚未提供。
+Archmage 当前不在客户端退出后继续调度。若进程崩溃或被强制结束，下次启动会终止失去 owner 的主任务或咨询进程，并把对应 Run 标记为 `interrupted`。图形化 resume 尚未提供。
 
 ## 与 CLI 配合
 

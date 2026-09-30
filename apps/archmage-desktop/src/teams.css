@@ -1,0 +1,43 @@
+.teams-view { max-width:1240px; margin:0 auto; padding:54px 0 72px; }
+.teams-header { border-bottom:1px solid var(--border); padding-bottom:26px; }
+.teams-header h1 { font-size:34px; letter-spacing:-.035em; margin:8px 0 10px; }
+.teams-header>p:last-child { max-width:760px; color:var(--muted); font-size:14px; line-height:1.65; margin:0; }
+.teams-toolbar { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin:26px 0 20px; }
+.teams-toolbar label,.team-name-field { display:flex; flex-direction:column; gap:7px; color:#bac8d4; font-size:12px; }
+.teams-toolbar select,.team-name-field input { min-height:44px; min-width:240px; border:1px solid var(--border); border-radius:8px; background:#0c1117; color:var(--text); padding:0 12px; font:inherit; }
+.teams-toolbar button,.teams-footer button { min-height:44px; display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); padding:0 14px; cursor:pointer; }
+.teams-toolbar button:disabled,.teams-footer button:disabled { opacity:.45; cursor:not-allowed; }
+.team-name-field { margin-bottom:17px; }
+.team-name-field input { width:min(100%,480px); font-size:14px; }
+.team-canvas-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:13px; background:radial-gradient(circle at 50% 40%,#1b2935,#111820); }
+.team-canvas { position:relative; width:1000px; height:360px; margin:0 auto; background-image:radial-gradient(#405063 1px,transparent 1px); background-size:24px 24px; }
+.team-canvas svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.team-canvas path { fill:none; stroke-width:2.5; }
+.team-canvas path.required { stroke:#72d9a2; }
+.team-canvas path.optional { stroke:#7f9eb7; stroke-dasharray:6 5; }
+.team-node { position:absolute; width:166px; height:88px; display:flex; flex-direction:column; align-items:flex-start; gap:5px; padding:11px 13px; border:1px solid #3c4e60; border-radius:10px; background:#172431; color:var(--text); text-align:left; cursor:grab; touch-action:none; user-select:none; }
+.team-node:active { cursor:grabbing; border-color:var(--accent); }
+.team-node span { font:10px ui-monospace,SFMono-Regular,monospace; letter-spacing:.08em; color:#9ac0d6; }
+.team-node strong { font-size:15px; }
+.team-node small { font-size:10px; color:var(--muted); }
+.team-canvas-note { color:var(--muted); font-size:12px; margin:10px 2px 25px; }
+.team-edges { border:1px solid var(--border); border-radius:12px; background:var(--surface); padding:20px; }
+.team-edges h2 { margin:0 0 5px; font-size:16px; }
+.team-edges p { color:var(--muted); font-size:12px; line-height:1.6; margin:0 0 17px; }
+.team-edge-list { display:flex; gap:12px; flex-wrap:wrap; }
+.team-edge-list + .team-edge-list { margin-top:12px; }
+.team-edge-list label.locked { color:var(--muted); cursor:default; background:#101821; }
+.team-edge-list label { display:flex; align-items:center; gap:10px; min-height:44px; padding:0 12px; border:1px solid var(--border); border-radius:8px; font-size:12px; cursor:pointer; }
+.team-edge-list input { accent-color:var(--accent); width:17px; height:17px; }
+.teams-footer { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-top:20px; }
+.teams-footer span { color:var(--muted); font-size:12px; }
+.teams-footer button { background:#143222; border-color:#3d7a5d; color:var(--accent); }
+.teams-view :is(select,input,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.team-run-panel { min-height:0; margin:8px 0 14px; }
+.team-run-edges { display:flex; flex-wrap:wrap; gap:8px; padding:14px 17px; }
+.team-run-edges span { border:1px solid var(--border); border-radius:7px; padding:6px 9px; color:#b9c8d6; font-size:11px; }
+.consultation-card { margin:9px 0; padding:12px; border:1px solid var(--border); border-radius:8px; background:#0d141c; }
+.consultation-card strong { font-size:11px; color:var(--accent); }
+.consultation-card p { font-size:11px; line-height:1.5; color:#b9c8d6; }
+.consultation-card code { font-size:9px; color:var(--muted); overflow-wrap:anywhere; }
+@media(max-width:780px) { .teams-view { padding-top:26px; } .teams-footer { flex-direction:column; align-items:flex-start; } }

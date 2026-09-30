@@ -1,11 +1,13 @@
 use archmage_core::{
     capability::CapabilityConfigurationInput,
     config::Config,
+    process::ProcessIdentity,
     runtime::{
         NodeSnapshot, RunRequest, Runtime,
-        scheduler::{TerminalDecision, ready_keys, terminal_decision},
+        scheduler::{ReviewGate, TerminalDecision, ready_keys, review_gate, terminal_decision},
     },
     store::{AttemptOutcome, Store},
+    team::TeamGraph,
 };
 use std::{path::Path, process::Command};
 
@@ -16,6 +18,36 @@ fn git(repo: &Path, args: &[&str]) {
         .status()
         .unwrap();
     assert!(status.success());
+}
+
+#[test]
+fn review_gate_requires_every_outgoing_consultation_and_aggregates_rejections() {
+    let graph = TeamGraph::builtin();
+    let edges: Vec<_> = graph.outgoing("designer").collect();
+    assert_eq!(
+        review_gate(&edges, &[]),
+        ReviewGate::Awaiting(vec!["coder".into(), "tester".into(), "reviewer".into()])
+    );
+    let decisions = vec![
+        ("coder", "approved", vec![]),
+        (
+            "tester",
+            "changes_requested",
+            vec!["Cover failure path".into()],
+        ),
+        (
+            "reviewer",
+            "changes_requested",
+            vec!["Clarify acceptance".into()],
+        ),
+    ];
+    assert_eq!(
+        review_gate(&edges, &decisions),
+        ReviewGate::ChangesRequested(vec![
+            "Cover failure path".into(),
+            "Clarify acceptance".into()
+        ])
+    );
 }
 
 fn node(key: &str, state: &str) -> NodeSnapshot {
@@ -124,6 +156,55 @@ fn reconciliation_marks_an_abandoned_attempt_interrupted() {
 }
 
 #[test]
+fn reconciliation_marks_an_abandoned_consultation_run_interrupted() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), None).unwrap()).unwrap();
+    let mut store = Store::open(&data.join("archmage.db")).unwrap();
+    let run = store
+        .create_run("recover consultation", &["designer", "coder"])
+        .unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    let node = store.nodes(&run).unwrap().remove(0);
+    store.ready_node(&node.id, node.revision).unwrap();
+    let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    store.mark_running(&attempt.id, attempt.revision).unwrap();
+    store
+        .finish_attempt(
+            &attempt.id,
+            attempt.revision + 1,
+            AttemptOutcome::Succeeded(serde_json::json!({"design":"v1"})),
+        )
+        .unwrap();
+    store
+        .register_consultation_process(
+            "consult-1",
+            &run,
+            &attempt.id,
+            "coder",
+            generation,
+            &ProcessIdentity {
+                pid: 999_999,
+                pgid: 999_999,
+                started: "absent".into(),
+            },
+        )
+        .unwrap();
+    drop(store);
+
+    runtime.reconcile_interrupted().unwrap();
+    let store = Store::open(&data.join("archmage.db")).unwrap();
+    assert_eq!(store.run(&run).unwrap().state, "interrupted");
+    assert!(
+        store
+            .active_consultation_processes(&run)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn start_definition_is_queryable_as_one_four_node_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
@@ -137,8 +218,13 @@ fn start_definition_is_queryable_as_one_four_node_run() {
 
     let config = Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap();
     let runtime = Runtime::open(config).unwrap();
-    let team = runtime.team_service().create("Custom Team", &archmage_core::team::TeamGraph::builtin()).unwrap();
-    let request = RunRequest::new(&repo, "add health endpoint").unwrap().with_team(team.id.clone());
+    let team = runtime
+        .team_service()
+        .create("Custom Team", &archmage_core::team::TeamGraph::builtin())
+        .unwrap();
+    let request = RunRequest::new(&repo, "add health endpoint")
+        .unwrap()
+        .with_team(team.id.clone());
 
     let run_id = runtime.create_run_definition(&request).unwrap();
     let snapshot = runtime.snapshot(&run_id).unwrap();
@@ -156,8 +242,14 @@ fn start_definition_is_queryable_as_one_four_node_run() {
     assert_eq!(snapshot.agent_bindings.len(), 4);
     assert_eq!(snapshot.team.as_ref().unwrap().id, team.id);
     assert_eq!(snapshot.team.as_ref().unwrap().name, "Custom Team");
-    runtime.team_service().save(&team.id, team.revision, "Changed Team", &team.graph).unwrap();
-    assert_eq!(runtime.snapshot(&run_id).unwrap().team.unwrap().name, "Custom Team");
+    runtime
+        .team_service()
+        .save(&team.id, team.revision, "Changed Team", &team.graph)
+        .unwrap();
+    assert_eq!(
+        runtime.snapshot(&run_id).unwrap().team.unwrap().name,
+        "Custom Team"
+    );
     assert_eq!(
         snapshot.agent_bindings["tester"].agent_instance_id,
         "codex-default"

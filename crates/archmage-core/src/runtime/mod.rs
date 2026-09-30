@@ -1,3 +1,4 @@
+pub mod consultation;
 pub mod control;
 mod dispatch;
 mod recovery;
@@ -9,7 +10,7 @@ use crate::{
     config::Config,
     contract::validate_builtin_schemas,
     error::{Error, Result},
-    store::{RunDefinitionRecord, Store},
+    store::{Consultation, ConsultationProcessSnapshot, RunDefinitionRecord, Store},
     team::{DEFAULT_TEAM_ID, Team, TeamService},
     workspace::inspect_repository,
 };
@@ -128,6 +129,10 @@ pub struct RunSnapshot {
     pub created_at: String,
     pub last_event_sequence: i64,
     pub nodes: Vec<NodeSnapshot>,
+    #[serde(default)]
+    pub consultations: Vec<Consultation>,
+    #[serde(default)]
+    pub consultation_processes: Vec<ConsultationProcessSnapshot>,
     pub workspace: Option<PathBuf>,
 }
 
@@ -167,11 +172,18 @@ impl Runtime {
         let repository = inspect_repository(&request.repository)?.root;
         let (bindings, configurations) = self.frozen_capability_settings()?;
         let team = self.resolve_team(request)?;
-        self.create_run_definition_with_bindings(request, repository, bindings, configurations, team)
+        self.create_run_definition_with_bindings(
+            request,
+            repository,
+            bindings,
+            configurations,
+            team,
+        )
     }
 
     fn resolve_team(&self, request: &RunRequest) -> Result<Team> {
-        self.store()?.team(request.team_id.as_deref().unwrap_or(DEFAULT_TEAM_ID))
+        self.store()?
+            .team(request.team_id.as_deref().unwrap_or(DEFAULT_TEAM_ID))
     }
 
     fn create_run_definition_with_bindings(
@@ -309,6 +321,8 @@ impl Runtime {
             created_at: record.created_at,
             last_event_sequence: record.last_event_sequence,
             nodes,
+            consultations: store.consultations_for_run(run_id)?,
+            consultation_processes: store.consultation_processes_for_run(run_id)?,
             workspace,
         })
     }
