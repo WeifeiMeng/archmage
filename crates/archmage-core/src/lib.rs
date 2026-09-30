@@ -13,4 +13,5 @@ pub mod process;
 pub mod provider;
 pub mod runtime;
 pub mod store;
+pub mod team;
 pub mod workspace;
