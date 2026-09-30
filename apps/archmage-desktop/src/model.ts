@@ -43,11 +43,15 @@ export type CapabilityBinding = {
   agentInstanceId: string;
 };
 
+export type CapabilityGuidance = { name: string; purpose: string };
+
 export type CapabilityConfiguration = {
   key: CapabilityKey;
   displayName: string;
   description: string;
   extraInstructions: string;
+  skills: CapabilityGuidance[];
+  tools: CapabilityGuidance[];
   agentInstanceId: string;
   revision: number;
   promptVersion: string;
@@ -55,9 +59,13 @@ export type CapabilityConfiguration = {
 
 export type CapabilityConfigurationInput = Omit<CapabilityConfiguration, "promptVersion">;
 
-export function bindingOnlyUpdate(current: CapabilityConfiguration, agentInstanceId: string): CapabilityConfigurationInput {
+export function capabilityDraft(current: CapabilityConfiguration): CapabilityConfigurationInput {
   const { promptVersion: _promptVersion, ...input } = current;
-  return { ...input, agentInstanceId };
+  return { ...input, skills: current.skills.map((item) => ({ ...item })), tools: current.tools.map((item) => ({ ...item })) };
+}
+
+export function isCapabilityDirty(current: CapabilityConfiguration, draft: CapabilityConfigurationInput): boolean {
+  return JSON.stringify(capabilityDraft(current)) !== JSON.stringify(draft);
 }
 
 export function capabilityDisplayName(configuration: Pick<CapabilityConfiguration, "displayName"> | undefined, key: CapabilityKey): string {

@@ -251,6 +251,12 @@ impl Runtime {
             kind,
             prompt_version,
             extra_instructions,
+            configuration
+                .map(|item| item.skills.as_slice())
+                .unwrap_or(&[]),
+            configuration
+                .map(|item| item.tools.as_slice())
+                .unwrap_or(&[]),
             &feedback,
             previous_output.as_ref(),
             inputs,

@@ -1,6 +1,6 @@
 use crate::{
     artifact::ArtifactStore,
-    capability::CapabilityKind,
+    capability::{CapabilityGuidance, CapabilityKind, GUIDANCE_NOTE},
     error::{Error, Result},
     store::Store,
 };
@@ -109,6 +109,8 @@ pub fn resolve_context_with_feedback(
         kind,
         prompt_version,
         extra_instructions,
+        &[],
+        &[],
         revision_feedback,
         None,
         inputs,
@@ -122,6 +124,8 @@ pub fn resolve_context_with_revision(
     kind: CapabilityKind,
     prompt_version: &str,
     extra_instructions: &str,
+    skills: &[CapabilityGuidance],
+    tools: &[CapabilityGuidance],
     revision_feedback: &[String],
     previous_output: Option<&Value>,
     inputs: HashMap<String, ContextRef>,
@@ -165,6 +169,9 @@ pub fn resolve_context_with_revision(
     if !extra_instructions.is_empty() {
         manifest["extra_instructions"] = extra_instructions.into();
     }
+    manifest["skills"] = json!(skills);
+    manifest["tools"] = json!(tools);
+    manifest["guidance_note"] = GUIDANCE_NOTE.into();
     if !revision_feedback.is_empty() {
         manifest["revision_feedback"] = json!(revision_feedback);
     }

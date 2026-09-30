@@ -71,13 +71,13 @@ archmage cancel <run-id>
 ./scripts/dev-desktop.sh
 ```
 
-第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后在“Capability 管理”确认四个独立能力各自绑定的 Agent，在“团队管理”调整审阅关系，最后回到“新建 Run”选择团队、Git 仓库并填写目标。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
+第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后在“Capability 管理”确认四个独立能力各自绑定的 Agent，并可填写角色补充提示词、手动添加 Skill/Tool 名称与用途；在“团队管理”调整审阅关系，最后回到“新建 Run”选择团队、Git 仓库并填写目标。Skill/Tool 配置只作为给真实 Agent 的提示词指引，不验证它们是否安装，也不限制可调用范围。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
 
 ## 4. Runtime 的关键语义
 
 - 一个 Run 包含多个 Node，当前内置四个能力节点；
 - 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
-- Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；能力提示词暂由 Runtime 内置；
+- Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；Runtime 内置职责及输出契约固定，角色补充提示词和 Skill/Tool 指引可配置；
 - 团队拓扑保留必需主链 Designer → Coder → Tester → Reviewer，可选 Designer → Tester/Reviewer 与 Coder → Reviewer；每条边都会触发下游真实 Codex 的只读咨询；
 - 同一个上游的下游咨询并行执行，全部认可后才放行；要求修改时汇总建议给上游重新执行，初稿之后最多修改三轮；Reviewer 最终要求修改会让 Coder、Tester、Reviewer 重跑；
 - Run 启动时冻结所选团队、能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
@@ -114,7 +114,7 @@ Runtime 主链的最终验收应使用一个临时 Git fixture 和真实 Codex�
 
 `archmage doctor --offline` 输出的 `config.data_root` 是实际数据目录。主要内容包括：
 
-- `archmage.db`：schema v12 的执行账本、Agent 实例、能力配置、团队、咨询与事件；
+- `archmage.db`：schema v13 的执行账本、Agent 实例、能力配置、团队、咨询与事件；
 - Run worktree 与 Artifact；
 - Codex JSONL、stderr 和 metadata 诊断。
 

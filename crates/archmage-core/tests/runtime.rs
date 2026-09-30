@@ -1,5 +1,5 @@
 use archmage_core::{
-    capability::CapabilityConfigurationInput,
+    capability::{CapabilityConfigurationInput, CapabilityGuidance},
     config::Config,
     process::ProcessIdentity,
     runtime::{
@@ -293,6 +293,14 @@ fn changing_global_binding_does_not_change_existing_run() {
             display_name: "QA".into(),
             description: "New description".into(),
             extra_instructions: "Run focused checks first".into(),
+            skills: vec![CapabilityGuidance {
+                name: "test-design".into(),
+                purpose: "Select checks".into(),
+            }],
+            tools: vec![CapabilityGuidance {
+                name: "web_search".into(),
+                purpose: "Research behavior".into(),
+            }],
             agent_instance_id: "codex-work".into(),
             revision: current.revision,
         })
@@ -315,6 +323,20 @@ fn changing_global_binding_does_not_change_existing_run() {
     assert_eq!(
         frozen.capability_configurations["tester"].prompt_version,
         "v1"
+    );
+    assert!(frozen.capability_configurations["tester"].skills.is_empty());
+    assert!(frozen.capability_configurations["tester"].tools.is_empty());
+    let next_run = runtime
+        .create_run_definition(&RunRequest::new(&repo, "next goal").unwrap())
+        .unwrap();
+    let next = runtime.snapshot(&next_run).unwrap();
+    assert_eq!(
+        next.capability_configurations["tester"].skills[0].name,
+        "test-design"
+    );
+    assert_eq!(
+        next.capability_configurations["tester"].tools[0].name,
+        "web_search"
     );
 
     rusqlite::Connection::open(data.join("archmage.db")).unwrap().execute(

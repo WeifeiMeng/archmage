@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bindingOnlyUpdate, capabilityDisplayName, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, shouldConfirmCapabilityExit, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration } from "./model";
+import { capabilityDraft, capabilityDisplayName, isCapabilityDirty, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, shouldConfirmCapabilityExit, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration } from "./model";
 
 describe("capability topology", () => {
   it("keeps execution dependencies separate from extra context handoffs", () => {
@@ -19,15 +19,35 @@ describe("capability topology", () => {
     expect(shouldConfirmCapabilityExit("capabilities", "agents", false)).toBe(false);
     expect(shouldConfirmCapabilityExit("runs", "agents", true)).toBe(false);
   });
-  it("changes only the Agent binding when saving a Capability", () => {
+  it("keeps role, Skill, Tool, and Agent changes in one draft", () => {
     const current: CapabilityConfiguration = {
       key: "designer", displayName: "Designer", description: "内置职责",
       extraInstructions: "existing instruction", agentInstanceId: "codex-a",
+      skills: [{ name: "brainstorming", purpose: "Explore ideas" }],
+      tools: [],
       revision: 3, promptVersion: "v1",
     };
-    expect(bindingOnlyUpdate(current, "codex-b")).toEqual({
+    const draft = capabilityDraft(current);
+    expect(isCapabilityDirty(current, draft)).toBe(false);
+    draft.skills[0].purpose = "Explore better ideas";
+    expect(isCapabilityDirty(current, draft)).toBe(true);
+    draft.skills[0].purpose = "Explore ideas";
+    draft.extraInstructions = "New role guidance";
+    expect(isCapabilityDirty(current, draft)).toBe(true);
+    draft.extraInstructions = "existing instruction";
+    draft.tools.push({ name: "web_search", purpose: "Research unfamiliar facts" });
+    expect(isCapabilityDirty(current, draft)).toBe(true);
+    draft.tools.pop();
+    draft.agentInstanceId = "codex-b";
+    expect(isCapabilityDirty(current, draft)).toBe(true);
+    draft.extraInstructions = "New role guidance";
+    draft.tools.push({ name: "web_search", purpose: "Research unfamiliar facts" });
+    expect(isCapabilityDirty(current, draft)).toBe(true);
+    expect(draft).toEqual({
       key: "designer", displayName: "Designer", description: "内置职责",
-      extraInstructions: "existing instruction", agentInstanceId: "codex-b", revision: 3,
+      extraInstructions: "New role guidance", agentInstanceId: "codex-b", revision: 3,
+      skills: [{ name: "brainstorming", purpose: "Explore ideas" }],
+      tools: [{ name: "web_search", purpose: "Research unfamiliar facts" }],
     });
   });
 });

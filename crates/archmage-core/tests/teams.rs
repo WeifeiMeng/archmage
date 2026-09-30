@@ -63,7 +63,7 @@ fn schema_ten_seeds_default_team_and_preserves_existing_data() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("archmage.db");
     let store = Store::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 12);
+    assert_eq!(store.schema_version().unwrap(), 13);
     assert_eq!(store.teams().unwrap().len(), 1);
     assert_eq!(store.teams().unwrap()[0].id, "default");
     assert_eq!(store.capability_bindings().unwrap().len(), 4);

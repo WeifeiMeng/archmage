@@ -1,9 +1,9 @@
 use archmage_core::{
     artifact::ArtifactStore,
-    capability::CapabilityKind,
+    capability::{CapabilityGuidance, CapabilityKind},
     context::{
         ContextRef, resolve_context, resolve_context_with_feedback,
-        resolve_context_with_instructions,
+        resolve_context_with_instructions, resolve_context_with_revision,
     },
     store::{AttemptOutcome, Store},
 };
@@ -51,6 +51,40 @@ fn coder_inputs(artifact: &str) -> HashMap<String, ContextRef> {
             },
         ),
     ])
+}
+
+#[test]
+fn capability_guidance_is_rendered_as_advisory_context() {
+    let (_dir, store, files, _, _, artifact) = committed_artifact();
+    let guidance = CapabilityGuidance {
+        name: "brainstorming".into(),
+        purpose: "Explore options".into(),
+    };
+    let tool = CapabilityGuidance {
+        name: "web_search".into(),
+        purpose: "Research uncertain facts".into(),
+    };
+    let context = resolve_context_with_revision(
+        CapabilityKind::Coder,
+        "v1",
+        "Prefer clear code",
+        &[guidance],
+        &[tool],
+        &[],
+        None,
+        coder_inputs(&artifact),
+        &files,
+        &store,
+    )
+    .unwrap();
+    assert_eq!(context.manifest["skills"][0]["name"], "brainstorming");
+    assert_eq!(context.manifest["tools"][0]["name"], "web_search");
+    assert!(
+        context.manifest["guidance_note"]
+            .as_str()
+            .unwrap()
+            .contains("not an availability or permission guarantee")
+    );
 }
 
 #[test]

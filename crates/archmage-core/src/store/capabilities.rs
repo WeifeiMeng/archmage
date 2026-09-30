@@ -9,7 +9,7 @@ impl Store {
     pub fn capability_configurations(&self) -> Result<Vec<CapabilityConfiguration>> {
         let mut query = self.db.prepare(
             "SELECT c.key,c.display_name,c.description,c.extra_instructions,
-                    b.agent_instance_id,c.revision
+                    b.agent_instance_id,c.revision,c.skills_json,c.tools_json
              FROM capability_configurations c
              JOIN capability_bindings b ON b.capability=c.key
              ORDER BY CASE c.key WHEN 'designer' THEN 0 WHEN 'coder' THEN 1
@@ -24,6 +24,20 @@ impl Store {
                     extra_instructions: row.get(3)?,
                     agent_instance_id: row.get(4)?,
                     revision: row.get(5)?,
+                    skills: serde_json::from_str(&row.get::<_, String>(6)?).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            6,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?,
+                    tools: serde_json::from_str(&row.get::<_, String>(7)?).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            7,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?,
                     prompt_version: BUILTIN_PROMPT_VERSION.into(),
                 })
             })?
@@ -50,9 +64,13 @@ impl Store {
                 "capability requires an enabled supported agent instance".into(),
             ));
         }
+        let skills_json = serde_json::to_string(&input.skills)
+            .map_err(|error| Error::Preflight(error.to_string()))?;
+        let tools_json = serde_json::to_string(&input.tools)
+            .map_err(|error| Error::Preflight(error.to_string()))?;
         let changed = tx.execute(
             "UPDATE capability_configurations SET display_name=?2,description=?3,
-                    extra_instructions=?4,revision=revision+1,
+                    extra_instructions=?4,skills_json=?6,tools_json=?7,revision=revision+1,
                     updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
              WHERE key=?1 AND revision=?5",
             params![
@@ -60,7 +78,9 @@ impl Store {
                 input.display_name.trim(),
                 input.description.trim(),
                 input.extra_instructions,
-                input.revision
+                input.revision,
+                skills_json,
+                tools_json,
             ],
         )?;
         if changed != 1 {

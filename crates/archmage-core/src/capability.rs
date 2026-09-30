@@ -4,13 +4,49 @@ use crate::{
     store::Store,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub const CAPABILITY_KEYS: [&str; 4] = ["designer", "coder", "tester", "reviewer"];
 pub const BUILTIN_PROMPT_VERSION: &str = "v1";
+pub const GUIDANCE_NOTE: &str = "The listed Skills and Tools are role guidance for the Agent, not an availability or permission guarantee. Use them when actually available and relevant; do not claim a missing capability was used.";
 
 fn default_prompt_version() -> String {
     BUILTIN_PROMPT_VERSION.into()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CapabilityGuidance {
+    pub name: String,
+    pub purpose: String,
+}
+
+fn validate_guidance(label: &str, entries: &[CapabilityGuidance]) -> Result<()> {
+    if entries.len() > 16 {
+        return Err(Error::Preflight(format!(
+            "capability {label} exceeds 16 entries"
+        )));
+    }
+    let mut names = HashSet::new();
+    for entry in entries {
+        let name = entry.name.trim();
+        if name.is_empty()
+            || name.chars().count() > 80
+            || entry.purpose.trim().is_empty()
+            || entry.purpose.chars().count() > 500
+        {
+            return Err(Error::Preflight(format!(
+                "capability {label} name or purpose is invalid"
+            )));
+        }
+        if !names.insert(name.to_lowercase()) {
+            return Err(Error::Preflight(format!(
+                "capability {label} contains duplicate names"
+            )));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +56,10 @@ pub struct CapabilityConfiguration {
     pub display_name: String,
     pub description: String,
     pub extra_instructions: String,
+    #[serde(default)]
+    pub skills: Vec<CapabilityGuidance>,
+    #[serde(default)]
+    pub tools: Vec<CapabilityGuidance>,
     pub agent_instance_id: String,
     pub revision: i64,
     #[serde(default = "default_prompt_version")]
@@ -40,6 +80,8 @@ impl CapabilityConfiguration {
             display_name: display_name.into(),
             description: description.into(),
             extra_instructions: String::new(),
+            skills: Vec::new(),
+            tools: Vec::new(),
             agent_instance_id,
             revision: 0,
             prompt_version: default_prompt_version(),
@@ -54,6 +96,10 @@ pub struct CapabilityConfigurationInput {
     pub display_name: String,
     pub description: String,
     pub extra_instructions: String,
+    #[serde(default)]
+    pub skills: Vec<CapabilityGuidance>,
+    #[serde(default)]
+    pub tools: Vec<CapabilityGuidance>,
     pub agent_instance_id: String,
     pub revision: i64,
 }
@@ -81,6 +127,8 @@ impl CapabilityConfigurationInput {
                 "capability extra instructions exceed 8000 characters".into(),
             ));
         }
+        validate_guidance("skills", &self.skills)?;
+        validate_guidance("tools", &self.tools)?;
         if self.agent_instance_id.trim().is_empty() || self.revision < 0 {
             return Err(Error::Preflight(
                 "capability binding or revision is invalid".into(),

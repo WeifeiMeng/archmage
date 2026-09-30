@@ -1,6 +1,6 @@
 use super::Runtime;
 use crate::{
-    capability::CapabilityKind,
+    capability::{CapabilityConfiguration, CapabilityKind, GUIDANCE_NOTE},
     contract::{CONSULTATION_SCHEMA, validate_consultation},
     error::{Error, Result},
     provider::codex::{self, CodexInvocation, Sandbox},
@@ -27,6 +27,7 @@ pub fn render_consultation_prompt(
     source_attempt_id: &str,
     goal: &str,
     source_output: &Value,
+    target_configuration: Option<&CapabilityConfiguration>,
 ) -> Result<Vec<u8>> {
     let stage = match kind(source)? {
         CapabilityKind::Designer => {
@@ -44,6 +45,10 @@ pub fn render_consultation_prompt(
     serde_json::to_vec(&json!({
         "mode":"read_only_consultation",
         "persona_for_perspective_only":persona,
+        "extra_instructions":target_configuration.map(|item| item.extra_instructions.as_str()).unwrap_or(""),
+        "skills":target_configuration.map(|item| item.skills.as_slice()).unwrap_or(&[]),
+        "tools":target_configuration.map(|item| item.tools.as_slice()).unwrap_or(&[]),
+        "guidance_note":GUIDANCE_NOTE,
         "task":"This is a stage-specific consultation, not your main capability task. Evaluate ONLY the current upstream deliverable. Do not require artifacts or completed tasks from later stages. Approve when the upstream deliverable is sufficient for its own stage, even though the entire Run is not finished. Do not perform your main task or modify files. Return only schema-valid JSON. If rejecting, identify a defect that the upstream capability can fix NOW in its own deliverable and provide specific actionable suggestions.",
         "stage_rule":stage,
         "target_capability":target,
@@ -131,6 +136,7 @@ impl Runtime {
             source_attempt_id,
             &run.goal,
             &producer.result.as_ref().ok_or(Error::Conflict)?.output,
+            run.capability_configurations.get(target),
         )?;
         let workspace = run
             .workspace

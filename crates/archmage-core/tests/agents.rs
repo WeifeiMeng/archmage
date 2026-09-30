@@ -1,6 +1,6 @@
 use archmage_core::{
     agent::{AgentInstanceInput, AgentService, ConnectionState, ProviderKind},
-    capability::{CapabilityConfigurationInput, CapabilityService},
+    capability::{CapabilityConfigurationInput, CapabilityGuidance, CapabilityService},
     config::Config,
     store::Store,
 };
@@ -8,7 +8,7 @@ use archmage_core::{
 #[test]
 fn capability_config_is_seeded_and_saved_with_revision_guard() {
     let (_temp, mut store) = fixture_store();
-    assert_eq!(store.schema_version().unwrap(), 12);
+    assert_eq!(store.schema_version().unwrap(), 13);
     let configs = store.capability_configurations().unwrap();
     assert_eq!(configs.len(), 4);
     assert_eq!(configs[0].key, "designer");
@@ -19,6 +19,14 @@ fn capability_config_is_seeded_and_saved_with_revision_guard() {
         display_name: "Product Designer".into(),
         description: "Plan the change".into(),
         extra_instructions: "  Prefer concise designs\n".into(),
+        skills: vec![CapabilityGuidance {
+            name: "brainstorming".into(),
+            purpose: "Explore alternatives before design".into(),
+        }],
+        tools: vec![CapabilityGuidance {
+            name: "web_search".into(),
+            purpose: "Research uncertain facts".into(),
+        }],
         agent_instance_id: "codex-default".into(),
         revision: configs[0].revision,
     };
@@ -26,6 +34,8 @@ fn capability_config_is_seeded_and_saved_with_revision_guard() {
     let saved = &store.capability_configurations().unwrap()[0];
     assert_eq!(saved.display_name, "Product Designer");
     assert_eq!(saved.extra_instructions, "  Prefer concise designs\n");
+    assert_eq!(saved.skills, input.skills);
+    assert_eq!(saved.tools, input.tools);
     assert_eq!(saved.revision, input.revision + 1);
     assert!(store.save_capability_configuration(&input).is_err());
     assert!(
@@ -36,6 +46,35 @@ fn capability_config_is_seeded_and_saved_with_revision_guard() {
             })
             .is_err()
     );
+}
+
+#[test]
+fn capability_guidance_rejects_duplicate_names_and_blank_purposes() {
+    let (_temp, mut store) = fixture_store();
+    let current = store.capability_configurations().unwrap().remove(0);
+    let mut input = CapabilityConfigurationInput {
+        key: current.key,
+        display_name: current.display_name,
+        description: current.description,
+        extra_instructions: String::new(),
+        skills: vec![
+            CapabilityGuidance {
+                name: "brainstorming".into(),
+                purpose: "Explore ideas".into(),
+            },
+            CapabilityGuidance {
+                name: "Brainstorming".into(),
+                purpose: "Duplicate".into(),
+            },
+        ],
+        tools: vec![],
+        agent_instance_id: current.agent_instance_id,
+        revision: current.revision,
+    };
+    assert!(store.save_capability_configuration(&input).is_err());
+    input.skills.pop();
+    input.skills[0].purpose = "  ".into();
+    assert!(store.save_capability_configuration(&input).is_err());
 }
 
 #[test]
@@ -88,11 +127,11 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12);",
+            "DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13);",
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();
-    assert_eq!(upgraded.schema_version().unwrap(), 12);
+    assert_eq!(upgraded.schema_version().unwrap(), 13);
     assert_eq!(upgraded.capability_configurations().unwrap().len(), 4);
     assert_eq!(
         upgraded.capability_bindings().unwrap()[0].agent_instance_id,
