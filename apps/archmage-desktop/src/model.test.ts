@@ -33,10 +33,11 @@ describe("capability topology", () => {
 });
 
 describe("run request", () => {
-  it("serializes a run from repository and goal only", () => {
-    expect(toRunRequest(" /repo ", " goal ")).toEqual({
+  it("serializes the selected team with the repository and goal", () => {
+    expect(toRunRequest(" /repo ", " goal ", "team-1")).toEqual({
       repository: "/repo",
       goal: "goal",
+      teamId: "team-1",
     });
   });
 });

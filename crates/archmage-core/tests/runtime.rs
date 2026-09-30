@@ -137,7 +137,8 @@ fn start_definition_is_queryable_as_one_four_node_run() {
 
     let config = Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap();
     let runtime = Runtime::open(config).unwrap();
-    let request = RunRequest::new(&repo, "add health endpoint").unwrap();
+    let team = runtime.team_service().create("Custom Team", &archmage_core::team::TeamGraph::builtin()).unwrap();
+    let request = RunRequest::new(&repo, "add health endpoint").unwrap().with_team(team.id.clone());
 
     let run_id = runtime.create_run_definition(&request).unwrap();
     let snapshot = runtime.snapshot(&run_id).unwrap();
@@ -153,6 +154,10 @@ fn start_definition_is_queryable_as_one_four_node_run() {
         ["designer", "coder", "tester", "reviewer"]
     );
     assert_eq!(snapshot.agent_bindings.len(), 4);
+    assert_eq!(snapshot.team.as_ref().unwrap().id, team.id);
+    assert_eq!(snapshot.team.as_ref().unwrap().name, "Custom Team");
+    runtime.team_service().save(&team.id, team.revision, "Changed Team", &team.graph).unwrap();
+    assert_eq!(runtime.snapshot(&run_id).unwrap().team.unwrap().name, "Custom Team");
     assert_eq!(
         snapshot.agent_bindings["tester"].agent_instance_id,
         "codex-default"

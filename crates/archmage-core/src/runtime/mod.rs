@@ -10,7 +10,7 @@ use crate::{
     contract::validate_builtin_schemas,
     error::{Error, Result},
     store::{RunDefinitionRecord, Store},
-    team::TeamService,
+    team::{DEFAULT_TEAM_ID, Team, TeamService},
     workspace::inspect_repository,
 };
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,8 @@ impl CheckSpec {
 pub struct RunRequest {
     pub repository: PathBuf,
     pub goal: String,
+    #[serde(default)]
+    pub team_id: Option<String>,
 }
 
 impl RunRequest {
@@ -59,7 +61,13 @@ impl RunRequest {
         Ok(Self {
             repository: repository.as_ref().to_path_buf(),
             goal,
+            team_id: None,
         })
+    }
+
+    pub fn with_team(mut self, team_id: impl Into<String>) -> Self {
+        self.team_id = Some(team_id.into());
+        self
     }
 }
 
@@ -113,6 +121,7 @@ pub struct RunSnapshot {
     pub checks: Vec<CheckSpec>,
     pub agent_bindings: BTreeMap<String, FrozenAgentBinding>,
     pub capability_configurations: BTreeMap<String, CapabilityConfiguration>,
+    pub team: Option<Team>,
     pub state: String,
     pub outcome: Option<String>,
     pub revision: i64,
@@ -137,6 +146,8 @@ struct FrozenRunDefinition {
     pub(crate) agent_bindings: BTreeMap<String, FrozenAgentBinding>,
     #[serde(default)]
     pub(crate) capability_configurations: BTreeMap<String, CapabilityConfiguration>,
+    #[serde(default)]
+    pub(crate) team: Option<Team>,
     pub(crate) nodes: Vec<String>,
 }
 
@@ -155,7 +166,12 @@ impl Runtime {
     pub fn create_run_definition(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
         let (bindings, configurations) = self.frozen_capability_settings()?;
-        self.create_run_definition_with_bindings(request, repository, bindings, configurations)
+        let team = self.resolve_team(request)?;
+        self.create_run_definition_with_bindings(request, repository, bindings, configurations, team)
+    }
+
+    fn resolve_team(&self, request: &RunRequest) -> Result<Team> {
+        self.store()?.team(request.team_id.as_deref().unwrap_or(DEFAULT_TEAM_ID))
     }
 
     fn create_run_definition_with_bindings(
@@ -164,13 +180,15 @@ impl Runtime {
         repository: PathBuf,
         agent_bindings: BTreeMap<String, FrozenAgentBinding>,
         capability_configurations: BTreeMap<String, CapabilityConfiguration>,
+        team: Team,
     ) -> Result<String> {
         let definition = FrozenRunDefinition {
-            version: 3,
+            version: 4,
             repository,
             checks: Vec::new(),
             agent_bindings,
             capability_configurations,
+            team: Some(team),
             nodes: BUILTIN_NODES.iter().map(|key| (*key).to_owned()).collect(),
         };
         let value = serde_json::to_value(definition)
@@ -182,6 +200,7 @@ impl Runtime {
     pub async fn start_run(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
         let (mut bindings, configurations) = self.frozen_capability_settings()?;
+        let team = self.resolve_team(request)?;
         for (capability, binding) in &mut bindings {
             match binding.provider_kind {
                 ProviderKind::Codex => {
@@ -208,6 +227,7 @@ impl Runtime {
             repository,
             bindings,
             configurations,
+            team,
         )?;
         let mut store = self.store()?;
         crate::workspace::provision(
@@ -282,6 +302,7 @@ impl Runtime {
             checks: definition.checks,
             agent_bindings: definition.agent_bindings,
             capability_configurations: configurations,
+            team: definition.team,
             state: record.state,
             outcome: record.outcome,
             revision: record.revision,

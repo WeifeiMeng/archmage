@@ -1,4 +1,4 @@
-export type RunRequest = { repository: string; goal: string };
+export type RunRequest = { repository: string; goal: string; teamId?: string };
 export type ProviderKind = "codex" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
 export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
@@ -118,6 +118,7 @@ export type RunSnapshot = {
   checks: { checkId: string; command: string }[];
   agentBindings: Record<NodeSnapshot["key"], FrozenAgentBinding>;
   capabilityConfigurations: Record<CapabilityKey, CapabilityConfiguration>;
+  team: Team | null;
   state: string;
   outcome: string | null;
   revision: number;
@@ -155,8 +156,8 @@ export const initialTimelineState: TimelineState = {
   needsRefresh: false,
 };
 
-export function toRunRequest(repository: string, goal: string): RunRequest {
-  return { repository: repository.trim(), goal: goal.trim() };
+export function toRunRequest(repository: string, goal: string, teamId?: string): RunRequest {
+  return { repository: repository.trim(), goal: goal.trim(), ...(teamId ? { teamId } : {}) };
 }
 
 export const connectionLabel = (state: ConnectionState) =>
