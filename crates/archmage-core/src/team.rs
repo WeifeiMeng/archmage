@@ -1,6 +1,6 @@
-use crate::error::{Error, Result};
+use crate::{error::{Error, Result}, store::Store};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::PathBuf};
 
 pub const DEFAULT_TEAM_ID: &str = "default";
 pub const CAPABILITIES: [&str; 4] = ["designer", "coder", "tester", "reviewer"];
@@ -35,6 +35,32 @@ pub struct TeamEdge {
 pub struct TeamGraph {
     pub nodes: Vec<TeamNode>,
     pub edges: Vec<TeamEdge>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Team {
+    pub id: String,
+    pub name: String,
+    pub revision: i64,
+    pub graph: TeamGraph,
+}
+
+#[derive(Clone)]
+pub struct TeamService {
+    data_root: PathBuf,
+}
+
+impl TeamService {
+    pub fn new(data_root: PathBuf) -> Self { Self { data_root } }
+    fn store(&self) -> Result<Store> { Store::open(&self.data_root.join("archmage.db")) }
+    pub fn list(&self) -> Result<Vec<Team>> { self.store()?.teams() }
+    pub fn create(&self, name: &str, graph: &TeamGraph) -> Result<Team> {
+        self.store()?.create_team(name, graph)
+    }
+    pub fn save(&self, id: &str, revision: i64, name: &str, graph: &TeamGraph) -> Result<Team> {
+        self.store()?.save_team(id, revision, name, graph)
+    }
 }
 
 impl TeamGraph {

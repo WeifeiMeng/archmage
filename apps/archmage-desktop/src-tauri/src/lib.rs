@@ -5,6 +5,7 @@ use archmage_core::{
     event::Event,
     provider::codex,
     runtime::{RunRequest, RunSnapshot, RunSummary, Runtime},
+    team::{Team, TeamGraph},
 };
 use serde::Serialize;
 use std::{
@@ -136,6 +137,21 @@ fn save_capability_configuration(
         .capability_service()
         .save(&input)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn list_teams(state: State<'_, AppState>) -> Result<Vec<Team>, String> {
+    state.runtime.team_service().list().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn create_team(state: State<'_, AppState>, name: String, graph: TeamGraph) -> Result<Team, String> {
+    state.runtime.team_service().create(&name, &graph).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_team(state: State<'_, AppState>, id: String, revision: i64, name: String, graph: TeamGraph) -> Result<Team, String> {
+    state.runtime.team_service().save(&id, revision, &name, &graph).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -273,6 +289,9 @@ pub fn run() {
             bind_capability,
             get_capability_management,
             save_capability_configuration,
+            list_teams,
+            create_team,
+            save_team,
             start_run,
             list_runs,
             active_run_ids,

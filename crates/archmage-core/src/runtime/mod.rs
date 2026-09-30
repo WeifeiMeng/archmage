@@ -10,6 +10,7 @@ use crate::{
     contract::validate_builtin_schemas,
     error::{Error, Result},
     store::{RunDefinitionRecord, Store},
+    team::TeamService,
     workspace::inspect_repository,
 };
 use serde::{Deserialize, Serialize};
@@ -305,6 +306,10 @@ impl Runtime {
 
     pub fn capability_service(&self) -> CapabilityService {
         CapabilityService::new(self.config.data_root.clone())
+    }
+
+    pub fn team_service(&self) -> TeamService {
+        TeamService::new(self.config.data_root.clone())
     }
 
     fn frozen_capability_settings(

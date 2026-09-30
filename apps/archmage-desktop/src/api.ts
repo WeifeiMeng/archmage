@@ -10,6 +10,8 @@ import type {
   RunRequest,
   RunSnapshot,
   RunSummary,
+  Team,
+  TeamGraph,
 } from "./model";
 
 export const api = {
@@ -30,6 +32,10 @@ export const api = {
     invoke<CapabilityManagementSnapshot>("get_capability_management"),
   saveCapabilityConfiguration: (input: CapabilityConfigurationInput) =>
     invoke<CapabilityManagementSnapshot>("save_capability_configuration", { input }),
+  listTeams: () => invoke<Team[]>("list_teams"),
+  createTeam: (name: string, graph: TeamGraph) => invoke<Team>("create_team", { name, graph }),
+  saveTeam: (id: string, revision: number, name: string, graph: TeamGraph) =>
+    invoke<Team>("save_team", { id, revision, name, graph }),
   listRuns: () => invoke<RunSummary[]>("list_runs"),
   activeRunIds: () => invoke<string[]>("active_run_ids"),
   snapshot: (runId: string) => invoke<RunSnapshot>("get_run_snapshot", { runId }),

@@ -1,6 +1,7 @@
 //! Transactional execution ledger. Scheduling, contract validation and OS ownership live above it.
 mod capabilities;
 mod recovery;
+mod teams;
 pub(crate) mod transitions;
 use crate::{
     agent::{
@@ -152,6 +153,7 @@ impl Store {
             tx.execute_batch(include_str!("../../migrations/0007_control.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0008_agents.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0009_capabilities.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0010_teams.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -190,7 +192,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0009_capabilities.sql"))?;
                 version = 9;
             }
-            if version != 9 {
+            if version == 9 {
+                tx.execute_batch(include_str!("../../migrations/0010_teams.sql"))?;
+                version = 10;
+            }
+            if version != 10 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));

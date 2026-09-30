@@ -2,6 +2,11 @@ export type RunRequest = { repository: string; goal: string };
 export type ProviderKind = "codex" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
 export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
+
+export type TeamNode = { capability: CapabilityKey; x: number; y: number };
+export type TeamEdge = { from: CapabilityKey; to: CapabilityKey };
+export type TeamGraph = { nodes: TeamNode[]; edges: TeamEdge[] };
+export type Team = { id: string; name: string; revision: number; graph: TeamGraph };
 export type AppView = "runs" | "agents" | "capabilities";
 
 export function shouldConfirmCapabilityExit(current: AppView, next: AppView, dirty: boolean): boolean {

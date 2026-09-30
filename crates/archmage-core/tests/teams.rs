@@ -1,4 +1,5 @@
 use archmage_core::team::{TeamEdge, TeamGraph, TeamNode};
+use archmage_core::store::Store;
 
 fn graph() -> TeamGraph {
     TeamGraph {
@@ -55,4 +56,31 @@ fn graph_rejects_duplicate_nodes_edges_and_out_of_bounds_positions() {
     let mut outside = graph();
     outside.nodes[0].x = -1;
     assert!(outside.validate().is_err());
+}
+
+#[test]
+fn schema_ten_seeds_default_team_and_preserves_existing_data() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("archmage.db");
+    let store = Store::open(&path).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 10);
+    assert_eq!(store.teams().unwrap().len(), 1);
+    assert_eq!(store.teams().unwrap()[0].id, "default");
+    assert_eq!(store.capability_bindings().unwrap().len(), 4);
+}
+
+#[test]
+fn team_save_is_atomic_and_revision_guarded() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let created = store.create_team("Review Team", &graph()).unwrap();
+    assert_eq!(created.revision, 0);
+    let changed = store.save_team(&created.id, 0, "New Name", &graph()).unwrap();
+    assert_eq!(changed.revision, 1);
+    assert!(store.save_team(&created.id, 0, "Stale", &graph()).is_err());
+    assert!(store.create_team("New Name", &graph()).is_err());
+    let mut invalid = graph();
+    invalid.edges.clear();
+    assert!(store.save_team(&created.id, 1, "Invalid", &invalid).is_err());
+    assert_eq!(store.team(&created.id).unwrap().name, "New Name");
 }
