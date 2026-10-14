@@ -28,6 +28,23 @@ fn migration_and_pragmas_survive_reopen() {
 }
 
 #[test]
+fn schema_thirteen_upgrades_without_losing_runs() {
+    let (dir, store, run, _) = setup();
+    drop(store);
+    let path = dir.path().join("state.db");
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute_batch(
+            "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version=14;",
+        )
+        .unwrap();
+    let reopened = Store::open(&path).unwrap();
+    assert_eq!(reopened.schema_version().unwrap(), 14);
+    assert_eq!(reopened.run(&run).unwrap().state, "running");
+    assert!(reopened.flow_deliveries(&run).unwrap().is_empty());
+}
+
+#[test]
 fn simultaneous_claim_has_one_winner() {
     let (dir, _store, _, node) = setup();
     let gate = std::sync::Arc::new(std::sync::Barrier::new(2));

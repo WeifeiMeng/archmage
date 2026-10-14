@@ -1,14 +1,113 @@
 use crate::{
     capability::CapabilityKind,
     error::{Error, Result},
+    team::TeamGraph,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::path::{Component, Path};
 
 #[derive(Clone, Debug, Default)]
 pub struct ContractContext {
     pub tester_accepted: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FlowRouting {
+    pub decision: String,
+    pub next: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FlowEnvelope {
+    deliverable: Value,
+    routing: FlowRouting,
+}
+
+pub fn flow_output_schema(kind: CapabilityKind) -> Result<String> {
+    let deliverable: Value =
+        serde_json::from_str(kind.schema()).map_err(|error| invalid(error.to_string()))?;
+    let schema = serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["deliverable", "routing"],
+        "properties": {
+            "deliverable": deliverable,
+            "routing": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["decision", "next"],
+                "properties": {
+                    "decision": {"type": "string", "enum": ["continue", "complete"]},
+                    "next": {"type": "array", "items": {"type": "string"}}
+                }
+            }
+        }
+    });
+    serde_json::to_string(&schema).map_err(|error| invalid(error.to_string()))
+}
+
+pub fn validate_flow_output(
+    kind: CapabilityKind,
+    bytes: &[u8],
+    context: &ContractContext,
+    graph: &TeamGraph,
+) -> Result<(Value, FlowRouting)> {
+    let envelope: FlowEnvelope =
+        serde_json::from_slice(bytes).map_err(|error| invalid(error.to_string()))?;
+    let deliverable_bytes =
+        serde_json::to_vec(&envelope.deliverable).map_err(|error| invalid(error.to_string()))?;
+    let deliverable = validate_output(kind, &deliverable_bytes, context)?;
+    let routing = envelope.routing;
+    let from = kind.key();
+    let unique: HashSet<&str> = routing.next.iter().map(String::as_str).collect();
+    if unique.len() != routing.next.len() {
+        return Err(invalid("routing recipients must be unique"));
+    }
+    match routing.decision.as_str() {
+        "complete" => {
+            if graph.terminal.as_deref() != Some(from) || !routing.next.is_empty() {
+                return Err(invalid(
+                    "only the terminal capability may complete without recipients",
+                ));
+            }
+        }
+        "continue" => {
+            if routing.next.is_empty()
+                || routing.next.iter().any(|target| {
+                    !graph
+                        .edges
+                        .iter()
+                        .any(|edge| edge.from == from && edge.to == *target)
+                })
+            {
+                return Err(invalid("routing recipients must follow outgoing edges"));
+            }
+        }
+        _ => return Err(invalid("routing decision must be continue or complete")),
+    }
+    if kind == CapabilityKind::Reviewer && graph.terminal.as_deref() == Some(kind.key()) {
+        let approved = deliverable["status"] == "approved";
+        if approved != (routing.decision == "complete") {
+            return Err(invalid("review status and routing decision disagree"));
+        }
+    }
+    if kind == CapabilityKind::Coder && deliverable["status"] == "blocked" {
+        return Err(invalid("blocked coder output cannot route a flow"));
+    }
+    if kind == CapabilityKind::Tester && deliverable["status"] == "blocked" {
+        return Err(invalid("blocked tester output cannot route a flow"));
+    }
+    if kind == CapabilityKind::Tester
+        && deliverable["status"] == "failed"
+        && routing.decision == "complete"
+    {
+        return Err(invalid("failed testing cannot complete a flow"));
+    }
+    Ok((deliverable, routing))
 }
 
 #[derive(Deserialize)]

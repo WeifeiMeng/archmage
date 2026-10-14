@@ -127,7 +127,7 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13);",
+            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14);",
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();

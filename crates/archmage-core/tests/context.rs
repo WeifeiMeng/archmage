@@ -2,13 +2,61 @@ use archmage_core::{
     artifact::ArtifactStore,
     capability::{CapabilityGuidance, CapabilityKind},
     context::{
-        ContextRef, resolve_context, resolve_context_for_team, resolve_context_with_feedback,
-        resolve_context_with_instructions, resolve_context_with_revision,
+        ContextRef, resolve_context, resolve_context_for_flow, resolve_context_for_team,
+        resolve_context_with_feedback, resolve_context_with_instructions,
+        resolve_context_with_revision,
     },
     store::{AttemptOutcome, Store},
 };
 use serde_json::json;
 use std::collections::HashMap;
+
+#[test]
+fn flow_context_accepts_reviewer_feedback_without_designer_handoff() {
+    let (_dir, store, files, _, _, artifact) = committed_artifact();
+    let context = resolve_context_for_flow(
+        CapabilityKind::Coder,
+        "v1",
+        "Follow the feedback",
+        &[],
+        &[],
+        Some(&json!({"status":"implemented"})),
+        HashMap::from([
+            (
+                "goal".into(),
+                ContextRef::WorkflowInput {
+                    value: json!("build"),
+                },
+            ),
+            (
+                "repo_view".into(),
+                ContextRef::WorkspaceSnapshot {
+                    value: json!({"files":[]}),
+                },
+            ),
+            (
+                "incoming".into(),
+                ContextRef::CommittedNodeOutput {
+                    artifact_id: artifact.clone(),
+                },
+            ),
+            (
+                "previous_result".into(),
+                ContextRef::CommittedNodeOutput {
+                    artifact_id: artifact,
+                },
+            ),
+        ]),
+        &files,
+        &store,
+    )
+    .unwrap();
+    assert!(context.manifest["bindings"]["incoming"].is_object());
+    assert_eq!(context.manifest["previous_output"]["status"], "implemented");
+    assert_eq!(context.handoffs.len(), 2);
+    assert!(context.manifest["bindings"]["previous_result"].is_object());
+    assert!(context.manifest["bindings"].get("design").is_none());
+}
 
 fn committed_artifact() -> (
     tempfile::TempDir,

@@ -1,6 +1,7 @@
 pub mod consultation;
 pub mod control;
 mod dispatch;
+mod flow;
 mod recovery;
 pub mod scheduler;
 
@@ -10,7 +11,7 @@ use crate::{
     config::Config,
     contract::validate_builtin_schemas,
     error::{Error, Result},
-    store::{Consultation, ConsultationProcessSnapshot, RunDefinitionRecord, Store},
+    store::{Consultation, ConsultationProcessSnapshot, FlowDelivery, RunDefinitionRecord, Store},
     team::{DEFAULT_TEAM_ID, Team, TeamGraph, TeamService},
     workspace::inspect_repository,
 };
@@ -21,6 +22,7 @@ use std::{
 };
 
 const BUILTIN_NODES: [&str; 4] = ["designer", "coder", "tester", "reviewer"];
+pub(crate) const FLOW_STEP_LIMIT: usize = 24;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -133,6 +135,10 @@ pub struct RunSnapshot {
     pub consultations: Vec<Consultation>,
     #[serde(default)]
     pub consultation_processes: Vec<ConsultationProcessSnapshot>,
+    #[serde(default)]
+    pub flow_deliveries: Vec<FlowDelivery>,
+    #[serde(default = "default_flow_step_limit")]
+    pub flow_step_limit: usize,
     pub workspace: Option<PathBuf>,
 }
 
@@ -154,6 +160,12 @@ struct FrozenRunDefinition {
     #[serde(default)]
     pub(crate) team: Option<Team>,
     pub(crate) nodes: Vec<String>,
+    #[serde(default = "default_flow_step_limit")]
+    pub(crate) flow_step_limit: usize,
+}
+
+fn default_flow_step_limit() -> usize {
+    FLOW_STEP_LIMIT
 }
 
 impl Runtime {
@@ -200,13 +212,14 @@ impl Runtime {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         let definition = FrozenRunDefinition {
-            version: 4,
+            version: 5,
             repository,
             checks: Vec::new(),
             agent_bindings,
             capability_configurations,
             team: Some(team),
             nodes: nodes.clone(),
+            flow_step_limit: FLOW_STEP_LIMIT,
         };
         let value = serde_json::to_value(definition)
             .map_err(|error| Error::Preflight(error.to_string()))?;
@@ -331,6 +344,8 @@ impl Runtime {
             nodes,
             consultations: store.consultations_for_run(run_id)?,
             consultation_processes: store.consultation_processes_for_run(run_id)?,
+            flow_deliveries: store.flow_deliveries(run_id)?,
+            flow_step_limit: definition.flow_step_limit,
             workspace,
         })
     }

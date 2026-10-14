@@ -7,6 +7,7 @@ use crate::{
     error::{Error, Result},
     provider::codex::{self, CodexInvocation, Sandbox},
     store::{AttemptOutcome, Store},
+    team::TeamMode,
     workspace::{GitRepository, inspect_repository, publish_changeset, snapshot},
 };
 use serde_json::json;
@@ -19,6 +20,15 @@ impl Runtime {
         let mut store = self.store()?;
         let generation = store.claim_run_owner(run_id)?;
         drop(store);
+
+        if self
+            .snapshot(run_id)?
+            .team
+            .as_ref()
+            .is_some_and(|team| team.graph.mode == TeamMode::Flow)
+        {
+            return self.run_flow_to_terminal(run_id, generation).await;
+        }
 
         loop {
             let current = self.snapshot(run_id)?;
@@ -369,7 +379,7 @@ impl Runtime {
     }
 }
 
-fn capability(key: &str) -> Result<CapabilityKind> {
+pub(super) fn capability(key: &str) -> Result<CapabilityKind> {
     match key {
         "designer" => Ok(CapabilityKind::Designer),
         "coder" => Ok(CapabilityKind::Coder),
@@ -561,7 +571,7 @@ fn contract_context(kind: CapabilityKind, run_id: &str, store: &Store) -> Result
     }
 }
 
-fn private_dir(path: &Path) -> Result<()> {
+pub(super) fn private_dir(path: &Path) -> Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
@@ -573,7 +583,7 @@ fn private_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn error_code(error: &Error) -> &'static str {
+pub(super) fn error_code(error: &Error) -> &'static str {
     match error {
         Error::Storage(_) => "storage_failed",
         Error::Conflict => "state_conflict",

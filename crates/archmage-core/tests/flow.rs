@@ -172,6 +172,46 @@ fn terminal_delivery_skips_pending_siblings() {
     assert!(store.claim_flow_delivery(&run, generation).is_err());
 }
 
+#[test]
+fn feedback_cycle_reexecutes_the_same_capability_for_each_delivery() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    for (target, next, complete) in [
+        ("coder", vec!["reviewer".into()], false),
+        ("reviewer", vec!["coder".into()], false),
+        ("coder", vec!["reviewer".into()], false),
+        ("reviewer", vec![], true),
+    ] {
+        let delivery = store
+            .claim_flow_delivery(&run, generation)
+            .unwrap()
+            .unwrap();
+        assert_eq!(delivery.target, target);
+        store.prepare_flow_node(&run, target, generation).unwrap();
+        finish_test_delivery(
+            &mut store, &temp, &run, generation, &delivery, &next, complete,
+        );
+    }
+    let deliveries = store.flow_deliveries(&run).unwrap();
+    assert_eq!(deliveries.len(), 4);
+    assert_eq!(
+        deliveries
+            .iter()
+            .filter(|item| item.state == "completed")
+            .count(),
+        4
+    );
+    assert_ne!(deliveries[0].attempt_id, deliveries[2].attempt_id);
+    assert_eq!(
+        deliveries[3].routing.as_ref().unwrap()["decision"],
+        "complete"
+    );
+}
+
 fn finish_test_delivery(
     store: &mut Store,
     temp: &tempfile::TempDir,

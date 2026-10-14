@@ -144,6 +144,7 @@ pub fn resolve_context_with_revision(
         artifacts,
         store,
         false,
+        false,
     )
 }
 
@@ -172,6 +173,35 @@ pub fn resolve_context_for_team(
         artifacts,
         store,
         true,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_context_for_flow(
+    kind: CapabilityKind,
+    prompt_version: &str,
+    extra_instructions: &str,
+    skills: &[CapabilityGuidance],
+    tools: &[CapabilityGuidance],
+    previous_output: Option<&Value>,
+    inputs: HashMap<String, ContextRef>,
+    artifacts: &ArtifactStore,
+    store: &Store,
+) -> Result<ContextSnapshot> {
+    resolve_context_internal(
+        kind,
+        prompt_version,
+        extra_instructions,
+        skills,
+        tools,
+        &[],
+        previous_output,
+        inputs,
+        artifacts,
+        store,
+        false,
+        true,
     )
 }
 
@@ -188,11 +218,22 @@ fn resolve_context_internal(
     artifacts: &ArtifactStore,
     store: &Store,
     team_mode: bool,
+    flow_mode: bool,
 ) -> Result<ContextSnapshot> {
     if prompt_version.trim().is_empty() {
         return Err(Error::Preflight("context prompt version is blank".into()));
     }
-    let valid = if team_mode {
+    let valid = if flow_mode {
+        inputs.contains_key("goal")
+            && inputs.contains_key("repo_view")
+            && inputs.keys().all(|key| {
+                matches!(
+                    key.as_str(),
+                    "goal" | "repo_view" | "incoming" | "changeset" | "previous_result"
+                )
+            })
+            && (!inputs.contains_key("changeset") || inputs.contains_key("incoming"))
+    } else if team_mode {
         valid_team_inputs(kind, &inputs)
     } else {
         let expected = required(kind);
@@ -234,6 +275,9 @@ fn resolve_context_internal(
     manifest["skills"] = json!(skills);
     manifest["tools"] = json!(tools);
     manifest["guidance_note"] = GUIDANCE_NOTE.into();
+    if flow_mode {
+        manifest["flow_instructions"] = "Return a deliverable matching this capability's schema and a routing decision. Use continue with one or more outgoing recipients to hand off your result; only the configured terminal capability may use complete with no recipients. Each recipient gets an independent new execution. Do not claim evidence that was not supplied.".into();
+    }
     if !revision_feedback.is_empty() {
         manifest["revision_feedback"] = json!(revision_feedback);
     }

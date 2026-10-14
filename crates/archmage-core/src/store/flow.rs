@@ -1,10 +1,10 @@
 use super::{Store, transitions::event};
 use crate::error::{Error, Result};
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FlowDelivery {
     pub id: String,
@@ -46,6 +46,36 @@ fn delivery(row: &rusqlite::Row<'_>) -> rusqlite::Result<FlowDelivery> {
 const DELIVERY_COLUMNS: &str = "id,run_id,sequence,source_attempt_id,target_key,payload_artifact_id,state,attempt_id,routing_json";
 
 impl Store {
+    pub fn flow_source_changeset(&self, delivery_id: &str) -> Result<Option<String>> {
+        Ok(self.db.query_row(
+            "SELECT a.changeset_artifact_id FROM flow_deliveries d LEFT JOIN attempts a ON a.id=d.source_attempt_id WHERE d.id=?1",
+            [delivery_id], |row| row.get(0),
+        )?)
+    }
+
+    pub fn fail_flow_run(&mut self, run: &str, generation: i64, code: &str) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let changed = tx.execute(
+            "UPDATE runs SET state='failed',revision=revision+1 WHERE id=?1 AND state='running' AND owner_generation=?2",
+            params![run, generation],
+        )?;
+        if changed != 1 {
+            return Err(Error::Conflict);
+        }
+        event(
+            &tx,
+            run,
+            "workflow.failed",
+            None,
+            None,
+            json!({"error_code":code}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn flow_deliveries(&self, run: &str) -> Result<Vec<FlowDelivery>> {
         let mut query = self.db.prepare(&format!(
             "SELECT {DELIVERY_COLUMNS} FROM flow_deliveries WHERE run_id=?1 ORDER BY sequence"

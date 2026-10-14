@@ -1,7 +1,153 @@
 use archmage_core::{
     capability::CapabilityKind,
-    contract::{ContractContext, validate_builtin_schemas, validate_output},
+    contract::{ContractContext, validate_builtin_schemas, validate_flow_output, validate_output},
+    team::{TeamEdge, TeamGraph, TeamMode, TeamNode},
 };
+
+#[test]
+fn flow_contract_checks_terminal_authority_and_recipient_edges() {
+    let graph = TeamGraph {
+        nodes: vec![
+            TeamNode {
+                capability: "coder".into(),
+                x: 100,
+                y: 120,
+            },
+            TeamNode {
+                capability: "reviewer".into(),
+                x: 400,
+                y: 120,
+            },
+        ],
+        edges: vec![
+            TeamEdge {
+                from: "coder".into(),
+                to: "reviewer".into(),
+            },
+            TeamEdge {
+                from: "reviewer".into(),
+                to: "coder".into(),
+            },
+        ],
+        mode: TeamMode::Flow,
+        entry: Some("coder".into()),
+        terminal: Some("reviewer".into()),
+    };
+    let coder = json!({"deliverable":{"schema_version":"1","summary_markdown":"done","status":"implemented","changed_paths":[],"notes":[]},"routing":{"decision":"continue","next":["reviewer"]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&coder).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_ok()
+    );
+    let mut bad = coder.clone();
+    bad["routing"] = json!({"decision":"complete","next":[]});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&bad).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_err()
+    );
+    bad["routing"] = json!({"decision":"continue","next":["coder"]});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&bad).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_err()
+    );
+    bad["routing"] = json!({"decision":"continue","next":["reviewer","reviewer"]});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&bad).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_err()
+    );
+    let reviewer = json!({"deliverable":{"schema_version":"1","summary_markdown":"ok","status":"approved","issues":[]},"routing":{"decision":"complete","next":[]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Reviewer,
+            &serde_json::to_vec(&reviewer).unwrap(),
+            &ContractContext {
+                tester_accepted: true
+            },
+            &graph
+        )
+        .is_ok()
+    );
+    let mut mismatch = reviewer.clone();
+    mismatch["routing"] = json!({"decision":"continue","next":["coder"]});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Reviewer,
+            &serde_json::to_vec(&mismatch).unwrap(),
+            &ContractContext {
+                tester_accepted: true
+            },
+            &graph
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn nonterminal_reviewer_may_approve_and_continue() {
+    let graph = TeamGraph {
+        nodes: vec![
+            TeamNode {
+                capability: "coder".into(),
+                x: 100,
+                y: 100,
+            },
+            TeamNode {
+                capability: "reviewer".into(),
+                x: 300,
+                y: 100,
+            },
+            TeamNode {
+                capability: "designer".into(),
+                x: 500,
+                y: 100,
+            },
+        ],
+        edges: vec![
+            TeamEdge {
+                from: "coder".into(),
+                to: "reviewer".into(),
+            },
+            TeamEdge {
+                from: "reviewer".into(),
+                to: "designer".into(),
+            },
+        ],
+        mode: TeamMode::Flow,
+        entry: Some("coder".into()),
+        terminal: Some("designer".into()),
+    };
+    let output = json!({"deliverable":{"schema_version":"1","summary_markdown":"ok","status":"approved","issues":[]},"routing":{"decision":"continue","next":["designer"]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Reviewer,
+            &serde_json::to_vec(&output).unwrap(),
+            &ContractContext {
+                tester_accepted: true
+            },
+            &graph
+        )
+        .is_ok()
+    );
+}
 
 #[test]
 fn consultation_contract_requires_actionable_rejection() {
