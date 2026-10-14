@@ -8,6 +8,8 @@ Latest development increment: [Desktop runtime vertical slice](superpowers/specs
 
 Team composition update: [Selectable Capabilities and relationships](superpowers/specs/2026-10-14-selectable-team-capabilities-design.md). Users create their own teams; the application does not pre-create a Coder → Reviewer combination.
 
+Next Team design: [Message-flow Teams](superpowers/specs/2026-10-14-message-flow-teams-design.md) replaces consultation arrows with Agent-selected deliverable routes, feedback cycles, and an explicit terminal signal for new Teams. This is an approved design, not yet implemented.
+
 **Want to run the current code?** Use the [CLI command reference (中文)](cli-reference.md) or [desktop client guide (中文)](runbooks/desktop-s0.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
 
 1. [CLI command reference](cli-reference.md)
