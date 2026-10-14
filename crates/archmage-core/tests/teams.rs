@@ -33,6 +33,52 @@ fn graph_accepts_required_spine_and_forward_consultations() {
 }
 
 #[test]
+fn graph_accepts_connected_coder_reviewer_subset() {
+    let graph = TeamGraph {
+        nodes: vec![
+            TeamNode {
+                capability: "coder".into(),
+                x: 120,
+                y: 120,
+            },
+            TeamNode {
+                capability: "reviewer".into(),
+                x: 620,
+                y: 120,
+            },
+        ],
+        edges: vec![TeamEdge {
+            from: "coder".into(),
+            to: "reviewer".into(),
+        }],
+    };
+    graph.validate().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let saved = store.create_team("Code Review", &graph).unwrap();
+    assert_eq!(store.team(&saved.id).unwrap().graph, graph);
+}
+
+#[test]
+fn graph_rejects_singleton_and_disconnected_members() {
+    let mut graph = TeamGraph {
+        nodes: vec![TeamNode {
+            capability: "coder".into(),
+            x: 0,
+            y: 0,
+        }],
+        edges: vec![],
+    };
+    assert!(graph.validate().is_err());
+    graph.nodes.push(TeamNode {
+        capability: "reviewer".into(),
+        x: 200,
+        y: 0,
+    });
+    assert!(graph.validate().is_err());
+}
+
+#[test]
 fn graph_rejects_missing_spine_or_reverse_edge() {
     let mut missing = graph();
     missing.edges.remove(0);

@@ -11,7 +11,7 @@ use crate::{
     contract::validate_builtin_schemas,
     error::{Error, Result},
     store::{Consultation, ConsultationProcessSnapshot, RunDefinitionRecord, Store},
-    team::{DEFAULT_TEAM_ID, Team, TeamService},
+    team::{DEFAULT_TEAM_ID, Team, TeamGraph, TeamService},
     workspace::inspect_repository,
 };
 use serde::{Deserialize, Serialize};
@@ -170,8 +170,8 @@ impl Runtime {
 
     pub fn create_run_definition(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
-        let (bindings, configurations) = self.frozen_capability_settings()?;
         let team = self.resolve_team(request)?;
+        let (bindings, configurations) = self.frozen_capability_settings(&team.graph)?;
         self.create_run_definition_with_bindings(
             request,
             repository,
@@ -194,6 +194,11 @@ impl Runtime {
         capability_configurations: BTreeMap<String, CapabilityConfiguration>,
         team: Team,
     ) -> Result<String> {
+        let nodes = BUILTIN_NODES
+            .into_iter()
+            .filter(|key| team.graph.nodes.iter().any(|node| node.capability == *key))
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
         let definition = FrozenRunDefinition {
             version: 4,
             repository,
@@ -201,18 +206,21 @@ impl Runtime {
             agent_bindings,
             capability_configurations,
             team: Some(team),
-            nodes: BUILTIN_NODES.iter().map(|key| (*key).to_owned()).collect(),
+            nodes: nodes.clone(),
         };
         let value = serde_json::to_value(definition)
             .map_err(|error| Error::Preflight(error.to_string()))?;
-        self.store()?
-            .create_run_definition(&request.goal, &BUILTIN_NODES, value)
+        self.store()?.create_run_definition(
+            &request.goal,
+            &nodes.iter().map(String::as_str).collect::<Vec<_>>(),
+            value,
+        )
     }
 
     pub async fn start_run(&self, request: &RunRequest) -> Result<String> {
         let repository = inspect_repository(&request.repository)?.root;
-        let (mut bindings, configurations) = self.frozen_capability_settings()?;
         let team = self.resolve_team(request)?;
+        let (mut bindings, configurations) = self.frozen_capability_settings(&team.graph)?;
         for (capability, binding) in &mut bindings {
             match binding.provider_kind {
                 ProviderKind::Codex => {
@@ -349,6 +357,7 @@ impl Runtime {
 
     fn frozen_capability_settings(
         &self,
+        graph: &TeamGraph,
     ) -> Result<(
         BTreeMap<String, FrozenAgentBinding>,
         BTreeMap<String, CapabilityConfiguration>,
@@ -357,7 +366,10 @@ impl Runtime {
         let configurations = store.capability_configurations()?;
         let mut frozen = BTreeMap::new();
         let mut frozen_configurations = BTreeMap::new();
-        for capability in BUILTIN_NODES {
+        for capability in BUILTIN_NODES
+            .into_iter()
+            .filter(|key| graph.nodes.iter().any(|node| node.capability == *key))
+        {
             let configuration = configurations
                 .iter()
                 .find(|configuration| configuration.key == capability)

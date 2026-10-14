@@ -9,12 +9,16 @@
 .teams-toolbar button:disabled,.teams-footer button:disabled { opacity:.45; cursor:not-allowed; }
 .team-name-field { margin-bottom:17px; }
 .team-name-field input { width:min(100%,480px); font-size:14px; }
+.team-members { margin:0 0 18px; padding:18px 20px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.team-members h2 { margin:0 0 5px; font-size:16px; }
+.team-members p { margin:0 0 14px; color:var(--muted); font-size:12px; }
+.team-member-list { display:flex; flex-wrap:wrap; gap:10px; }
+.team-member-list label { display:flex; align-items:center; gap:9px; min-height:42px; padding:0 12px; border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:12px; }
+.team-member-list input { accent-color:var(--accent); width:17px; height:17px; }
 .team-canvas-scroll { overflow-x:auto; border:1px solid var(--border); border-radius:13px; background:radial-gradient(circle at 50% 40%,#1b2935,#111820); }
 .team-canvas { position:relative; width:1000px; height:360px; margin:0 auto; background-image:radial-gradient(#405063 1px,transparent 1px); background-size:24px 24px; }
 .team-canvas svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
-.team-canvas path { fill:none; stroke-width:2.5; }
-.team-canvas path.required { stroke:#72d9a2; }
-.team-canvas path.optional { stroke:#7f9eb7; stroke-dasharray:6 5; }
+.team-canvas path { fill:none; stroke:#72d9a2; stroke-width:2.5; }
 .team-node { position:absolute; width:166px; height:88px; display:flex; flex-direction:column; align-items:flex-start; gap:5px; padding:11px 13px; border:1px solid #3c4e60; border-radius:10px; background:#172431; color:var(--text); text-align:left; cursor:grab; touch-action:none; user-select:none; }
 .team-node:active { cursor:grabbing; border-color:var(--accent); }
 .team-node span { font:10px ui-monospace,SFMono-Regular,monospace; letter-spacing:.08em; color:#9ac0d6; }

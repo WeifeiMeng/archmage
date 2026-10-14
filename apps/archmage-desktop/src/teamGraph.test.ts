@@ -1,18 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { consultationEdgeState, isTeamDirty, moveTeamNode, OPTIONAL_TEAM_EDGES, REQUIRED_TEAM_EDGES, shouldConfirmTeamExit, toggleOptionalTeamEdge } from "./teamGraph";
+import { consultationEdgeState, isTeamDirty, moveTeamNode, shouldConfirmTeamExit, toggleTeamCapability, toggleTeamEdge, teamGraphIssue } from "./teamGraph";
 import type { RunSnapshot, Team, TeamGraph } from "./model";
 
 const graph: TeamGraph = {
   nodes: (["designer", "coder", "tester", "reviewer"] as const).map((capability, index) => ({ capability, x: 100 + index * 200, y: 120 })),
-  edges: [...REQUIRED_TEAM_EDGES],
+  edges: [{ from: "designer", to: "coder" }, { from: "coder", to: "tester" }, { from: "tester", to: "reviewer" }],
 };
 
 describe("team graph editor", () => {
-  it("keeps required edges locked and toggles only optional edges", () => {
-    expect(toggleOptionalTeamEdge(graph, REQUIRED_TEAM_EDGES[0])).toBe(graph);
-    const withReview = toggleOptionalTeamEdge(graph, OPTIONAL_TEAM_EDGES[0]);
-    expect(withReview.edges).toHaveLength(4);
-    expect(toggleOptionalTeamEdge(withReview, OPTIONAL_TEAM_EDGES[0]).edges).toEqual(REQUIRED_TEAM_EDGES);
+  it("lets a new team select Coder and Reviewer before linking them", () => {
+    const empty: TeamGraph = { nodes: [], edges: [] };
+    const coder = toggleTeamCapability(empty, "coder");
+    const members = toggleTeamCapability(coder, "reviewer");
+    expect(teamGraphIssue(members)).toBeTruthy();
+    const linked = toggleTeamEdge(members, { from: "coder", to: "reviewer" });
+    expect(teamGraphIssue(linked)).toBeNull();
+    expect(toggleTeamCapability(linked, "coder").edges).toEqual([]);
+  });
+  it("allows changing any selected forward relationship", () => {
+    const withoutSpineEdge = toggleTeamEdge(graph, { from: "designer", to: "coder" });
+    expect(withoutSpineEdge.edges).toHaveLength(2);
+    expect(toggleTeamEdge(withoutSpineEdge, { from: "designer", to: "coder" }).edges).toEqual(expect.arrayContaining(graph.edges));
+    expect(toggleTeamEdge(graph, { from: "reviewer", to: "coder" })).toBe(graph);
   });
 
   it("clamps dragged nodes and warns before leaving dirty edits", () => {
@@ -25,7 +34,7 @@ describe("team graph editor", () => {
   });
 
   it("does not present old consultation approval as current while producer reruns", () => {
-    const edge = REQUIRED_TEAM_EDGES[0];
+    const edge = graph.edges[0];
     const snapshot = {
       nodes: [{ key: "designer", state: "pending", result: { attemptId: "old-attempt" } }],
       consultations: [{ sourceAttemptId: "old-attempt", targetCapability: "coder", decision: "approved" }],

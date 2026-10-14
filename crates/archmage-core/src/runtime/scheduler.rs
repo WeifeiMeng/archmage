@@ -1,4 +1,5 @@
 use super::NodeSnapshot;
+use crate::team::TeamGraph;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,6 +67,24 @@ pub fn ready_keys(nodes: &[NodeSnapshot]) -> Vec<&'static str> {
         .collect()
 }
 
+pub fn ready_keys_for_team<'a>(nodes: &[NodeSnapshot], graph: &'a TeamGraph) -> Vec<&'a str> {
+    let states: BTreeMap<_, _> = nodes
+        .iter()
+        .map(|node| (node.key.as_str(), node.state.as_str()))
+        .collect();
+    crate::team::CAPABILITIES
+        .into_iter()
+        .filter(|key| {
+            states.get(key).copied() == Some("pending")
+                && graph
+                    .edges
+                    .iter()
+                    .filter(|edge| edge.to == *key)
+                    .all(|edge| states.get(edge.from.as_str()).copied() == Some("succeeded"))
+        })
+        .collect()
+}
+
 pub fn terminal_decision(nodes: &[NodeSnapshot]) -> TerminalDecision {
     if nodes.iter().any(|node| node.state == "cancelled") {
         TerminalDecision::Cancelled
@@ -73,7 +92,7 @@ pub fn terminal_decision(nodes: &[NodeSnapshot]) -> TerminalDecision {
         TerminalDecision::Failed
     } else if nodes.iter().any(|node| node.state == "interrupted") {
         TerminalDecision::Interrupted
-    } else if nodes.len() == 4 && nodes.iter().all(|node| node.state == "succeeded") {
+    } else if !nodes.is_empty() && nodes.iter().all(|node| node.state == "succeeded") {
         TerminalDecision::Completed
     } else {
         TerminalDecision::Continue

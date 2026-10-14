@@ -2,7 +2,7 @@ use super::{Runtime, scheduler};
 use crate::{
     artifact::ArtifactStore,
     capability::CapabilityKind,
-    context::{ContextRef, resolve_context_with_revision},
+    context::{ContextRef, resolve_context_for_team, resolve_context_with_revision},
     contract::{ContractContext, validate_output},
     error::{Error, Result},
     provider::codex::{self, CodexInvocation, Sandbox},
@@ -34,15 +34,38 @@ impl Runtime {
             }
             match terminal {
                 scheduler::TerminalDecision::Completed => {
-                    let reviewer = self.store()?.node_result(run_id, "reviewer")?;
-                    let outcome = reviewer.output["status"]
-                        .as_str()
-                        .ok_or_else(|| Error::Preflight("reviewer status is missing".into()))?;
+                    let has_reviewer = current.nodes.iter().any(|node| node.key == "reviewer");
+                    let reviewer = has_reviewer
+                        .then(|| self.store()?.node_result(run_id, "reviewer"))
+                        .transpose()?;
+                    let outcome = reviewer
+                        .as_ref()
+                        .map(|item| {
+                            item.output["status"].as_str().ok_or_else(|| {
+                                Error::Preflight("reviewer status is missing".into())
+                            })
+                        })
+                        .transpose()?
+                        .unwrap_or("approved");
                     if current.team.is_some() && outcome == "changes_requested" {
+                        let reviewer = reviewer.as_ref().ok_or(Error::Conflict)?;
                         let feedback = reviewer_feedback(&reviewer.output);
                         let mut store = self.store()?;
-                        let coder = store.node_result(run_id, "coder")?;
-                        if store.attempt(&coder.attempt_id)?.number <= 3 {
+                        let target = current
+                            .nodes
+                            .iter()
+                            .filter(|node| node.key != "reviewer")
+                            .find(|node| node.key == "coder")
+                            .or_else(|| {
+                                current
+                                    .nodes
+                                    .iter()
+                                    .rev()
+                                    .find(|node| node.key != "reviewer")
+                            })
+                            .ok_or(Error::Conflict)?;
+                        let target_result = store.node_result(run_id, &target.key)?;
+                        if store.attempt(&target_result.attempt_id)?.number <= 3 {
                             store.reopen_after_reviewer(
                                 run_id,
                                 generation,
@@ -60,6 +83,21 @@ impl Runtime {
                         let failed = self.snapshot(run_id)?;
                         store.fail_run(run_id, failed.revision, "review_round_limit")?;
                         return Err(Error::Preflight("review round limit reached".into()));
+                    }
+                    if !has_reviewer
+                        && let Some(last) = current.nodes.last()
+                        && last
+                            .result
+                            .as_ref()
+                            .and_then(|result| result.output["status"].as_str())
+                            .is_some_and(|status| status == "failed" || status == "blocked")
+                    {
+                        self.store()?.fail_run(
+                            run_id,
+                            current.revision,
+                            "last_capability_failed",
+                        )?;
+                        return Err(Error::Preflight("last capability reported failure".into()));
                     }
                     self.store()?
                         .complete_run_with_outcome(run_id, current.revision, outcome)?;
@@ -81,7 +119,11 @@ impl Runtime {
                 scheduler::TerminalDecision::Continue => {}
             }
 
-            let ready = scheduler::ready_keys(&current.nodes);
+            let ready = if let Some(team) = &current.team {
+                scheduler::ready_keys_for_team(&current.nodes, &team.graph)
+            } else {
+                scheduler::ready_keys(&current.nodes)
+            };
             let Some(key) = ready.first().copied() else {
                 return Err(Error::Conflict);
             };
@@ -247,10 +289,16 @@ impl Runtime {
         let node_id = node_for(store, run_id, kind)?.id;
         let feedback = store.feedback_for_node(&node_id)?;
         let previous_output = store.previous_output_for_revision(&node_id)?;
-        let context = resolve_context_with_revision(
+        let resolve = if run.team.is_some() {
+            resolve_context_for_team
+        } else {
+            resolve_context_with_revision
+        };
+        let role_instructions = team_role_instructions(kind, &run, extra_instructions);
+        let context = resolve(
             kind,
             prompt_version,
-            extra_instructions,
+            &role_instructions,
             configuration
                 .map(|item| item.skills.as_slice())
                 .unwrap_or(&[]),
@@ -369,6 +417,11 @@ fn context_inputs(
     artifacts: &ArtifactStore,
     repository: &GitRepository,
 ) -> Result<HashMap<String, ContextRef>> {
+    let completed = |key: &str| {
+        run.nodes
+            .iter()
+            .any(|node| node.key == key && node.state == "succeeded")
+    };
     let mut inputs = HashMap::from([(
         "goal".into(),
         ContextRef::WorkflowInput {
@@ -386,45 +439,93 @@ fn context_inputs(
             );
         }
         CapabilityKind::Coder => {
-            insert_result(&mut inputs, store, &run.id, "designer", "design")?;
+            if completed("designer") {
+                insert_result(&mut inputs, store, &run.id, "designer", "design")?;
+            } else {
+                insert_workspace(&mut inputs, "repo_view", repository)?;
+            }
         }
         CapabilityKind::Tester => {
-            insert_result(&mut inputs, store, &run.id, "designer", "design")?;
-            insert_result(&mut inputs, store, &run.id, "coder", "implementation")?;
-            let coder = store.node_result(&run.id, "coder")?;
-            inputs.insert(
-                "changeset".into(),
-                ContextRef::Artifact {
-                    artifact_id: coder.changeset_artifact_id.ok_or_else(|| {
-                        Error::Preflight("coder changeset artifact is missing".into())
-                    })?,
-                },
-            );
-            inputs.insert(
-                "workspace_manifest".into(),
-                ContextRef::WorkspaceSnapshot {
-                    value: serde_json::to_value(snapshot(repository)?)
-                        .map_err(|error| Error::Preflight(error.to_string()))?,
-                },
-            );
+            if completed("designer") {
+                insert_result(&mut inputs, store, &run.id, "designer", "design")?;
+            }
+            if completed("coder") {
+                insert_coder_result(&mut inputs, store, &run.id)?;
+            } else {
+                insert_workspace(&mut inputs, "repo_view", repository)?;
+            }
+            insert_workspace(&mut inputs, "workspace_manifest", repository)?;
         }
         CapabilityKind::Reviewer => {
-            insert_result(&mut inputs, store, &run.id, "designer", "design")?;
-            insert_result(&mut inputs, store, &run.id, "coder", "implementation")?;
-            let coder = store.node_result(&run.id, "coder")?;
-            inputs.insert(
-                "changeset".into(),
-                ContextRef::Artifact {
-                    artifact_id: coder.changeset_artifact_id.ok_or_else(|| {
-                        Error::Preflight("coder changeset artifact is missing".into())
-                    })?,
-                },
-            );
-            insert_result(&mut inputs, store, &run.id, "tester", "test_result")?;
+            if completed("designer") {
+                insert_result(&mut inputs, store, &run.id, "designer", "design")?;
+            }
+            if completed("coder") {
+                insert_coder_result(&mut inputs, store, &run.id)?;
+            }
+            if completed("tester") {
+                insert_result(&mut inputs, store, &run.id, "tester", "test_result")?;
+            }
         }
     }
     let _ = artifacts;
     Ok(inputs)
+}
+
+fn insert_workspace(
+    inputs: &mut HashMap<String, ContextRef>,
+    key: &str,
+    repository: &GitRepository,
+) -> Result<()> {
+    inputs.insert(
+        key.into(),
+        ContextRef::WorkspaceSnapshot {
+            value: serde_json::to_value(snapshot(repository)?)
+                .map_err(|error| Error::Preflight(error.to_string()))?,
+        },
+    );
+    Ok(())
+}
+
+fn insert_coder_result(
+    inputs: &mut HashMap<String, ContextRef>,
+    store: &Store,
+    run_id: &str,
+) -> Result<()> {
+    insert_result(inputs, store, run_id, "coder", "implementation")?;
+    let coder = store.node_result(run_id, "coder")?;
+    inputs.insert(
+        "changeset".into(),
+        ContextRef::Artifact {
+            artifact_id: coder
+                .changeset_artifact_id
+                .ok_or_else(|| Error::Preflight("coder changeset artifact is missing".into()))?,
+        },
+    );
+    Ok(())
+}
+
+fn team_role_instructions(
+    kind: CapabilityKind,
+    run: &super::RunSnapshot,
+    configured: &str,
+) -> String {
+    if run.team.is_none() {
+        return configured.to_owned();
+    }
+    let note = match kind {
+        CapabilityKind::Designer => "Create a design from the goal and repository view.",
+        CapabilityKind::Coder => {
+            "Implement the goal directly when no design binding is supplied. Do not invent a Designer handoff."
+        }
+        CapabilityKind::Tester => {
+            "Choose and perform appropriate checks from the available implementation or repository evidence. Do not invent a Coder handoff."
+        }
+        CapabilityKind::Reviewer => {
+            "Review only the supplied evidence. If no test_result is supplied, tests have not been run by a Tester; never claim they passed. You may approve based on available evidence if justified."
+        }
+    };
+    format!("{configured}\n{note}")
 }
 
 fn insert_result(
@@ -446,9 +547,14 @@ fn insert_result(
 
 fn contract_context(kind: CapabilityKind, run_id: &str, store: &Store) -> Result<ContractContext> {
     if kind == CapabilityKind::Reviewer {
-        let tester = store.node_result(run_id, "tester")?;
+        let has_tester = store.nodes(run_id)?.iter().any(|node| node.key == "tester");
+        let accepted = if has_tester {
+            store.node_result(run_id, "tester")?.output["status"] == "passed"
+        } else {
+            true
+        };
         Ok(ContractContext {
-            tester_accepted: tester.output["status"] == "passed",
+            tester_accepted: accepted,
         })
     } else {
         Ok(ContractContext::default())
@@ -478,5 +584,22 @@ fn error_code(error: &Error) -> &'static str {
         Error::Workspace(_) => "workspace_failed",
         Error::Io(_) => "io_failed",
         Error::NotImplemented(_) => "not_implemented",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reviewer_without_tester_can_approve_available_evidence() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&directory.path().join("state.db")).unwrap();
+        let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+        assert!(
+            contract_context(CapabilityKind::Reviewer, &run, &store)
+                .unwrap()
+                .tester_accepted
+        );
     }
 }

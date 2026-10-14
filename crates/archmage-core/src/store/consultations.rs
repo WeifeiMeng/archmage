@@ -335,25 +335,25 @@ impl Store {
                  JOIN attempts a ON a.node_run_id=n.id
                  WHERE r.id=?1 AND r.state='running' AND r.owner_generation=?2
                  AND n.node_key='reviewer' AND n.state='succeeded' AND a.id=?3 AND a.state='succeeded'
-                 AND (SELECT COUNT(*) FROM node_runs d WHERE d.run_id=r.id AND d.state='succeeded')=4)",
+                 AND NOT EXISTS(SELECT 1 FROM node_runs d WHERE d.run_id=r.id AND d.state!='succeeded'))",
             params![run,generation,reviewer_attempt], |row| row.get(0),
         )?;
         if !valid {
             return Err(Error::Conflict);
         }
-        let coder: String = tx.query_row(
-            "SELECT id FROM node_runs WHERE run_id=?1 AND node_key='coder'",
+        let target: (String, i64) = tx.query_row(
+            "SELECT id,ordinal FROM node_runs WHERE run_id=?1 AND node_key!='reviewer' ORDER BY CASE WHEN node_key='coder' THEN 0 ELSE 1 END, ordinal DESC LIMIT 1",
             [run],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?,row.get(1)?)),
         )?;
-        tx.execute("UPDATE node_runs SET state='pending',revision=revision+1 WHERE run_id=?1 AND node_key IN ('coder','tester','reviewer') AND state='succeeded'", [run])?;
+        tx.execute("UPDATE node_runs SET state='pending',revision=revision+1 WHERE run_id=?1 AND ordinal>=?2 AND state='succeeded'", params![run,target.1])?;
         tx.execute("INSERT INTO revision_feedback(id,node_id,source_attempt_id,suggestions_json) VALUES(?1,?2,?3,?4)",
-            params![uuid::Uuid::new_v4().to_string(),coder,reviewer_attempt,serde_json::to_string(suggestions).map_err(|error| Error::Preflight(error.to_string()))?])?;
+            params![uuid::Uuid::new_v4().to_string(),target.0,reviewer_attempt,serde_json::to_string(suggestions).map_err(|error| Error::Preflight(error.to_string()))?])?;
         event(
             &tx,
             run,
             "workflow.revision_requested",
-            Some(&coder),
+            Some(&target.0),
             Some(reviewer_attempt),
             json!({"suggestions":suggestions}),
         )?;

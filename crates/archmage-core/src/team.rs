@@ -101,8 +101,9 @@ impl TeamGraph {
             .iter()
             .map(|node| node.capability.as_str())
             .collect();
-        if self.nodes.len() != CAPABILITIES.len()
-            || keys != CAPABILITIES.into_iter().collect()
+        if !(2..=CAPABILITIES.len()).contains(&self.nodes.len())
+            || keys.len() != self.nodes.len()
+            || !keys.iter().all(|key| CAPABILITIES.contains(key))
             || self
                 .nodes
                 .iter()
@@ -118,12 +119,38 @@ impl TeamGraph {
             .map(|edge| (edge.from.as_str(), edge.to.as_str()))
             .collect();
         if edges.len() != self.edges.len()
-            || !REQUIRED_EDGES.into_iter().all(|edge| edges.contains(&edge))
-            || !edges
-                .iter()
-                .all(|edge| REQUIRED_EDGES.contains(edge) || OPTIONAL_EDGES.contains(edge))
+            || !edges.iter().all(|(from, to)| {
+                let from_order = CAPABILITIES.iter().position(|key| key == from);
+                let to_order = CAPABILITIES.iter().position(|key| key == to);
+                keys.contains(from)
+                    && keys.contains(to)
+                    && from_order.zip(to_order).is_some_and(|(a, b)| a < b)
+            })
         {
             return Err(Error::Preflight("team edges are invalid".into()));
+        }
+        let roots: Vec<_> = keys
+            .iter()
+            .filter(|key| !edges.iter().any(|(_, to)| to == *key))
+            .copied()
+            .collect();
+        if roots.len() != 1 {
+            return Err(Error::Preflight(
+                "team must have one connected entry".into(),
+            ));
+        }
+        let mut reached = BTreeSet::from([roots[0]]);
+        for key in CAPABILITIES {
+            if reached.contains(key) {
+                for (_, to) in edges.iter().filter(|(from, _)| *from == key) {
+                    reached.insert(*to);
+                }
+            }
+        }
+        if reached != keys {
+            return Err(Error::Preflight(
+                "team contains disconnected capabilities".into(),
+            ));
         }
         Ok(())
     }

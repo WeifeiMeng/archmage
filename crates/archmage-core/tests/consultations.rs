@@ -188,6 +188,43 @@ fn final_reviewer_feedback_reopens_coder_tester_and_reviewer() {
 }
 
 #[test]
+fn final_reviewer_feedback_reopens_only_selected_coder_and_reviewer() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    let mut reviewer_attempt = String::new();
+    for node in store.nodes(&run).unwrap() {
+        store.ready_node(&node.id, node.revision).unwrap();
+        let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+        store.mark_running(&attempt.id, attempt.revision).unwrap();
+        store
+            .finish_attempt(
+                &attempt.id,
+                attempt.revision + 1,
+                AttemptOutcome::Succeeded(serde_json::json!({"producer":node.key})),
+            )
+            .unwrap();
+        if node.key == "reviewer" {
+            reviewer_attempt = attempt.id;
+        }
+    }
+    store
+        .reopen_after_reviewer(&run, generation, &reviewer_attempt, &["Fix it".into()])
+        .unwrap();
+    let nodes = store.nodes(&run).unwrap();
+    assert_eq!(
+        nodes
+            .iter()
+            .map(|node| node.state.as_str())
+            .collect::<Vec<_>>(),
+        ["pending", "pending"]
+    );
+    assert_eq!(store.feedback_for_node(&nodes[0].id).unwrap(), ["Fix it"]);
+}
+
+#[test]
 fn consultation_process_is_registered_and_cancelled_with_run() {
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();

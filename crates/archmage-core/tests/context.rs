@@ -2,7 +2,7 @@ use archmage_core::{
     artifact::ArtifactStore,
     capability::{CapabilityGuidance, CapabilityKind},
     context::{
-        ContextRef, resolve_context, resolve_context_with_feedback,
+        ContextRef, resolve_context, resolve_context_for_team, resolve_context_with_feedback,
         resolve_context_with_instructions, resolve_context_with_revision,
     },
     store::{AttemptOutcome, Store},
@@ -51,6 +51,73 @@ fn coder_inputs(artifact: &str) -> HashMap<String, ContextRef> {
             },
         ),
     ])
+}
+
+#[test]
+fn selected_team_resolves_coder_without_designer_and_reviewer_without_tester() {
+    let (_dir, store, files, _, _, artifact) = committed_artifact();
+    let coder = resolve_context_for_team(
+        CapabilityKind::Coder,
+        "v1",
+        "",
+        &[],
+        &[],
+        &[],
+        None,
+        HashMap::from([
+            (
+                "goal".into(),
+                ContextRef::WorkflowInput {
+                    value: json!("build"),
+                },
+            ),
+            (
+                "repo_view".into(),
+                ContextRef::WorkspaceSnapshot {
+                    value: json!({"files":[]}),
+                },
+            ),
+        ]),
+        &files,
+        &store,
+    )
+    .unwrap();
+    assert!(coder.manifest["bindings"]["repo_view"].is_object());
+    assert!(coder.manifest["bindings"].get("design").is_none());
+    let reviewer = resolve_context_for_team(
+        CapabilityKind::Reviewer,
+        "v1",
+        "",
+        &[],
+        &[],
+        &[],
+        None,
+        HashMap::from([
+            (
+                "goal".into(),
+                ContextRef::WorkflowInput {
+                    value: json!("build"),
+                },
+            ),
+            (
+                "implementation".into(),
+                ContextRef::CommittedNodeOutput {
+                    artifact_id: artifact.clone(),
+                },
+            ),
+            (
+                "changeset".into(),
+                ContextRef::Artifact {
+                    artifact_id: artifact,
+                },
+            ),
+        ]),
+        &files,
+        &store,
+    )
+    .unwrap();
+    assert!(reviewer.manifest["bindings"]["implementation"].is_object());
+    assert!(reviewer.manifest["bindings"].get("test_result").is_none());
 }
 
 #[test]

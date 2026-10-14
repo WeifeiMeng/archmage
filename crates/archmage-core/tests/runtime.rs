@@ -4,10 +4,13 @@ use archmage_core::{
     process::ProcessIdentity,
     runtime::{
         NodeSnapshot, RunRequest, Runtime,
-        scheduler::{ReviewGate, TerminalDecision, ready_keys, review_gate, terminal_decision},
+        scheduler::{
+            ReviewGate, TerminalDecision, ready_keys, ready_keys_for_team, review_gate,
+            terminal_decision,
+        },
     },
     store::{AttemptOutcome, Store},
-    team::TeamGraph,
+    team::{TeamEdge, TeamGraph, TeamNode},
 };
 use std::{path::Path, process::Command};
 
@@ -94,6 +97,46 @@ fn ready_set_advances_from_persisted_dependencies() {
         node("reviewer", "succeeded"),
     ];
     assert_eq!(terminal_decision(&complete), TerminalDecision::Completed);
+}
+
+#[test]
+fn two_member_scheduler_starts_coder_then_reviewer() {
+    let graph = TeamGraph {
+        nodes: vec![
+            TeamNode {
+                capability: "coder".into(),
+                x: 100,
+                y: 120,
+            },
+            TeamNode {
+                capability: "reviewer".into(),
+                x: 600,
+                y: 120,
+            },
+        ],
+        edges: vec![TeamEdge {
+            from: "coder".into(),
+            to: "reviewer".into(),
+        }],
+    };
+    assert_eq!(
+        ready_keys_for_team(
+            &[node("coder", "pending"), node("reviewer", "pending")],
+            &graph
+        ),
+        ["coder"]
+    );
+    assert_eq!(
+        ready_keys_for_team(
+            &[node("coder", "succeeded"), node("reviewer", "pending")],
+            &graph
+        ),
+        ["reviewer"]
+    );
+    assert_eq!(
+        terminal_decision(&[node("coder", "succeeded"), node("reviewer", "succeeded")]),
+        TerminalDecision::Completed
+    );
 }
 
 #[test]
@@ -255,6 +298,57 @@ fn start_definition_is_queryable_as_one_four_node_run() {
         "codex-default"
     );
     assert_eq!(runtime.list_runs().unwrap()[0].id, run_id);
+}
+
+#[test]
+fn two_member_team_freezes_only_selected_run_nodes() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--quiet"]);
+    git(&repo, &["config", "user.email", "archmage@example.invalid"]);
+    git(&repo, &["config", "user.name", "Archmage Test"]);
+    std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
+    git(&repo, &["add", "README.md"]);
+    git(&repo, &["commit", "--quiet", "-m", "fixture"]);
+    let runtime =
+        Runtime::open(Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap())
+            .unwrap();
+    let graph = TeamGraph {
+        nodes: vec![
+            TeamNode {
+                capability: "coder".into(),
+                x: 100,
+                y: 120,
+            },
+            TeamNode {
+                capability: "reviewer".into(),
+                x: 600,
+                y: 120,
+            },
+        ],
+        edges: vec![TeamEdge {
+            from: "coder".into(),
+            to: "reviewer".into(),
+        }],
+    };
+    let team = runtime
+        .team_service()
+        .create("Code Review", &graph)
+        .unwrap();
+    let id = runtime
+        .create_run_definition(&RunRequest::new(&repo, "goal").unwrap().with_team(team.id))
+        .unwrap();
+    let run = runtime.snapshot(&id).unwrap();
+    assert_eq!(
+        run.nodes
+            .iter()
+            .map(|node| node.key.as_str())
+            .collect::<Vec<_>>(),
+        vec!["coder", "reviewer"]
+    );
+    assert_eq!(run.agent_bindings.len(), 2);
+    assert_eq!(run.capability_configurations.len(), 2);
 }
 
 #[test]

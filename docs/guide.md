@@ -9,7 +9,7 @@ Archmage 已具备一条可运行的纵向主链：连接本机真实 Codex CLI�
 可用入口：
 
 - CLI：`doctor`、`run`、`status`、`logs`、`cancel`；
-- Tauri 桌面客户端：管理本地 Agent、配置单个 Capability、编辑团队拓扑、选择团队新建 Run、查看咨询和四节点进度、打开工作区、取消 Run；
+- Tauri 桌面客户端：管理本地 Agent、配置单个 Capability、选择团队成员并编辑关系、选择团队新建 Run、查看咨询和所选节点进度、打开工作区、取消 Run；
 - 进程恢复：启动时清理失去 Run owner 的遗留 Codex 主任务/咨询进程，并把孤儿 Run 收敛为 `interrupted`。
 
 暂未提供：`resume`、`logs --follow`、后台 daemon、任意工作流编排。
@@ -75,10 +75,10 @@ archmage cancel <run-id>
 
 ## 4. Runtime 的关键语义
 
-- 一个 Run 包含多个 Node，当前内置四个能力节点；
+- 一个 Run 包含团队中选择的多个 Node；当前有四种内置能力可供选择；
 - 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
 - Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；Runtime 内置职责及输出契约固定，角色补充提示词和 Skill/Tool 指引可配置；
-- 团队拓扑保留必需主链 Designer → Coder → Tester → Reviewer，可选 Designer → Tester/Reviewer 与 Coder → Reviewer；每条边都会触发下游真实 Codex 的只读咨询；
+- 团队至少选择两个能力，再从所选能力之间建立向前关系；要求单一入口且全部连通。默认团队保留 Designer → Coder → Tester → Reviewer 四角色拓扑，也可自行创建 Coder → Reviewer 等组合；每条边都会触发下游真实 Codex 的只读咨询；
 - 同一个上游的下游咨询并行执行，全部认可后才放行；要求修改时汇总建议给上游重新执行，初稿之后最多修改三轮；Reviewer 最终要求修改会让 Coder、Tester、Reviewer 重跑；
 - Run 启动时冻结所选团队、能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
 - 每个节点有独立 Codex thread/result 与显式 Context/Handoff；

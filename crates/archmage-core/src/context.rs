@@ -132,11 +132,73 @@ pub fn resolve_context_with_revision(
     artifacts: &ArtifactStore,
     store: &Store,
 ) -> Result<ContextSnapshot> {
+    resolve_context_internal(
+        kind,
+        prompt_version,
+        extra_instructions,
+        skills,
+        tools,
+        revision_feedback,
+        previous_output,
+        inputs,
+        artifacts,
+        store,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_context_for_team(
+    kind: CapabilityKind,
+    prompt_version: &str,
+    extra_instructions: &str,
+    skills: &[CapabilityGuidance],
+    tools: &[CapabilityGuidance],
+    revision_feedback: &[String],
+    previous_output: Option<&Value>,
+    inputs: HashMap<String, ContextRef>,
+    artifacts: &ArtifactStore,
+    store: &Store,
+) -> Result<ContextSnapshot> {
+    resolve_context_internal(
+        kind,
+        prompt_version,
+        extra_instructions,
+        skills,
+        tools,
+        revision_feedback,
+        previous_output,
+        inputs,
+        artifacts,
+        store,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_context_internal(
+    kind: CapabilityKind,
+    prompt_version: &str,
+    extra_instructions: &str,
+    skills: &[CapabilityGuidance],
+    tools: &[CapabilityGuidance],
+    revision_feedback: &[String],
+    previous_output: Option<&Value>,
+    inputs: HashMap<String, ContextRef>,
+    artifacts: &ArtifactStore,
+    store: &Store,
+    team_mode: bool,
+) -> Result<ContextSnapshot> {
     if prompt_version.trim().is_empty() {
         return Err(Error::Preflight("context prompt version is blank".into()));
     }
-    let expected = required(kind);
-    if inputs.len() != expected.len() || expected.iter().any(|key| !inputs.contains_key(*key)) {
+    let valid = if team_mode {
+        valid_team_inputs(kind, &inputs)
+    } else {
+        let expected = required(kind);
+        inputs.len() == expected.len() && expected.iter().all(|key| inputs.contains_key(*key))
+    };
+    if !valid {
         return Err(Error::Preflight(
             "context bindings are incomplete or unexpected".into(),
         ));
@@ -188,4 +250,43 @@ pub fn resolve_context_with_revision(
         manifest,
         handoffs,
     })
+}
+
+fn valid_team_inputs(kind: CapabilityKind, inputs: &HashMap<String, ContextRef>) -> bool {
+    let has = |key| inputs.contains_key(key);
+    let allowed: &[&str] = match kind {
+        CapabilityKind::Designer => &["goal", "repo_view"],
+        CapabilityKind::Coder => &["goal", "design", "repo_view"],
+        CapabilityKind::Tester => &[
+            "goal",
+            "repo_view",
+            "design",
+            "implementation",
+            "changeset",
+            "workspace_manifest",
+        ],
+        CapabilityKind::Reviewer => &[
+            "goal",
+            "design",
+            "implementation",
+            "changeset",
+            "test_result",
+        ],
+    };
+    if !has("goal") || inputs.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return false;
+    }
+    match kind {
+        CapabilityKind::Designer => inputs.len() == 2 && has("repo_view"),
+        CapabilityKind::Coder => has("design") != has("repo_view") && inputs.len() == 2,
+        CapabilityKind::Tester => {
+            has("workspace_manifest")
+                && has("implementation") == has("changeset")
+                && (has("implementation") != has("repo_view"))
+        }
+        CapabilityKind::Reviewer => {
+            has("implementation") == has("changeset")
+                && (has("design") || has("implementation") || has("test_result"))
+        }
+    }
 }

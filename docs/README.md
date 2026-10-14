@@ -6,6 +6,8 @@ This directory is the maintained source of truth for product scope, concepts, ar
 
 Latest development increment: [Desktop runtime vertical slice](superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md).
 
+Team composition update: [Selectable Capabilities and relationships](superpowers/specs/2026-10-14-selectable-team-capabilities-design.md). Users create their own teams; the application does not pre-create a Coder → Reviewer combination.
+
 **Want to run the current code?** Use the [CLI command reference (中文)](cli-reference.md) or [desktop client guide (中文)](runbooks/desktop-s0.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
 
 1. [CLI command reference](cli-reference.md)
