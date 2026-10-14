@@ -5,7 +5,7 @@ export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
 
 export type TeamNode = { capability: CapabilityKey; x: number; y: number };
 export type TeamEdge = { from: CapabilityKey; to: CapabilityKey };
-export type TeamGraph = { nodes: TeamNode[]; edges: TeamEdge[] };
+export type TeamGraph = { nodes: TeamNode[]; edges: TeamEdge[]; mode?: "legacy" | "flow"; entry?: CapabilityKey | null; terminal?: CapabilityKey | null };
 export type Team = { id: string; name: string; revision: number; graph: TeamGraph };
 export type AppView = "runs" | "agents" | "capabilities" | "teams";
 

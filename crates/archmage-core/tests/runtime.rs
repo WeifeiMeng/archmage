@@ -118,6 +118,7 @@ fn two_member_scheduler_starts_coder_then_reviewer() {
             from: "coder".into(),
             to: "reviewer".into(),
         }],
+        ..TeamGraph::default()
     };
     assert_eq!(
         ready_keys_for_team(
@@ -331,6 +332,7 @@ fn two_member_team_freezes_only_selected_run_nodes() {
             from: "coder".into(),
             to: "reviewer".into(),
         }],
+        ..TeamGraph::default()
     };
     let team = runtime
         .team_service()

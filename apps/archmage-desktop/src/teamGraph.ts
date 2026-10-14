@@ -6,14 +6,14 @@ const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
 
 export function toggleTeamCapability(graph: TeamGraph, key: CapabilityKey): TeamGraph {
   if (graph.nodes.some((node) => node.capability === key)) {
-    return { nodes: graph.nodes.filter((node) => node.capability !== key), edges: graph.edges.filter((edge) => edge.from !== key && edge.to !== key) };
+    return { ...graph, nodes: graph.nodes.filter((node) => node.capability !== key), edges: graph.edges.filter((edge) => edge.from !== key && edge.to !== key), entry: graph.entry === key ? null : graph.entry, terminal: graph.terminal === key ? null : graph.terminal };
   }
   const index = TEAM_CAPABILITIES.indexOf(key);
   return { ...graph, nodes: [...graph.nodes, { capability: key, x: 100 + index * 240, y: 120 }].sort((a, b) => TEAM_CAPABILITIES.indexOf(a.capability) - TEAM_CAPABILITIES.indexOf(b.capability)) };
 }
 
 export function toggleTeamEdge(graph: TeamGraph, edge: TeamEdge): TeamGraph {
-  if (TEAM_CAPABILITIES.indexOf(edge.from) >= TEAM_CAPABILITIES.indexOf(edge.to) ||
+  if (edge.from === edge.to || (graph.mode !== "flow" && TEAM_CAPABILITIES.indexOf(edge.from) >= TEAM_CAPABILITIES.indexOf(edge.to)) ||
     !graph.nodes.some((node) => node.capability === edge.from) ||
     !graph.nodes.some((node) => node.capability === edge.to)) return graph;
   const exists = graph.edges.some((item) => teamEdgeId(item) === teamEdgeId(edge));
@@ -23,6 +23,20 @@ export function toggleTeamEdge(graph: TeamGraph, edge: TeamEdge): TeamGraph {
 export function teamGraphIssue(graph: TeamGraph): string | null {
   if (graph.nodes.length < 2) return "至少选择两个能力。";
   const selected = new Set(graph.nodes.map((node) => node.capability));
+  if (graph.mode === "flow") {
+    if (!graph.entry || !selected.has(graph.entry)) return "请选择入口能力。";
+    if (!graph.terminal || !selected.has(graph.terminal)) return "请选择可发出终止信号的能力。";
+    const reachable = (start: CapabilityKey) => {
+      const reached = new Set<CapabilityKey>([start]);
+      for (let index = 0; index < graph.nodes.length; index++) {
+        for (const edge of graph.edges) if (reached.has(edge.from)) reached.add(edge.to);
+      }
+      return reached;
+    };
+    if (reachable(graph.entry).size !== selected.size) return "入口能力必须能到达所有成员。";
+    if ([...selected].some((key) => !reachable(key).has(graph.terminal!))) return "每个能力都必须能到达终止能力。";
+    return null;
+  }
   const roots = graph.nodes.filter((node) => !graph.edges.some((edge) => edge.to === node.capability));
   if (roots.length !== 1) return "请从一个入口连接所有能力。";
   const reached = new Set<CapabilityKey>([roots[0].capability]);

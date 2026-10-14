@@ -17,6 +17,17 @@ describe("team graph editor", () => {
     expect(teamGraphIssue(linked)).toBeNull();
     expect(toggleTeamCapability(linked, "coder").edges).toEqual([]);
   });
+  it("supports a flow feedback edge and clears a removed endpoint", () => {
+    const empty: TeamGraph = { mode: "flow", entry: "coder", terminal: "reviewer", nodes: [], edges: [] };
+    const members = toggleTeamCapability(toggleTeamCapability(empty, "coder"), "reviewer");
+    const forward = toggleTeamEdge(members, { from: "coder", to: "reviewer" });
+    const cycle = toggleTeamEdge(forward, { from: "reviewer", to: "coder" });
+    expect(cycle.edges).toHaveLength(2);
+    expect(teamGraphIssue(cycle)).toBeNull();
+    const removed = toggleTeamCapability(cycle, "coder");
+    expect(removed.edges).toEqual([]);
+    expect(removed.entry).toBeNull();
+  });
   it("allows changing any selected forward relationship", () => {
     const withoutSpineEdge = toggleTeamEdge(graph, { from: "designer", to: "coder" });
     expect(withoutSpineEdge.edges).toHaveLength(2);

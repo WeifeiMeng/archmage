@@ -18,6 +18,20 @@ pub const OPTIONAL_EDGES: [(&str, &str); 3] = [
     ("coder", "reviewer"),
 ];
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamMode {
+    #[default]
+    Legacy,
+    Flow,
+}
+
+impl TeamMode {
+    fn is_legacy(&self) -> bool {
+        *self == Self::Legacy
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamNode {
@@ -38,6 +52,24 @@ pub struct TeamEdge {
 pub struct TeamGraph {
     pub nodes: Vec<TeamNode>,
     pub edges: Vec<TeamEdge>,
+    #[serde(default, skip_serializing_if = "TeamMode::is_legacy")]
+    pub mode: TeamMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<String>,
+}
+
+impl Default for TeamGraph {
+    fn default() -> Self {
+        Self {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            mode: TeamMode::Legacy,
+            entry: None,
+            terminal: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,6 +124,9 @@ impl TeamGraph {
                     to: to.into(),
                 })
                 .collect(),
+            mode: TeamMode::Legacy,
+            entry: None,
+            terminal: None,
         }
     }
 
@@ -119,15 +154,59 @@ impl TeamGraph {
             .map(|edge| (edge.from.as_str(), edge.to.as_str()))
             .collect();
         if edges.len() != self.edges.len()
-            || !edges.iter().all(|(from, to)| {
-                let from_order = CAPABILITIES.iter().position(|key| key == from);
-                let to_order = CAPABILITIES.iter().position(|key| key == to);
-                keys.contains(from)
-                    && keys.contains(to)
-                    && from_order.zip(to_order).is_some_and(|(a, b)| a < b)
-            })
+            || !edges
+                .iter()
+                .all(|(from, to)| keys.contains(from) && keys.contains(to) && from != to)
         {
             return Err(Error::Preflight("team edges are invalid".into()));
+        }
+        if self.mode == TeamMode::Flow {
+            let entry = self
+                .entry
+                .as_deref()
+                .ok_or_else(|| Error::Preflight("flow entry is required".into()))?;
+            let terminal = self
+                .terminal
+                .as_deref()
+                .ok_or_else(|| Error::Preflight("flow terminal is required".into()))?;
+            if !keys.contains(entry) || !keys.contains(terminal) {
+                return Err(Error::Preflight(
+                    "flow entry or terminal is not selected".into(),
+                ));
+            }
+            for start in std::iter::once(entry).chain(keys.iter().copied()) {
+                let mut reached = BTreeSet::from([start]);
+                for _ in 0..keys.len() {
+                    for (from, to) in &edges {
+                        if reached.contains(from) {
+                            reached.insert(to);
+                        }
+                    }
+                }
+                if start == entry && reached != keys {
+                    return Err(Error::Preflight(
+                        "flow contains unreachable capabilities".into(),
+                    ));
+                }
+                if !reached.contains(terminal) {
+                    return Err(Error::Preflight(
+                        "flow capability cannot reach terminal".into(),
+                    ));
+                }
+            }
+            return Ok(());
+        }
+        if self.entry.is_some()
+            || self.terminal.is_some()
+            || !edges.iter().all(|(from, to)| {
+                CAPABILITIES
+                    .iter()
+                    .position(|key| key == from)
+                    .zip(CAPABILITIES.iter().position(|key| key == to))
+                    .is_some_and(|(a, b)| a < b)
+            })
+        {
+            return Err(Error::Preflight("legacy team edges are invalid".into()));
         }
         let roots: Vec<_> = keys
             .iter()

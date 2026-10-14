@@ -24,6 +24,7 @@ fn graph() -> TeamGraph {
             to: to.into(),
         })
         .collect(),
+        ..TeamGraph::default()
     }
 }
 
@@ -51,12 +52,31 @@ fn graph_accepts_connected_coder_reviewer_subset() {
             from: "coder".into(),
             to: "reviewer".into(),
         }],
+        ..TeamGraph::default()
     };
     graph.validate().unwrap();
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
     let saved = store.create_team("Code Review", &graph).unwrap();
     assert_eq!(store.team(&saved.id).unwrap().graph, graph);
+}
+
+#[test]
+fn flow_graph_accepts_feedback_cycle_and_preserves_legacy_mode() {
+    let legacy: TeamGraph = serde_json::from_value(serde_json::json!({
+        "nodes":[{"capability":"coder","x":120,"y":120},{"capability":"reviewer","x":620,"y":120}],
+        "edges":[{"from":"coder","to":"reviewer"}]
+    }))
+    .unwrap();
+    legacy.validate().unwrap();
+    let flow: TeamGraph = serde_json::from_value(serde_json::json!({
+        "mode":"flow", "entry":"coder", "terminal":"reviewer",
+        "nodes":[{"capability":"coder","x":120,"y":120},{"capability":"reviewer","x":620,"y":120}],
+        "edges":[{"from":"coder","to":"reviewer"},{"from":"reviewer","to":"coder"}]
+    }))
+    .unwrap();
+    flow.validate().unwrap();
+    assert_eq!(serde_json::to_value(&flow).unwrap()["mode"], "flow");
 }
 
 #[test]
@@ -68,6 +88,7 @@ fn graph_rejects_singleton_and_disconnected_members() {
             y: 0,
         }],
         edges: vec![],
+        ..TeamGraph::default()
     };
     assert!(graph.validate().is_err());
     graph.nodes.push(TeamNode {
