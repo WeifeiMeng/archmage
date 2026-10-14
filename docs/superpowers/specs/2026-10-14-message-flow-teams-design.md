@@ -1,6 +1,6 @@
 # Message-Flow Teams Design
 
-**Status:** Approved conversational design; written spec awaiting user review. This supersedes the relationship and scheduling semantics in [Selectable Team Capabilities](2026-10-14-selectable-team-capabilities-design.md) for new flow teams only.
+**Status:** Approved design; implementation in progress. This supersedes the relationship and scheduling semantics in [Selectable Team Capabilities](2026-10-14-selectable-team-capabilities-design.md) for new flow teams only.
 
 ## Purpose and scope
 

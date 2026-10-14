@@ -1,6 +1,6 @@
 # 当前版本使用指南
 
-更新日期：2026-09-30。本文描述当前源码的真实入口；日常参数以 [CLI 命令手册](cli-reference.md) 为准，图形界面以 [桌面客户端使用手册](runbooks/desktop-s0.md) 为准。
+更新日期：2026-10-14。本文描述当前源码的真实入口；日常参数以 [CLI 命令手册](cli-reference.md) 为准，图形界面以 [桌面客户端使用手册](runbooks/desktop-s0.md) 为准。
 
 ## 当前能力
 
@@ -9,7 +9,7 @@ Archmage 已具备一条可运行的纵向主链：连接本机真实 Codex CLI�
 可用入口：
 
 - CLI：`doctor`、`run`、`status`、`logs`、`cancel`；
-- Tauri 桌面客户端：管理本地 Agent、配置单个 Capability、选择团队成员并编辑关系、选择团队新建 Run、查看咨询和所选节点进度、打开工作区、取消 Run；
+- Tauri 桌面客户端：管理本地 Agent、配置单个 Capability、在画布中绘制消息流团队、选择团队新建 Run、查看交付消息或历史咨询进度、打开工作区、取消 Run；
 - 进程恢复：启动时清理失去 Run owner 的遗留 Codex 主任务/咨询进程，并把孤儿 Run 收敛为 `interrupted`。
 
 暂未提供：`resume`、`logs --follow`、后台 daemon、任意工作流编排。
@@ -71,15 +71,15 @@ archmage cancel <run-id>
 ./scripts/dev-desktop.sh
 ```
 
-第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后在“Capability 管理”确认四个独立能力各自绑定的 Agent，并可填写角色补充提示词、手动添加 Skill/Tool 名称与用途；在“团队管理”调整审阅关系，最后回到“新建 Run”选择团队、Git 仓库并填写目标。Skill/Tool 配置只作为给真实 Agent 的提示词指引，不验证它们是否安装，也不限制可调用范围。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
+第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后在“Capability 管理”确认四个独立能力各自绑定的 Agent，并可填写角色补充提示词、手动添加 Skill/Tool 名称与用途；在“团队管理”创建消息流团队、选择能力并在画布上连线，最后回到“新建 Run”选择团队、Git 仓库并填写目标。Skill/Tool 配置只作为给真实 Agent 的提示词指引，不验证它们是否安装，也不限制可调用范围。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
 
 ## 4. Runtime 的关键语义
 
 - 一个 Run 包含团队中选择的多个 Node；当前有四种内置能力可供选择；
 - 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
 - Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；Runtime 内置职责及输出契约固定，角色补充提示词和 Skill/Tool 指引可配置；
-- 团队至少选择两个能力，再从所选能力之间建立向前关系；要求单一入口且全部连通。默认团队保留 Designer → Coder → Tester → Reviewer 四角色拓扑，也可自行创建 Coder → Reviewer 等组合；每条边都会触发下游真实 Codex 的只读咨询；
-- 同一个上游的下游咨询并行执行，全部认可后才放行；要求修改时汇总建议给上游重新执行，初稿之后最多修改三轮；Reviewer 最终要求修改会让 Coder、Tester、Reviewer 重跑；
+- 新建团队使用消息流模式：至少选择两个能力，显式选择入口及可发出完成信号的能力，并在画布上连接有向边；允许 Coder → Reviewer → Coder 这样的反馈环。每次交付触发目标能力的一次真实 Codex 执行；Agent 通过结构化结果选择一个或多个已连接的下游，终止节点可选择完成。执行串行，循环最多 24 次，待处理消息会在终止时标记为跳过；
+- 默认团队和既有团队仍使用历史咨询模式：边触发只读咨询、下游认可门禁和最多三轮修改。旧团队可以显式复制为消息流团队，原团队不会被改变；
 - Run 启动时冻结所选团队、能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
 - 每个节点有独立 Codex thread/result 与显式 Context/Handoff；
 - Tester 直接获得测试任务、工作区和上游产物，由绑定的真实 Codex 自主选择测试方式与命令；
@@ -114,7 +114,7 @@ Runtime 主链的最终验收应使用一个临时 Git fixture 和真实 Codex�
 
 `archmage doctor --offline` 输出的 `config.data_root` 是实际数据目录。主要内容包括：
 
-- `archmage.db`：schema v13 的执行账本、Agent 实例、能力配置、团队、咨询与事件；
+- `archmage.db`：schema v14 的执行账本、Agent 实例、能力配置、团队、交付消息、咨询与事件；
 - Run worktree 与 Artifact；
 - Codex JSONL、stderr 和 metadata 诊断。
 
