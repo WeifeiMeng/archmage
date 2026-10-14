@@ -148,6 +148,11 @@ export type RunSnapshot = {
     threadId: string;
   }[];
   consultationProcesses: { sourceNodeId: string; sourceAttemptId: string; targetCapability: CapabilityKey }[];
+  flowDeliveries?: {
+    id: string; runId: string; sequence: number; sourceAttemptId: string | null;
+    target: CapabilityKey; payloadArtifactId: string | null; state: string;
+    attemptId: string | null; routing: { decision: string; next: CapabilityKey[] } | null;
+  }[];
   workspace: string | null;
 };
 

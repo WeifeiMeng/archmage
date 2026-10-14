@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consultationEdgeState, isTeamDirty, moveTeamNode, shouldConfirmTeamExit, toggleTeamCapability, toggleTeamEdge, teamGraphIssue } from "./teamGraph";
+import { consultationEdgeState, isTeamDirty, moveTeamNode, shouldConfirmTeamExit, toggleTeamCapability, toggleTeamEdge, teamEdgePath, teamGraphIssue } from "./teamGraph";
 import type { RunSnapshot, Team, TeamGraph } from "./model";
 
 const graph: TeamGraph = {
@@ -27,6 +27,7 @@ describe("team graph editor", () => {
     const removed = toggleTeamCapability(cycle, "coder");
     expect(removed.edges).toEqual([]);
     expect(removed.entry).toBeNull();
+    expect(teamEdgePath(cycle, { from: "coder", to: "reviewer" })).not.toBe(teamEdgePath(cycle, { from: "reviewer", to: "coder" }));
   });
   it("allows changing any selected forward relationship", () => {
     const withoutSpineEdge = toggleTeamEdge(graph, { from: "designer", to: "coder" });

@@ -2,6 +2,20 @@ import type { AppView, CapabilityKey, RunSnapshot, Team, TeamEdge, TeamGraph } f
 
 export const TEAM_CAPABILITIES: CapabilityKey[] = ["designer", "coder", "tester", "reviewer"];
 export const teamEdgeId = (edge: TeamEdge) => `${edge.from}-${edge.to}`;
+export function teamEdgePath(graph: TeamGraph, edge: TeamEdge): string {
+  const from = graph.nodes.find((node) => node.capability === edge.from);
+  const to = graph.nodes.find((node) => node.capability === edge.to);
+  if (!from || !to) return "";
+  const forward = from.x <= to.x;
+  const reciprocal = graph.edges.some((other) => other.from === edge.to && other.to === edge.from);
+  const x1 = from.x + (forward ? 166 : 0);
+  const x2 = to.x + (forward ? 0 : 166);
+  const y1 = from.y + 44;
+  const y2 = to.y + 44;
+  const bend = reciprocal ? (forward ? -52 : 52) : 0;
+  const middle = (x1 + x2) / 2;
+  return `M ${x1} ${y1} Q ${middle} ${(y1 + y2) / 2 + bend} ${x2} ${y2}`;
+}
 const clamp = (value: number, max: number) => Math.max(0, Math.min(max, value));
 
 export function toggleTeamCapability(graph: TeamGraph, key: CapabilityKey): TeamGraph {
