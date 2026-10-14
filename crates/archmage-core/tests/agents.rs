@@ -8,7 +8,7 @@ use archmage_core::{
 #[test]
 fn capability_config_is_seeded_and_saved_with_revision_guard() {
     let (_temp, mut store) = fixture_store();
-    assert_eq!(store.schema_version().unwrap(), 13);
+    assert_eq!(store.schema_version().unwrap(), 14);
     let configs = store.capability_configurations().unwrap();
     assert_eq!(configs.len(), 4);
     assert_eq!(configs[0].key, "designer");
@@ -131,7 +131,7 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();
-    assert_eq!(upgraded.schema_version().unwrap(), 13);
+    assert_eq!(upgraded.schema_version().unwrap(), 14);
     assert_eq!(upgraded.capability_configurations().unwrap().len(), 4);
     assert_eq!(
         upgraded.capability_bindings().unwrap()[0].agent_instance_id,
