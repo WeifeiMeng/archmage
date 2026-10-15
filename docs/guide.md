@@ -114,7 +114,7 @@ Runtime 主链的最终验收应使用一个临时 Git fixture 和真实 Codex�
 
 `archmage doctor --offline` 输出的 `config.data_root` 是实际数据目录。主要内容包括：
 
-- `archmage.db`：schema v14 的执行账本、Agent 实例、能力配置、团队、交付消息、咨询与事件；
+- `archmage.db`：schema v15 的执行账本、Agent 实例、能力配置、团队、交付消息、咨询与事件；
 - Run worktree 与 Artifact；
 - Codex JSONL、stderr 和 metadata 诊断。
 

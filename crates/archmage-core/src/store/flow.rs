@@ -46,6 +46,25 @@ fn delivery(row: &rusqlite::Row<'_>) -> rusqlite::Result<FlowDelivery> {
 const DELIVERY_COLUMNS: &str = "id,run_id,sequence,source_attempt_id,target_key,payload_artifact_id,state,attempt_id,routing_json";
 
 impl Store {
+    pub fn bind_flow_attempt(
+        &mut self,
+        delivery_id: &str,
+        generation: i64,
+        attempt_id: &str,
+    ) -> Result<()> {
+        let changed = self.db.execute(
+            "UPDATE flow_deliveries SET attempt_id=?3 WHERE id=?1 AND state='running' AND attempt_id IS NULL
+             AND EXISTS(SELECT 1 FROM runs r WHERE r.id=flow_deliveries.run_id AND r.state='running' AND r.owner_generation=?2)
+             AND EXISTS(SELECT 1 FROM attempts a JOIN node_runs n ON n.id=a.node_run_id
+                        WHERE a.id=?3 AND a.state IN ('starting','running') AND n.run_id=flow_deliveries.run_id AND n.node_key=flow_deliveries.target_key)",
+            params![delivery_id, generation, attempt_id],
+        )?;
+        if changed != 1 {
+            return Err(Error::Conflict);
+        }
+        Ok(())
+    }
+
     pub fn flow_source_changeset(&self, delivery_id: &str) -> Result<Option<String>> {
         Ok(self.db.query_row(
             "SELECT a.changeset_artifact_id FROM flow_deliveries d LEFT JOIN attempts a ON a.id=d.source_attempt_id WHERE d.id=?1",
@@ -64,6 +83,11 @@ impl Store {
         if changed != 1 {
             return Err(Error::Conflict);
         }
+        tx.execute(
+            "UPDATE flow_deliveries SET state='failed' WHERE run_id=?1 AND state='running'",
+            [run],
+        )?;
+        tx.execute("UPDATE flow_deliveries SET state='skipped_due_failure' WHERE run_id=?1 AND state='queued'", [run])?;
         event(
             &tx,
             run,
@@ -195,8 +219,8 @@ impl Store {
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let (run,target): (String,String) = tx.query_row(
-            "SELECT d.run_id,d.target_key FROM flow_deliveries d JOIN runs r ON r.id=d.run_id WHERE d.id=?1 AND d.state='running' AND r.state='running' AND r.owner_generation=?2",
-            params![delivery_id,generation], |row| Ok((row.get(0)?,row.get(1)?)),
+            "SELECT d.run_id,d.target_key FROM flow_deliveries d JOIN runs r ON r.id=d.run_id WHERE d.id=?1 AND d.state='running' AND d.attempt_id=?3 AND r.state='running' AND r.owner_generation=?2",
+            params![delivery_id,generation,attempt_id], |row| Ok((row.get(0)?,row.get(1)?)),
         ).map_err(|_| Error::Conflict)?;
         let (node,attempt_revision): (String,i64) = tx.query_row(
             "SELECT n.id,a.revision FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1 AND n.run_id=?2 AND n.node_key=?3 AND a.state='running' AND a.owner_generation=?4 AND n.state='running'",

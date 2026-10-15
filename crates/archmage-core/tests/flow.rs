@@ -49,6 +49,98 @@ fn second_claim_waits_for_running_delivery_and_stale_owner_cannot_claim() {
 }
 
 #[test]
+fn cancelled_delivery_keeps_its_attempt_and_terminal_state() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    let delivery = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    let node = store.nodes(&run).unwrap().remove(0);
+    store.ready_node(&node.id, node.revision).unwrap();
+    let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    store
+        .bind_flow_attempt(&delivery.id, generation, &attempt.id)
+        .unwrap();
+    store.request_cancel(&run).unwrap();
+    store.apply_cancel(&run).unwrap();
+    let settled = store.flow_deliveries(&run).unwrap();
+    assert_eq!(settled[0].state, "cancelled");
+    assert_eq!(settled[0].attempt_id.as_deref(), Some(attempt.id.as_str()));
+}
+
+#[test]
+fn interrupted_delivery_keeps_its_attempt_and_terminal_state() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    let delivery = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    let node = store.nodes(&run).unwrap().remove(0);
+    store.ready_node(&node.id, node.revision).unwrap();
+    let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    store
+        .bind_flow_attempt(&delivery.id, generation, &attempt.id)
+        .unwrap();
+    store.interrupt_orphaned_run(&run).unwrap();
+    let settled = store.flow_deliveries(&run).unwrap();
+    assert_eq!(settled[0].state, "interrupted");
+    assert_eq!(settled[0].attempt_id.as_deref(), Some(attempt.id.as_str()));
+}
+
+#[test]
+fn failed_run_settles_active_and_queued_deliveries() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store
+        .create_run("goal", &["designer", "coder", "reviewer"])
+        .unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store
+        .enqueue_flow_entry(&run, generation, "designer")
+        .unwrap();
+    let first = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    finish_test_delivery(
+        &mut store,
+        &temp,
+        &run,
+        generation,
+        &first,
+        &["coder".into(), "reviewer".into()],
+        false,
+    );
+    let active = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    assert_eq!(active.target, "coder");
+    store
+        .fail_flow_run(&run, generation, "contract_invalid")
+        .unwrap();
+    let deliveries = store.flow_deliveries(&run).unwrap();
+    assert_eq!(
+        deliveries
+            .iter()
+            .map(|item| item.state.as_str())
+            .collect::<Vec<_>>(),
+        ["completed", "failed", "skipped_due_failure"]
+    );
+}
+
+#[test]
 fn finishing_one_delivery_atomically_queues_each_selected_recipient() {
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
@@ -87,6 +179,24 @@ fn finishing_one_delivery_atomically_queues_each_selected_recipient() {
             br#"{"summary":"design"}"#,
             "application/json",
         )
+        .unwrap();
+    assert!(
+        store
+            .finish_flow_delivery(
+                &delivery.id,
+                generation,
+                &attempt.id,
+                &artifact,
+                None,
+                &serde_json::json!({"summary":"design"}),
+                "thread-1",
+                &["coder".into()],
+                false,
+            )
+            .is_err()
+    );
+    store
+        .bind_flow_attempt(&delivery.id, generation, &attempt.id)
         .unwrap();
     store
         .finish_flow_delivery(
@@ -229,6 +339,9 @@ fn finish_test_delivery(
         .unwrap();
     store.ready_node(&node.id, node.revision).unwrap();
     let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    store
+        .bind_flow_attempt(&delivery.id, generation, &attempt.id)
+        .unwrap();
     store
         .attach_attempt_process(
             &attempt.id,

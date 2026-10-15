@@ -14,10 +14,10 @@ fn setup() -> (tempfile::TempDir, Store, String, String) {
 #[test]
 fn migration_and_pragmas_survive_reopen() {
     let (dir, store, run, _) = setup();
-    assert_eq!(store.schema_version().unwrap(), 14);
+    assert_eq!(store.schema_version().unwrap(), 15);
     drop(store);
     let store = Store::open(&dir.path().join("state.db")).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 14);
+    assert_eq!(store.schema_version().unwrap(), 15);
     assert_eq!(store.run(&run).unwrap().state, "running");
     let db = rusqlite::Connection::open(dir.path().join("state.db")).unwrap();
     assert_eq!(
@@ -35,13 +35,36 @@ fn schema_thirteen_upgrades_without_losing_runs() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version=14;",
+            "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version IN (14,15);",
         )
         .unwrap();
     let reopened = Store::open(&path).unwrap();
-    assert_eq!(reopened.schema_version().unwrap(), 14);
+    assert_eq!(reopened.schema_version().unwrap(), 15);
     assert_eq!(reopened.run(&run).unwrap().state, "running");
     assert!(reopened.flow_deliveries(&run).unwrap().is_empty());
+}
+
+#[test]
+fn schema_fourteen_upgrades_flow_delivery_states() {
+    let (dir, store, run, _) = setup();
+    drop(store);
+    let path = dir.path().join("state.db");
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(
+        "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version IN (14,15);",
+    )
+    .unwrap();
+    db.execute_batch(include_str!("../migrations/0014_flow_deliveries.sql"))
+        .unwrap();
+    db.execute("INSERT INTO flow_deliveries(id,run_id,sequence,target_key,state) VALUES('legacy-delivery',?1,1,'design','queued')", [&run]).unwrap();
+    drop(db);
+    let reopened = Store::open(&path).unwrap();
+    assert_eq!(reopened.schema_version().unwrap(), 15);
+    assert_eq!(reopened.run(&run).unwrap().state, "running");
+    assert_eq!(
+        reopened.flow_deliveries(&run).unwrap()[0].id,
+        "legacy-delivery"
+    );
 }
 
 #[test]
@@ -102,7 +125,7 @@ fn schema_eleven_upgrades_to_consultation_provenance() {
     }
     drop(conn);
     let store = Store::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 14);
+    assert_eq!(store.schema_version().unwrap(), 15);
     assert!(
         store
             .active_consultation_processes("missing")

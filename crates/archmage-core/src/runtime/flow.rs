@@ -86,6 +86,7 @@ impl Runtime {
             .ok_or(Error::Conflict)?;
         store.ready_node(&node.id, node.revision)?;
         let attempt = store.begin_attempt(&node.id, node.revision + 1)?;
+        store.bind_flow_attempt(&delivery.id, generation, &attempt.id)?;
         let result = self
             .execute_flow_attempt(
                 run,

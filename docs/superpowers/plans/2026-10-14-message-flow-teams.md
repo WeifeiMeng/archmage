@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust, rusqlite, Tauri, React, TypeScript, Vitest.
 
-**Progress (2026-10-14):** Versioned graphs, durable delivery ledger, strict routing contract, real Codex flow dispatcher, canvas editor, Run delivery display, and guides are implemented. Deterministic feedback-cycle tests and a real two-step Coder → Reviewer → complete acceptance passed. A live feedback-cycle acceptance and interactive desktop pointer/keyboard QA remain separate follow-up checks; the real acceptance does not prove those interactions.
+**Progress (2026-10-15):** Versioned graphs, durable delivery ledger, strict routing contract, real Codex flow dispatcher, canvas editor, Run delivery display, and guides are implemented. Review fixes now bind attempts when they begin, settle failed/cancelled/interrupted deliveries, and make repeat edge-drawing idempotent. Full automated checks and a real two-step Coder → Reviewer → complete acceptance passed after schema v15. A live feedback-cycle acceptance and interactive desktop pointer/keyboard QA remain separate follow-up checks; the real acceptance does not prove those interactions.
 
 ---
 

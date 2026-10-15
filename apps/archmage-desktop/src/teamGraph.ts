@@ -34,6 +34,11 @@ export function toggleTeamEdge(graph: TeamGraph, edge: TeamEdge): TeamGraph {
   return { ...graph, edges: exists ? graph.edges.filter((item) => teamEdgeId(item) !== teamEdgeId(edge)) : [...graph.edges, edge] };
 }
 
+export function createTeamEdge(graph: TeamGraph, edge: TeamEdge): TeamGraph {
+  if (graph.edges.some((item) => teamEdgeId(item) === teamEdgeId(edge))) return graph;
+  return toggleTeamEdge(graph, edge);
+}
+
 export function teamGraphIssue(graph: TeamGraph): string | null {
   if (graph.nodes.length < 2) return "至少选择两个能力。";
   const selected = new Set(graph.nodes.map((node) => node.capability));

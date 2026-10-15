@@ -4,7 +4,7 @@ import { confirm } from "@tauri-apps/plugin-dialog";
 import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { api } from "./api";
 import type { CapabilityKey, Team, TeamEdge, TeamGraph } from "./model";
-import { isTeamDirty, moveTeamNode, TEAM_CAPABILITIES, teamEdgeId, teamEdgePath, teamGraphIssue, toggleTeamCapability, toggleTeamEdge } from "./teamGraph";
+import { createTeamEdge, isTeamDirty, moveTeamNode, TEAM_CAPABILITIES, teamEdgeId, teamEdgePath, teamGraphIssue, toggleTeamCapability, toggleTeamEdge } from "./teamGraph";
 import "./teams.css";
 
 const labels: Record<CapabilityKey, string> = { designer: "Designer", coder: "Coder", tester: "Tester", reviewer: "Reviewer" };
@@ -26,7 +26,7 @@ function TeamCanvas({ graph, onChange }: { graph: TeamGraph; onChange: (graph: T
   function cancel() { linking.current = null; setSource(null); setPointer(null); }
   function connect(target: CapabilityKey | undefined) {
     const from = linking.current;
-    if (from && target && from !== target) onChange(toggleTeamEdge(graph, { from, to: target }));
+    if (from && target && from !== target) onChange(createTeamEdge(graph, { from, to: target }));
     cancel();
   }
   function remove(edge: TeamEdge) { onChange(toggleTeamEdge(graph, edge)); setSelectedId(null); }

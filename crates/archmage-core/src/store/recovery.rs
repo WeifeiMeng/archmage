@@ -29,6 +29,11 @@ impl Store {
         tx.execute("UPDATE attempts SET state='interrupted',revision=revision+1,error_code='interrupted'
             WHERE node_run_id IN (SELECT id FROM node_runs WHERE run_id=?1) AND state IN ('starting','running')", [run])?;
         tx.execute("UPDATE node_runs SET state='interrupted',revision=revision+1 WHERE run_id=?1 AND state IN ('ready','running')", [run])?;
+        tx.execute(
+            "UPDATE flow_deliveries SET state='interrupted' WHERE run_id=?1 AND state='running'",
+            [run],
+        )?;
+        tx.execute("UPDATE flow_deliveries SET state='skipped_due_interruption' WHERE run_id=?1 AND state='queued'", [run])?;
         tx.execute("UPDATE consultation_processes SET state='cancelled' WHERE run_id=?1 AND state='running'", [run])?;
         super::transitions::event(
             &tx,
@@ -151,6 +156,11 @@ impl Store {
             [run],
         )?;
         tx.execute(
+            "UPDATE flow_deliveries SET state='cancelled' WHERE run_id=?1 AND state='running'",
+            [run],
+        )?;
+        tx.execute("UPDATE flow_deliveries SET state='skipped_due_cancel' WHERE run_id=?1 AND state='queued'", [run])?;
+        tx.execute(
             "UPDATE control_requests SET state='applied',applied_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
              WHERE run_id=?1 AND kind='cancel' AND state='requested'",
             [run],
@@ -193,6 +203,8 @@ impl Store {
             "UPDATE runs SET state='interrupted',revision=revision+1 WHERE id=?1 AND state='running'",
             [&run],
         )?;
+        tx.execute("UPDATE flow_deliveries SET state='interrupted' WHERE run_id=?1 AND attempt_id=?2 AND state='running'", params![run,attempt])?;
+        tx.execute("UPDATE flow_deliveries SET state='skipped_due_interruption' WHERE run_id=?1 AND state='queued'", [&run])?;
         super::transitions::event(
             &tx,
             &run,

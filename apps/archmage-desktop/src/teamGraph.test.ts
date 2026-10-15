@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consultationEdgeState, isTeamDirty, moveTeamNode, shouldConfirmTeamExit, toggleTeamCapability, toggleTeamEdge, teamEdgePath, teamGraphIssue } from "./teamGraph";
+import { consultationEdgeState, createTeamEdge, isTeamDirty, moveTeamNode, shouldConfirmTeamExit, toggleTeamCapability, toggleTeamEdge, teamEdgePath, teamGraphIssue } from "./teamGraph";
 import type { RunSnapshot, Team, TeamGraph } from "./model";
 
 const graph: TeamGraph = {
@@ -28,6 +28,11 @@ describe("team graph editor", () => {
     expect(removed.edges).toEqual([]);
     expect(removed.entry).toBeNull();
     expect(teamEdgePath(cycle, { from: "coder", to: "reviewer" })).not.toBe(teamEdgePath(cycle, { from: "reviewer", to: "coder" }));
+  });
+  it("drawing the same edge twice keeps the existing edge", () => {
+    const flow = { ...graph, mode: "flow" as const };
+    const edge = { from: "coder" as const, to: "tester" as const };
+    expect(createTeamEdge(flow, edge).edges).toEqual(flow.edges);
   });
   it("allows changing any selected forward relationship", () => {
     const withoutSpineEdge = toggleTeamEdge(graph, { from: "designer", to: "coder" });

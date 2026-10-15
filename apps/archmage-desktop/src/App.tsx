@@ -293,8 +293,14 @@ function ConsultationProgress({ snapshot }: { snapshot: RunSnapshot }) {
 
 function FlowProgress({ snapshot }: { snapshot: RunSnapshot }) {
   const deliveries = snapshot.flowDeliveries ?? [];
+  const stateLabels: Record<string, string> = {
+    queued: "待执行", running: "执行中", completed: "已交付", failed: "失败",
+    cancelled: "已取消", interrupted: "已中断", skipped_due_terminal: "流程完成，已跳过",
+    skipped_due_failure: "流程失败，已跳过", skipped_due_cancel: "流程取消，已跳过",
+    skipped_due_interruption: "流程中断，已跳过",
+  };
   return <section className="panel team-run-panel"><div className="panel-title"><div><span>交付消息</span><small>每条消息独立触发一次目标能力；最多执行 24 次</small></div></div><div className="flow-deliveries">
-    {deliveries.map((item) => <div key={item.id} className="flow-delivery"><strong>#{item.sequence} · {item.target}</strong><span>{item.state === "queued" ? "待执行" : item.state === "running" ? "执行中" : item.state === "completed" ? "已交付" : "因流程终止而跳过"}</span>{item.routing && <code>{item.routing.decision === "complete" ? "完成" : `→ ${item.routing.next.join(", ")}`}</code>}</div>)}
+    {deliveries.map((item) => <div key={item.id} className="flow-delivery"><strong>#{item.sequence} · {item.target}</strong><span>{stateLabels[item.state] ?? item.state}</span>{item.routing && <code>{item.routing.decision === "complete" ? "完成" : `→ ${item.routing.next.join(", ")}`}</code>}</div>)}
     {!deliveries.length && <p className="empty-copy">尚未产生交付消息。</p>}
   </div></section>;
 }
