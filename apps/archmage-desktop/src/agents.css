@@ -1,8 +1,4 @@
 .new-run + .new-run { margin-top: 6px; }
-.delegated-testing { display:flex; align-items:flex-start; gap:11px; margin:0 0 20px; padding:13px; border:1px solid #2b4358; border-radius:9px; background:#101923; color:#91d4ff; }
-.delegated-testing strong,.delegated-testing span { display:block; }
-.delegated-testing strong { font-size:12px; }
-.delegated-testing span { margin-top:4px; color:#91a7bb; font-size:11px; line-height:1.5; }
 .agents-view { max-width:1240px; margin:0 auto; padding:54px 0 72px; }
 .agents-header { display:flex; justify-content:space-between; align-items:flex-end; gap:28px; padding-bottom:32px; border-bottom:1px solid var(--border); }
 .agents-header h1 { font-size:34px; letter-spacing:-.035em; margin:8px 0 10px; }

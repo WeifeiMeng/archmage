@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityDraft, capabilityDisplayName, isCapabilityDirty, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, shouldConfirmCapabilityExit, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration } from "./model";
+import { capabilityDraft, capabilityDisplayName, isCapabilityDirty, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, selectedTeamForRun, shouldConfirmCapabilityExit, teamRunOverview, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration, type Team } from "./model";
 
 describe("capability topology", () => {
   it("keeps execution dependencies separate from extra context handoffs", () => {
@@ -70,6 +70,36 @@ describe("agent routing", () => {
       bindings: [{ capability: "designer", agentInstanceId: "codex-default" }],
     };
     expect(runBindingIssues(snapshot)).toEqual(["designer: Agent 实例已禁用", "coder: 未绑定 Agent", "tester: 未绑定 Agent", "reviewer: 未绑定 Agent"]);
+  });
+  it("checks only members of the selected team", () => {
+    const snapshot: AgentManagementSnapshot = {
+      adapters: [],
+      instances: [{ id: "codex", providerKind: "codex", displayName: "Codex", executablePath: null, model: null, enabled: true, connectionState: "ready", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
+      bindings: [{ capability: "coder", agentInstanceId: "codex" }, { capability: "reviewer", agentInstanceId: "codex" }],
+    };
+    expect(runBindingIssues(snapshot, ["coder", "reviewer"])).toEqual([]);
+    expect(runBindingIssues(snapshot, ["coder", "tester"])).toEqual(["tester: 未绑定 Agent"]);
+  });
+});
+
+describe("new Run Team overview", () => {
+  it("does not use a cached team while its list reloads or has failed", () => {
+    const team: Team = { id: "t1", name: "旧版本", revision: 1, graph: { nodes: [], edges: [] } };
+    expect(selectedTeamForRun([team], "t1", "loading")).toBeNull();
+    expect(selectedTeamForRun([team], "t1", "failed")).toBeNull();
+    expect(selectedTeamForRun([team], "t1", "ready")).toEqual(team);
+  });
+  it("describes selected flow members, routes, entry, and terminal", () => {
+    const team: Team = { id: "team-1", name: "代码审阅", revision: 2, graph: {
+      mode: "flow", entry: "coder", terminal: "reviewer",
+      nodes: [{ capability: "coder", x: 0, y: 0 }, { capability: "reviewer", x: 300, y: 0 }],
+      edges: [{ from: "coder", to: "reviewer" }, { from: "reviewer", to: "coder" }],
+    } };
+    expect(teamRunOverview(team)).toEqual({
+      members: ["Coder", "Reviewer"],
+      routes: ["Coder → Reviewer", "Reviewer → Coder"],
+      detail: "入口 Coder · 可完成 Reviewer",
+    });
   });
 });
 

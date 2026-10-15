@@ -7,7 +7,12 @@ export type TeamNode = { capability: CapabilityKey; x: number; y: number };
 export type TeamEdge = { from: CapabilityKey; to: CapabilityKey };
 export type TeamGraph = { nodes: TeamNode[]; edges: TeamEdge[]; mode?: "legacy" | "flow"; entry?: CapabilityKey | null; terminal?: CapabilityKey | null };
 export type Team = { id: string; name: string; revision: number; graph: TeamGraph };
+export type TeamLoadState = "loading" | "ready" | "failed";
 export type AppView = "runs" | "agents" | "capabilities" | "teams";
+
+export function selectedTeamForRun(teams: Team[], teamId: string, loadState: TeamLoadState): Team | null {
+  return loadState === "ready" ? teams.find((team) => team.id === teamId) ?? null : null;
+}
 
 export function shouldConfirmCapabilityExit(current: AppView, next: AppView, dirty: boolean): boolean {
   return current === "capabilities" && next !== "capabilities" && dirty;
@@ -70,6 +75,18 @@ export function isCapabilityDirty(current: CapabilityConfiguration, draft: Capab
 
 export function capabilityDisplayName(configuration: Pick<CapabilityConfiguration, "displayName"> | undefined, key: CapabilityKey): string {
   return configuration?.displayName || key[0].toUpperCase() + key.slice(1);
+}
+
+export function teamRunOverview(team: Team) {
+  const name = (key: CapabilityKey) => capabilityDisplayName(undefined, key);
+  const graph = team.graph;
+  return {
+    members: graph.nodes.map((node) => name(node.capability)),
+    routes: graph.edges.map((edge) => `${name(edge.from)} → ${name(edge.to)}`),
+    detail: graph.mode === "flow"
+      ? `入口 ${name(graph.entry!)} · 可完成 ${name(graph.terminal!)}`
+      : "历史咨询模式",
+  };
 }
 
 export type TopologyEdge = {
@@ -191,8 +208,7 @@ export function toRunRequest(repository: string, goal: string, teamId?: string):
 export const connectionLabel = (state: ConnectionState) =>
   ({ unverified: "连接未验证", ready: "可用", failed: "连接失败" })[state];
 
-export function runBindingIssues(snapshot: AgentManagementSnapshot): string[] {
-  const capabilities: NodeSnapshot["key"][] = ["designer", "coder", "tester", "reviewer"];
+export function runBindingIssues(snapshot: AgentManagementSnapshot, capabilities: CapabilityKey[] = ["designer", "coder", "tester", "reviewer"]): string[] {
   return capabilities.flatMap((capability) => {
     const binding = snapshot.bindings.find((item) => item.capability === capability);
     if (!binding) return [`${capability}: 未绑定 Agent`];

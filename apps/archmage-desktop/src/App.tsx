@@ -25,6 +25,7 @@ import { api } from "./api";
 import { AgentManagement } from "./AgentManagement";
 import { CapabilityManagement } from "./CapabilityManagement";
 import { TeamManagement } from "./TeamManagement";
+import { RunTeamPreview } from "./RunTeamPreview";
 import { consultationEdgeState, shouldConfirmTeamExit } from "./teamGraph";
 import "./agents.css";
 import "./capabilities.css";
@@ -34,6 +35,7 @@ import {
   isActive,
   reduceEvent,
   runBindingIssues,
+  selectedTeamForRun,
   shouldConfirmCapabilityExit,
   toRunRequest,
   type AgentManagementSnapshot,
@@ -43,6 +45,7 @@ import {
   type RunSummary,
   type TimelineState,
   type Team,
+  type TeamLoadState,
 } from "./model";
 
 const nodeMeta = {
@@ -69,8 +72,12 @@ export default function App() {
   const [teamDirty, setTeamDirty] = useState(false);
   const capabilityDirtyRef = useRef(false);
   const teamDirtyRef = useRef(false);
+  const teamLoadGeneration = useRef(0);
+  const environmentGeneration = useRef(0);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [teamLoadState, setTeamLoadState] = useState<TeamLoadState>("loading");
   const [teamId, setTeamId] = useState<string>("default");
+  const [runSetupRevision, setRunSetupRevision] = useState(0);
   const [busy, setBusy] = useState(false);
   const [environment, setEnvironment] = useState<"checking" | "ready" | "failed" | "preview">("checking");
   const [agents, setAgents] = useState<AgentManagementSnapshot | null>(null);
@@ -90,6 +97,10 @@ export default function App() {
     }
     if (nextView !== "capabilities") setCapabilityDirty(false);
     if (nextView !== "teams") setTeamDirty(false);
+    if (nextView === "runs" && nextRunId === null) {
+      setTeamLoadState("loading"); setEnvironment("checking"); setAgents(null);
+      setRunSetupRevision((current) => current + 1);
+    }
     setView(nextView);
     if (nextRunId !== undefined) setSelectedId(nextRunId);
   }
@@ -124,23 +135,44 @@ export default function App() {
   useEffect(() => {
     if (!isTauri()) {
       setEnvironment("preview");
-      return;
     }
-    checkEnvironment();
   }, []);
+
+  async function loadTeams() {
+    const generation = ++teamLoadGeneration.current;
+    setTeamLoadState("loading");
+    try {
+      const items = await api.listTeams();
+      if (generation !== teamLoadGeneration.current) return;
+      setTeams(items);
+      if (items.length > 0 && !items.some((item) => item.id === teamId)) setTeamId(items[0].id);
+      setTeamLoadState("ready");
+    } catch (reason) {
+      if (generation !== teamLoadGeneration.current) return;
+      setTeams([]);
+      setTeamLoadState("failed");
+      setError(String(reason));
+    }
+  }
 
   useEffect(() => {
     if (!isTauri() || view !== "runs") return;
-    api.getAgentManagement().then(setAgents).catch((reason) => setError(String(reason)));
-    api.listTeams().then((items) => { setTeams(items); if (items.length > 0 && !items.some((item) => item.id === teamId)) setTeamId(items[0].id); }).catch((reason) => setError(String(reason)));
-  }, [view, teamId]);
+    void checkEnvironment();
+    void loadTeams();
+    return () => { teamLoadGeneration.current += 1; environmentGeneration.current += 1; };
+  }, [view, runSetupRevision]);
 
   async function checkEnvironment() {
+    const generation = ++environmentGeneration.current;
     setEnvironment("checking");
+    setAgents(null);
     try {
-      setAgents(await api.getAgentManagement());
+      const next = await api.getAgentManagement();
+      if (generation !== environmentGeneration.current) return;
+      setAgents(next);
       setEnvironment("ready");
     } catch (reason) {
+      if (generation !== environmentGeneration.current) return;
       setEnvironment("failed");
       setError(String(reason));
     }
@@ -196,8 +228,9 @@ export default function App() {
   }, [refreshRun, snapshot]);
 
   const request = useMemo(() => toRunRequest(repository, goal, teamId), [repository, goal, teamId]);
-  const bindingIssues = agents ? runBindingIssues(agents) : ["正在读取能力绑定"];
-  const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && teams.some((team) => team.id === teamId) && request.repository.length > 0 && request.goal.length > 0 && !busy;
+  const selectedTeam = selectedTeamForRun(teams, teamId, teamLoadState);
+  const bindingIssues = agents && selectedTeam ? runBindingIssues(agents, selectedTeam.graph.nodes.map((node) => node.capability)) : [];
+  const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && !!selectedTeam && request.repository.length > 0 && request.goal.length > 0 && !busy;
 
   async function chooseRepository() {
     const chosen = await open({ directory: true, multiple: false, title: "选择 Git 仓库" });
@@ -245,23 +278,21 @@ export default function App() {
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
         {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : !selectedId ? (
           <section className="new-run-view">
-            <header><p className="eyebrow">REAL CODEX WORKFLOW</p><h1>把目标交给一组能力</h1><p>一个 Run 串联 Designer、Coder、Tester 和 Reviewer；每个节点都调用真实的本地 Codex。</p></header>
+            <header><p className="eyebrow">TEAM RUN</p><h1>把目标交给团队</h1><p>选择一个团队，确认它的成员和协作方向，然后启动 Run。</p></header>
             <div className="form-card">
-              <label>Git 仓库<span>必填</span></label>
-              <div className="path-field"><FolderGit2 size={18} /><input value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
+              <label htmlFor="repository">Git 仓库<span>必填</span></label>
+              <div className="path-field"><FolderGit2 size={18} /><input id="repository" value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
               <label htmlFor="goal">目标<span>必填</span></label>
-              <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望四种能力协作完成的具体结果……" rows={5} />
+              <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望这个团队完成的具体结果……" rows={5} />
               <label htmlFor="run-team">执行团队<span>必填</span></label>
-              <select id="run-team" className="run-team-select" value={teamId} onChange={(event) => setTeamId(event.target.value)}>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
-              <p className="run-team-hint">新 Run 会冻结该团队的拓扑；之后调整团队不会改变正在运行的 Run。</p>
-              <div className="delegated-testing"><TestTube2 size={18} /><div><strong>Tester 自主验证</strong><span>测试任务会直接交给当前绑定的 Agent，由它分析项目并选择验证命令。</span></div></div>
-              <div className="delegated-testing"><Bot size={18} /><div><strong>能力绑定</strong><span>{bindingIssues.length ? bindingIssues.join("；") : "Designer、Coder、Tester、Reviewer 均已绑定可用实例。"}</span>{agents && agents.bindings.map((binding) => { const instance = agents.instances.find((item) => item.id === binding.agentInstanceId); return instance?.connectionState !== "ready" ? <span key={binding.capability}>{binding.capability}: {instance?.displayName ?? "未知实例"} 尚未通过真实连接验证</span> : null; })}<button type="button" className="inline-cap-link" onClick={() => setView("capabilities")}>配置 Capability</button></div></div>
-              <div className={`preflight ${environment}`}>
-                {environment === "checking" ? <LoaderCircle className="spin" size={17} /> : environment === "ready" ? <Check size={17} /> : <Circle size={17} />}
-                <div><strong>{environment === "checking" ? "正在检查本地环境" : environment === "ready" ? "本地 Runtime 已就绪" : environment === "preview" ? "当前是浏览器界面预览" : "环境检查未通过"}</strong><span>{environment === "ready" ? "数据库已就绪；具体 Agent 状态见上方能力绑定或 Agent 管理。" : environment === "failed" ? "请处理顶部错误后重试，未通过前不会创建 Run。" : environment === "preview" ? "请使用 Tauri 桌面窗口连接真实 Runtime 和 Codex。" : "正在读取 Runtime 和 Agent 配置。"}</span></div>
-                {environment === "failed" && <button type="button" onClick={checkEnvironment}>重试</button>}
-              </div>
-              <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : "启动真实 Run"}</button>
+              <select id="run-team" className="run-team-select" value={selectedTeam?.id ?? ""} disabled={teamLoadState !== "ready"} onChange={(event) => setTeamId(event.target.value)}><option value="" disabled>{environment === "preview" ? "请在桌面窗口选择团队" : teamLoadState === "loading" ? "正在读取团队…" : teamLoadState === "failed" ? "团队读取失败" : "请选择团队"}</option>{teamLoadState === "ready" && teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
+              {selectedTeam && <RunTeamPreview team={selectedTeam} />}
+              {teamLoadState === "ready" && teams.length === 0 && <div className="run-form-issue" role="status"><span>还没有可执行的团队。</span><button type="button" onClick={() => setView("teams")}>前往团队管理</button></div>}
+              {teamLoadState === "failed" && <div className="run-form-issue" role="status"><span>团队列表读取失败，暂时无法启动 Run。</span><button type="button" onClick={() => void loadTeams()}>重新读取</button></div>}
+              {bindingIssues.length > 0 && <div className="run-form-issue" role="status"><span>所选团队有能力尚不可用：{bindingIssues.join("；")}</span><button type="button" onClick={() => setView("capabilities")}>配置 Capability</button></div>}
+              {environment === "failed" && <div className="run-form-issue" role="status"><span>本地 Runtime 检查未通过，请处理顶部错误后重试。</span><button type="button" onClick={checkEnvironment}>重新检查</button></div>}
+              {environment === "preview" && <div className="run-form-issue" role="status"><span>浏览器只提供界面预览；请在桌面窗口启动 Run。</span></div>}
+              <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : environment === "checking" ? "正在检查环境…" : "启动 Run"}</button>
             </div>
           </section>
         ) : snapshot ? (
