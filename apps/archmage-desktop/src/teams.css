@@ -1,8 +1,9 @@
 .teams-view { max-width: 1380px; margin: 0 auto; padding: 32px 0 72px; }
 .teams-view .management-hero-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .team-refresh-button { width: 40px; padding: 0 !important; }
-.team-hero-selector { display: flex; flex-direction: column; gap: 6px; color: #9cafaa; font-size: 9px; }
-.team-hero-selector select { width: 100%; min-height: 42px; border: 1px solid #385044; border-radius: 9px; background: #0b1410; color: var(--text); padding: 0 11px; }
+.team-hero-selector { position: relative; min-width: 0; padding: 11px 12px; display: flex; flex-direction: column; gap: 4px; border: 1px solid #32463b; border-radius: 10px; background: rgba(10, 20, 16, .68); color: #819689; font-size: 9px; }
+.team-hero-selector::after { content: "⌄"; position: absolute; right: 12px; bottom: 13px; color: #aab9b1; font-size: 15px; line-height: 1; pointer-events: none; }
+.team-hero-selector select { appearance: none; width: 100%; min-width: 0; min-height: 24px; border: 0; background: transparent; color: var(--text); padding: 0 25px 0 0; font-size: 16px; font-weight: 700; cursor: pointer; }
 .team-workspace { display: grid; grid-template-columns: minmax(350px, .82fr) minmax(0, 1.18fr); gap: 14px; margin-top: 14px; align-items: start; }
 .team-config-panel, .team-canvas-panel { min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: 13px; background: linear-gradient(145deg, rgba(23, 30, 40, .94), rgba(15, 20, 27, .96)); }
 .team-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
@@ -52,6 +53,8 @@
 .teams-footer button { min-height: 42px; display: flex; align-items: center; gap: 8px; border: 1px solid #3d7a5d; border-radius: 8px; background: #143222; color: var(--accent); padding: 0 14px; cursor: pointer; }
 .teams-footer button:disabled { opacity: .45; cursor: not-allowed; }
 .teams-view :is(select, input, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.team-hero-selector:focus-within { border-color: #4e8068; outline: 2px solid var(--accent); outline-offset: 3px; }
+.teams-view .team-hero-selector select:focus-visible { outline: none; }
 
 /* Run detail styles intentionally remain unchanged by the management-page redesign. */
 .team-run-panel { min-height: 0; margin: 8px 0 14px; }
