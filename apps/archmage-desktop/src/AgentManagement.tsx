@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { Bot, CheckCircle2, CircleAlert, LoaderCircle, Plus, Save, Unplug, Wifi } from "lucide-react";
 import { api } from "./api";
+import { ManagementHero, PageMetric } from "./ManagementHero";
+import { agentMetrics } from "./managementLayout";
 import {
   connectionLabel,
   type AgentInstance,
@@ -19,9 +21,6 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
     api.getAgentManagement().then(setSnapshot).catch((reason) => { setLoadError(String(reason)); onError(String(reason)); });
   }, [onError]);
 
-  const readyCount = snapshot?.instances.filter((item) => item.enabled && item.connectionState === "ready").length ?? 0;
-  const unverifiedCount = snapshot?.instances.filter((item) => item.enabled && item.connectionState === "unverified").length ?? 0;
-  const failedCount = snapshot?.instances.filter((item) => item.enabled && item.connectionState === "failed").length ?? 0;
   const supportedInstances = snapshot?.instances.filter((item) => item.providerKind === "codex") ?? [];
   const boundIds = new Set(snapshot?.bindings.map((item) => item.agentInstanceId) ?? []);
 
@@ -43,20 +42,25 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
     return <div className="loading"><LoaderCircle className="spin" />正在读取本地 Agent…</div>;
   }
 
-  return <section className="agents-view">
-    <header className="agents-header">
-      <div><p className="eyebrow">LOCAL AGENT CONNECTIONS</p><h1>Agent 管理</h1><p>管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。</p></div>
-      <div className="agent-summary"><strong>{readyCount}/{supportedInstances.length}</strong><span>已验证 · 未验证 {unverifiedCount} · 失败 {failedCount}</span></div>
-    </header>
+  const metrics = agentMetrics(snapshot);
 
-    <div className="agents-section-heading"><div><h2>本地连接</h2><p>CLI 可发现不等于账号已连通；使用“验证连接”发起一次真实只读 Codex 请求。</p></div><button className="secondary-action" onClick={() => setAdding((value) => !value)}><Plus size={16} />添加 Codex 实例</button></div>
+  return <section className="agents-view">
+    <ManagementHero
+      eyebrow="LOCAL AGENT CONNECTIONS"
+      title="Agent 管理"
+      description="管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。"
+      actions={<button className="secondary-action" onClick={() => setAdding((value) => !value)}><Plus size={16} />{adding ? "收起新实例" : "添加 Codex 实例"}</button>}
+      summary={metrics.map((metric) => <PageMetric key={metric.label} {...metric} />)}
+    />
+
+    <div className="agents-section-heading"><div><h2>本地连接</h2><p>CLI 可发现不等于账号已连通；使用“验证连接”发起一次真实只读 Codex 请求。</p></div></div>
     <div className="agent-grid">
       {supportedInstances.map((instance) => <AgentCard key={instance.id} instance={instance} bound={boundIds.has(instance.id)} busy={busy === instance.id} onSave={(input) => run(instance.id, () => api.saveAgentInstance(input))} onDiscover={() => run(instance.id, () => api.discoverAgentInstance(instance.id))} onVerify={() => run(instance.id, () => api.verifyAgentInstance(instance.id))} onDelete={async () => { if (await confirm(`删除 ${instance.displayName}？`, { title: "删除 Agent 实例", kind: "warning" })) await run(instance.id, () => api.deleteAgentInstance(instance.id)); }} />)}
       {adding && <NewAgentCard busy={busy === "new"} onCancel={() => setAdding(false)} onSave={async (input) => { if (await run("new", () => api.saveAgentInstance(input))) setAdding(false); }} />}
       {snapshot.adapters.filter((adapter) => !adapter.supported).map((adapter) => <article className="agent-card unsupported" key={adapter.kind}><div className="agent-card-top"><span className="agent-logo"><Unplug size={19} /></span><div><h3>{adapter.displayName}</h3><span>Provider Adapter</span></div><span className="status-chip unsupported">尚未支持</span></div><p>Adapter 类型已保留，但当前版本不会创建连接、执行探测或承载能力。</p></article>)}
     </div>
 
-    <div className="agents-section-heading routing-heading"><div><h2>能力路由</h2><p>在独立的 Capability 管理页查看固定拓扑，并为四个能力分别绑定执行 Agent。</p></div><button className="secondary-action" onClick={onOpenCapabilities}>打开 Capability 管理</button></div>
+    <div className="agent-routing-handoff"><div><h2>下一步：配置能力路由</h2><p>为 Designer、Coder、Tester、Reviewer 分别选择执行 Agent。</p></div><button className="secondary-action" onClick={onOpenCapabilities}>打开 Capability 管理</button></div>
   </section>;
 }
 
