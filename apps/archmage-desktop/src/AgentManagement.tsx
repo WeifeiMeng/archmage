@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { Bot, CheckCircle2, CircleAlert, LoaderCircle, Plus, Save, Unplug, Wifi } from "lucide-react";
 import { api } from "./api";
@@ -18,6 +19,7 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
+    if (!isTauri()) return;
     api.getAgentManagement().then(setSnapshot).catch((reason) => { setLoadError(String(reason)); onError(String(reason)); });
   }, [onError]);
 
@@ -36,6 +38,11 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
       setBusy(null);
     }
   }
+
+  if (!isTauri()) return <section className="agents-view">
+    <ManagementHero eyebrow="LOCAL AGENT CONNECTIONS" title="Agent 管理" description="管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。" />
+    <div className="agent-preview-note">当前是浏览器预览。请在 Tauri 桌面窗口查看和验证真实 Agent 连接。</div>
+  </section>;
 
   if (!snapshot) {
     if (loadError) return <div className="loading"><CircleAlert size={17} />无法读取 Agent 配置：{loadError}<button onClick={() => { setLoadError(null); api.getAgentManagement().then(setSnapshot).catch((reason) => setLoadError(String(reason))); }}>重试</button></div>;

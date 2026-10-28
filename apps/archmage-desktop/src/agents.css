@@ -40,6 +40,7 @@
 .agent-routing-handoff h2 { margin: 0 0 5px; font-size: 14px; }
 .agent-routing-handoff p { margin: 0; color: #83958b; font-size: 11px; line-height: 1.5; }
 .agent-routing-handoff .secondary-action { border-color: #38634e; color: var(--accent); background: #12291e; white-space: nowrap; }
+.agent-preview-note { margin-top: 14px; padding: 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--muted); font-size: 13px; }
 
 @media (max-width: 1050px) {
   .agent-grid { grid-template-columns: 1fr; }
