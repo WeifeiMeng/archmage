@@ -1,0 +1,25 @@
+.new-run-view { max-width: 1180px; margin: 0 auto; padding: 32px 0 56px; }
+.new-run-view .management-hero-summary { grid-template-columns: minmax(190px, 270px); }
+.new-run-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr); gap: 14px; margin-top: 14px; align-items: start; }
+.new-run-grid .form-card { min-width: 0; padding: 22px; }
+.new-run-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; min-height: 58px; margin: -2px 0 18px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+.new-run-panel-heading span { color: var(--accent); font: 600 9px ui-monospace, SFMono-Regular, monospace; letter-spacing: .12em; }
+.new-run-panel-heading h2 { margin: 5px 0 4px; font-size: 17px; }
+.new-run-panel-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.new-run-task-panel textarea { min-height: 178px; margin-bottom: 0; }
+.new-run-team-panel .run-team-select { margin-bottom: 0; }
+.new-run-team-panel .run-team-preview { margin: 12px 0 0; }
+.new-run-issues { display: grid; gap: 8px; margin-top: 12px; }
+.new-run-issues .run-form-issue { margin: 0; }
+.new-run-freeze-note { margin: 14px 2px 10px; color: var(--muted); font-size: 10px; line-height: 1.5; text-align: center; }
+
+@media (max-width: 1080px) {
+  .new-run-grid { grid-template-columns: 1fr; }
+  .new-run-task-panel textarea { min-height: 132px; }
+}
+
+@media (max-width: 780px) {
+  .new-run-view { padding-top: 22px; }
+  .new-run-view .management-hero-summary { grid-template-columns: 1fr; }
+  .new-run-grid .form-card { padding: 18px; }
+}

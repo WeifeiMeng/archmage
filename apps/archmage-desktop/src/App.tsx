@@ -26,9 +26,12 @@ import { AgentManagement } from "./AgentManagement";
 import { CapabilityManagement } from "./CapabilityManagement";
 import { TeamManagement } from "./TeamManagement";
 import { RunTeamPreview } from "./RunTeamPreview";
+import { ManagementHero, PageMetric } from "./ManagementHero";
+import { environmentSummary } from "./managementLayout";
 import { consultationEdgeState, shouldConfirmTeamExit } from "./teamGraph";
 import "./agents.css";
 import "./capabilities.css";
+import "./newRun.css";
 import {
   initialTimelineState,
   capabilityDisplayName,
@@ -231,6 +234,7 @@ export default function App() {
   const selectedTeam = selectedTeamForRun(teams, teamId, teamLoadState);
   const bindingIssues = agents && selectedTeam ? runBindingIssues(agents, selectedTeam.graph.nodes.map((node) => node.capability)) : [];
   const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && !!selectedTeam && request.repository.length > 0 && request.goal.length > 0 && !busy;
+  const runtimeStatus = environmentSummary(environment);
 
   async function chooseRepository() {
     const chosen = await open({ directory: true, multiple: false, title: "选择 Git 仓库" });
@@ -278,21 +282,30 @@ export default function App() {
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
         {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : !selectedId ? (
           <section className="new-run-view">
-            <header><p className="eyebrow">TEAM RUN</p><h1>把目标交给团队</h1><p>选择一个团队，确认它的成员和协作方向，然后启动 Run。</p></header>
-            <div className="form-card">
-              <label htmlFor="repository">Git 仓库<span>必填</span></label>
-              <div className="path-field"><FolderGit2 size={18} /><input id="repository" value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
-              <label htmlFor="goal">目标<span>必填</span></label>
-              <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望这个团队完成的具体结果……" rows={5} />
-              <label htmlFor="run-team">执行团队<span>必填</span></label>
-              <select id="run-team" className="run-team-select" value={selectedTeam?.id ?? ""} disabled={teamLoadState !== "ready"} onChange={(event) => setTeamId(event.target.value)}><option value="" disabled>{environment === "preview" ? "请在桌面窗口选择团队" : teamLoadState === "loading" ? "正在读取团队…" : teamLoadState === "failed" ? "团队读取失败" : "请选择团队"}</option>{teamLoadState === "ready" && teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
-              {selectedTeam && <RunTeamPreview team={selectedTeam} />}
-              {teamLoadState === "ready" && teams.length === 0 && <div className="run-form-issue" role="status"><span>还没有可执行的团队。</span><button type="button" onClick={() => setView("teams")}>前往团队管理</button></div>}
-              {teamLoadState === "failed" && <div className="run-form-issue" role="status"><span>团队列表读取失败，暂时无法启动 Run。</span><button type="button" onClick={() => void loadTeams()}>重新读取</button></div>}
-              {bindingIssues.length > 0 && <div className="run-form-issue" role="status"><span>所选团队有能力尚不可用：{bindingIssues.join("；")}</span><button type="button" onClick={() => setView("capabilities")}>配置 Capability</button></div>}
-              {environment === "failed" && <div className="run-form-issue" role="status"><span>本地 Runtime 检查未通过，请处理顶部错误后重试。</span><button type="button" onClick={checkEnvironment}>重新检查</button></div>}
-              {environment === "preview" && <div className="run-form-issue" role="status"><span>浏览器只提供界面预览；请在桌面窗口启动 Run。</span></div>}
-              <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : environment === "checking" ? "正在检查环境…" : "启动 Run"}</button>
+            <ManagementHero eyebrow="TEAM RUN" title="把目标交给团队" description="定义任务、选择团队，并在启动前确认执行环境。" summary={<PageMetric {...runtimeStatus} />} />
+            <div className="new-run-grid">
+              <section className="form-card new-run-task-panel">
+                <div className="new-run-panel-heading"><div><span>STEP 1</span><h2>任务定义</h2><p>告诉团队在哪里工作，以及需要交付什么。</p></div></div>
+                <label htmlFor="repository">Git 仓库<span>必填</span></label>
+                <div className="path-field"><FolderGit2 size={18} /><input id="repository" value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
+                <label htmlFor="goal">目标<span>必填</span></label>
+                <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望这个团队完成的具体结果……" rows={7} />
+              </section>
+              <section className="form-card new-run-team-panel">
+                <div className="new-run-panel-heading"><div><span>STEP 2</span><h2>执行团队</h2><p>确认参与能力和消息流向。</p></div></div>
+                <label htmlFor="run-team">选择团队<span>必填</span></label>
+                <select id="run-team" className="run-team-select" value={selectedTeam?.id ?? ""} disabled={teamLoadState !== "ready"} onChange={(event) => setTeamId(event.target.value)}><option value="" disabled>{environment === "preview" ? "请在桌面窗口选择团队" : teamLoadState === "loading" ? "正在读取团队…" : teamLoadState === "failed" ? "团队读取失败" : "请选择团队"}</option>{teamLoadState === "ready" && teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
+                {selectedTeam && <RunTeamPreview team={selectedTeam} />}
+                <div className="new-run-issues">
+                  {teamLoadState === "ready" && teams.length === 0 && <div className="run-form-issue" role="status"><span>还没有可执行的团队。</span><button type="button" onClick={() => setView("teams")}>前往团队管理</button></div>}
+                  {teamLoadState === "failed" && <div className="run-form-issue" role="status"><span>团队列表读取失败，暂时无法启动 Run。</span><button type="button" onClick={() => void loadTeams()}>重新读取</button></div>}
+                  {bindingIssues.length > 0 && <div className="run-form-issue" role="status"><span>所选团队有能力尚不可用：{bindingIssues.join("；")}</span><button type="button" onClick={() => setView("capabilities")}>配置 Capability</button></div>}
+                  {environment === "failed" && <div className="run-form-issue" role="status"><span>本地 Runtime 检查未通过，请处理顶部错误后重试。</span><button type="button" onClick={checkEnvironment}>重新检查</button></div>}
+                  {environment === "preview" && <div className="run-form-issue" role="status"><span>浏览器只提供界面预览；请在桌面窗口启动 Run。</span></div>}
+                </div>
+                <p className="new-run-freeze-note">启动后将冻结当前团队、能力配置和 Agent 绑定。</p>
+                <button className="primary" disabled={!canStart} onClick={startRun}>{busy ? <LoaderCircle className="spin" size={18} /> : <Play size={18} fill="currentColor" />}{busy ? "正在准备…" : environment === "checking" ? "正在检查环境…" : "启动 Run"}</button>
+              </section>
             </div>
           </section>
         ) : snapshot ? (
