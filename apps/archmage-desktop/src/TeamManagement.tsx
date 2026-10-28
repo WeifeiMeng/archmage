@@ -3,6 +3,8 @@ import { isTauri } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { api } from "./api";
+import { ManagementHero, PageMetric } from "./ManagementHero";
+import { teamSummary } from "./managementLayout";
 import type { CapabilityKey, Team, TeamEdge, TeamGraph } from "./model";
 import { createTeamEdge, isTeamDirty, moveTeamNode, TEAM_CAPABILITIES, teamEdgeId, teamEdgePath, teamGraphIssue, toggleTeamCapability, toggleTeamEdge } from "./teamGraph";
 import "./teams.css";
@@ -115,6 +117,11 @@ export function TeamManagement({ onError, onDirtyChange }: { onError: (message: 
     setGraph({ ...copyGraph(graph), mode: "flow", entry: null, terminal: null });
     setMessage("这是尚未保存的副本；请指定入口和终止能力后保存。");
   }
+  async function refresh() {
+    if (!dirty) return reload();
+    const yes = await confirm("重新加载会放弃未保存修改，确定继续吗？", { title: "刷新团队", kind: "warning" });
+    if (yes) await reload();
+  }
   const selectedKeys = new Set(graph?.nodes.map((node) => node.capability) ?? []);
   const issue = graph ? teamGraphIssue(graph) : null;
   async function save() {
@@ -126,21 +133,32 @@ export function TeamManagement({ onError, onDirtyChange }: { onError: (message: 
     } catch (reason) { onError(String(reason)); setMessage(`保存失败：${String(reason)}`); }
     finally { setBusy(false); }
   }
-  if (!isTauri()) return <section className="teams-view"><h1>团队管理</h1><p>请在 Tauri 桌面窗口连接本地 Runtime 后管理团队。</p></section>;
+  if (!isTauri()) return <section className="teams-view"><ManagementHero eyebrow="TEAM MANAGEMENT" title="团队管理" description="选择能力，在画布中编排交付方向。" /><div className="cap-feedback">请在 Tauri 桌面窗口连接本地 Runtime 后管理团队。</div></section>;
+  const metrics = graph ? teamSummary(graph) : null;
   return <section className="teams-view">
-    <header className="teams-header"><p className="eyebrow">TEAM MANAGEMENT</p><h1>团队管理</h1><p>选择能力，在画布中绘制交付方向。每次交付触发目标能力的一次执行；终止能力可以发出完成信号。</p></header>
-    <div className="teams-toolbar"><label>当前团队<select value={selectedId ?? "new"} onChange={(event) => { const team = teams.find((item) => item.id === event.target.value); if (team) void choose(team); }}><option value="new" disabled>新团队（未保存）</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}{team.graph.mode === "flow" ? " · 消息流" : " · 历史咨询"}</option>)}</select></label>
-      <button onClick={() => void create()} disabled={busy}><Plus size={16} />创建团队</button>
-      <button onClick={() => { if (!dirty) void reload(); else void confirm("重新加载会放弃未保存修改，确定继续吗？", { title: "刷新团队", kind: "warning" }).then((yes) => { if (yes) void reload(); }); }} disabled={busy}><RefreshCw size={16} />刷新</button>
-    </div>
+    <ManagementHero
+      eyebrow="TEAM MANAGEMENT"
+      title="团队管理"
+      description="选择能力，在画布中编排交付方向。每次交付触发目标能力的一次执行；终止能力可以发出完成信号。"
+      actions={<><button onClick={() => void create()} disabled={busy}><Plus size={16} />创建团队</button><button className="team-refresh-button" aria-label="刷新团队" title="刷新团队" onClick={() => void refresh()} disabled={busy}><RefreshCw size={16} /></button></>}
+      summary={<><label className="team-hero-selector">当前团队<select value={selectedId ?? "new"} onChange={(event) => { const team = teams.find((item) => item.id === event.target.value); if (team) void choose(team); }}><option value="new" disabled>新团队（未保存）</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}{team.graph.mode === "flow" ? " · 消息流" : " · 历史咨询"}</option>)}</select></label>{metrics && <><PageMetric label="团队模式" value={metrics.modeLabel} tone={graph?.mode === "flow" ? "ready" : "warning"} /><PageMetric label="团队能力" value={metrics.capabilities} /><PageMetric label="消息路线" value={metrics.routes} /></>}</>}
+    />
     {!graph ? <div className="cap-feedback">正在读取团队…</div> : <>
-      {graph.mode !== "flow" && <div className="team-legacy-note">此团队使用历史咨询语义，原团队保持不变。<button type="button" onClick={() => void copyLegacy()}>复制为消息流团队</button></div>}
-      <div className="team-name-field"><label htmlFor="team-name">团队名称</label><input id="team-name" value={name} disabled={graph.mode !== "flow"} onChange={(event) => setName(event.target.value)} maxLength={80} /></div>
-      <div className="team-members"><h2>团队能力</h2><p>至少选两个。取消选择时，相关连线也会移除。</p><div className="team-member-list">{TEAM_CAPABILITIES.map((key) => <label key={key}><input type="checkbox" checked={selectedKeys.has(key)} disabled={busy || graph.mode !== "flow"} onChange={() => setGraph(toggleTeamCapability(graph, key))} /><span>{labels[key]}</span></label>)}</div></div>
-      {graph.mode === "flow" && <div className="team-endpoints"><label>入口能力<select value={graph.entry ?? ""} onChange={(event) => setGraph({ ...graph, entry: event.target.value ? event.target.value as CapabilityKey : null })}><option value="">请选择</option>{graph.nodes.map((node) => <option key={node.capability} value={node.capability}>{labels[node.capability]}</option>)}</select></label>
-        <label>可发出完成信号的能力<select value={graph.terminal ?? ""} onChange={(event) => setGraph({ ...graph, terminal: event.target.value ? event.target.value as CapabilityKey : null })}><option value="">请选择</option>{graph.nodes.map((node) => <option key={node.capability} value={node.capability}>{labels[node.capability]}</option>)}</select></label></div>}
-      <TeamCanvas graph={graph} onChange={setGraph} />
-      <p className="team-canvas-note">{graph.mode === "flow" ? "从节点右侧圆点拖到目标左侧圆点添加连线；可反向再连一条。点击连线可删除，Escape 取消。节点仍可拖动或用方向键移动。" : "历史团队的拓扑仅供查看。"}</p>
+      <div className="team-workspace">
+        <section className="team-config-panel">
+          <div className="team-panel-heading"><div><h2>团队设置</h2><p>配置名称、参与能力和流程端点。</p></div>{graph.mode !== "flow" && <span className="team-mode-badge">只读</span>}</div>
+          <div className="team-name-row"><div className="team-name-field"><label htmlFor="team-name">团队名称</label><input id="team-name" value={name} disabled={graph.mode !== "flow"} onChange={(event) => setName(event.target.value)} maxLength={80} /></div>{graph.mode !== "flow" && <button type="button" className="team-copy-button" onClick={() => void copyLegacy()}>复制为消息流</button>}</div>
+          {graph.mode !== "flow" && <p className="team-legacy-note">此团队使用历史咨询语义。复制后可编辑消息流，原团队保持不变。</p>}
+          <div className="team-members"><div className="team-panel-heading"><div><h2>团队能力</h2><p>至少选两个；取消后相关连线会同步移除。</p></div><span className="team-count-badge">{selectedKeys.size} / {TEAM_CAPABILITIES.length}</span></div><div className="team-member-list">{TEAM_CAPABILITIES.map((key) => <label key={key}><input type="checkbox" checked={selectedKeys.has(key)} disabled={busy || graph.mode !== "flow"} onChange={() => setGraph(toggleTeamCapability(graph, key))} /><span>{labels[key]}</span></label>)}</div></div>
+          {graph.mode === "flow" && <div className="team-endpoints"><label>入口能力<select value={graph.entry ?? ""} onChange={(event) => setGraph({ ...graph, entry: event.target.value ? event.target.value as CapabilityKey : null })}><option value="">请选择</option>{graph.nodes.map((node) => <option key={node.capability} value={node.capability}>{labels[node.capability]}</option>)}</select></label>
+            <label>完成信号能力<select value={graph.terminal ?? ""} onChange={(event) => setGraph({ ...graph, terminal: event.target.value ? event.target.value as CapabilityKey : null })}><option value="">请选择</option>{graph.nodes.map((node) => <option key={node.capability} value={node.capability}>{labels[node.capability]}</option>)}</select></label></div>}
+        </section>
+        <section className="team-canvas-panel">
+          <div className="team-panel-heading"><div><h2>消息流画布</h2><p>{graph.mode === "flow" ? "拖动节点，并从右侧圆点连接到目标能力。" : "历史团队的拓扑仅供查看。"}</p></div><span className="team-canvas-stats">{graph.nodes.length} NODES · {graph.edges.length} ROUTES</span></div>
+          <TeamCanvas graph={graph} onChange={setGraph} />
+          <p className="team-canvas-note">{graph.mode === "flow" ? "点击连线可删除，Escape 取消；节点也可用方向键移动。" : "复制为消息流团队后即可编辑节点和连线。"}</p>
+        </section>
+      </div>
       <div className="teams-footer"><span role="status">{issue ?? message}</span><button onClick={() => void save()} disabled={busy || graph.mode !== "flow" || !dirty || !name.trim() || !!issue}><Save size={16} />保存团队</button></div>
     </>}
   </section>;
