@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Square,
   TestTube2,
+  UsersRound,
   WandSparkles,
 } from "lucide-react";
 import { api } from "./api";
@@ -270,11 +271,11 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><img src="/archmage-icon.png" alt="" /></div><div><strong>Archmage</strong><span>Agent Workbench</span></div></div>
-        <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => navigate("runs", null)}><Plus size={17} />新建 Run</button>
-        <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => navigate("agents")}><Bot size={17} />Agent 管理</button>
-        <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => navigate("capabilities")}><Share2 size={17} />Capability 管理</button>
-        <button className={`new-run ${view === "teams" ? "active" : ""}`} onClick={() => navigate("teams")}><Share2 size={17} />团队管理</button>
+        <div className="brand"><div className="brand-mark"><img src="/archmage-icon.png" alt="" /></div><div><strong>Archmage</strong><span>智能体工作台</span></div></div>
+        <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => navigate("runs", null)}><Plus size={17} />新建任务</button>
+        <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => navigate("agents")}><Bot size={17} />智能体管理</button>
+        <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => navigate("capabilities")}><Share2 size={17} />能力管理</button>
+        <button className={`new-run ${view === "teams" ? "active" : ""}`} onClick={() => navigate("teams")}><UsersRound size={17} />团队管理</button>
         <div className="section-label">最近运行</div>
         <nav className="run-list" aria-label="最近运行">
           {runs.map((run) => (
