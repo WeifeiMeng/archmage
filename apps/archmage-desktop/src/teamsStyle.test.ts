@@ -10,4 +10,9 @@ describe("Team selector summary card", () => {
     expect(teamsCss).toMatch(/\.team-hero-selector:focus-within\s*\{[^}]*outline:\s*2px solid var\(--accent\);/s);
     expect(teamsCss).toMatch(/\.teams-view \.team-hero-selector select:focus-visible\s*\{[^}]*outline:\s*none;/s);
   });
+
+  it("stacks Team settings above the message-flow canvas", () => {
+    expect(teamsCss).toMatch(/\.team-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s);
+    expect(teamsCss).not.toMatch(/\.team-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(350px,/s);
+  });
 });
