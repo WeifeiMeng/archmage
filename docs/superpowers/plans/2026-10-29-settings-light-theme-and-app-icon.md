@@ -210,7 +210,7 @@ Expected: FAIL because the new portrait asset and complete icon set do not exist
 
 - [x] **Step 3: Create the approved master icon**
 
-Use the image editing tool with the supplied portrait as the reference. Create a centered head-and-shoulders crop that preserves the face, long hair, high collar, and chest medallion, keeps the original monochrome pencil style, places it on a pale gray-green macOS-style squircle, and leaves the area outside the squircle transparent. Save the result as `public/archmage-icon.png`.
+Use the image editing tool with the supplied portrait as the reference. Create a centered head-and-shoulders crop that preserves the face, long hair, high collar, and chest medallion, keeps the original monochrome pencil style, places it on a pure-white macOS-style squircle with no outline or shadow, and leaves the area outside the squircle transparent. Save the result as `public/archmage-icon.png`.
 
 - [x] **Step 4: Generate platform assets**
 
