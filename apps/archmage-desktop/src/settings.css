@@ -1,0 +1,31 @@
+.settings-view { max-width: 980px; margin: 0 auto; padding: 32px 0 72px; }
+.sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.sidebar-bottom .sidebar-foot { margin-top: 0; }
+.settings-nav { flex: 0 0 auto; }
+.brand-mark { overflow: hidden; padding: 0; background: #fff; }
+.brand-mark img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.settings-card { margin-top: 14px; padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.settings-card-heading h2 { margin: 0 0 5px; font-size: 17px; }
+.settings-card-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.theme-options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+.theme-option { min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); text-align: left; }
+.theme-option:hover { border-color: var(--accent); }
+.theme-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.theme-option.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.theme-preview { height: 132px; display: grid; grid-template-columns: 28% 1fr; gap: 9px; padding: 10px; border: 1px solid; border-radius: 9px; }
+.theme-preview-sidebar, .theme-preview-content, .theme-preview-content i { display: block; border-radius: 6px; }
+.theme-preview-content { padding: 8px; }
+.theme-preview-content i { height: 18px; margin-bottom: 7px; }
+.theme-preview.light { border-color: #d7e2da; background: #f3f6f2; }
+.theme-preview.light .theme-preview-sidebar { background: #e2eae4; }
+.theme-preview.light .theme-preview-content { border: 1px solid #dce5df; background: #fff; }
+.theme-preview.light .theme-preview-content i { background: #e9efe9; }
+.theme-preview.dark { border-color: #273140; background: #0a0d12; }
+.theme-preview.dark .theme-preview-sidebar { background: #151c25; }
+.theme-preview.dark .theme-preview-content { border: 1px solid #2b3543; background: #171e28; }
+.theme-preview.dark .theme-preview-content i { background: #273140; }
+.theme-option-copy { display: block; margin-top: 11px; }
+.theme-option-title { display: flex; align-items: center; gap: 7px; }
+.theme-option-copy small { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; }
+.theme-option-state { min-height: 21px; display: flex; align-items: center; gap: 5px; margin-top: 12px; color: var(--accent-strong); font-size: 10px; font-weight: 700; }
+@media (max-width: 780px) { .settings-view { padding-top: 22px; } .theme-options { grid-template-columns: 1fr; } }

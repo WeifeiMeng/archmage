@@ -7,4 +7,10 @@ apps/archmage-desktop/*.tsbuildinfo
 apps/archmage-desktop/vite.config.js
 apps/archmage-desktop/vite.config.d.ts
 apps/archmage-desktop/src-tauri/gen/
-apps/archmage-desktop/src-tauri/icons/
+apps/archmage-desktop/src-tauri/icons/*
+!apps/archmage-desktop/src-tauri/icons/32x32.png
+!apps/archmage-desktop/src-tauri/icons/128x128.png
+!apps/archmage-desktop/src-tauri/icons/128x128@2x.png
+!apps/archmage-desktop/src-tauri/icons/icon.icns
+!apps/archmage-desktop/src-tauri/icons/icon.ico
+!apps/archmage-desktop/src-tauri/icons/icon.png

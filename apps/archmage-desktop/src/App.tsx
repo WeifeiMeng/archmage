@@ -3,7 +3,6 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import {
-  Box,
   Bot,
   Check,
   ChevronRight,
@@ -15,6 +14,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Settings as SettingsIcon,
   Share2,
   ShieldCheck,
   Square,
@@ -25,10 +25,12 @@ import { api } from "./api";
 import { AgentManagement } from "./AgentManagement";
 import { CapabilityManagement } from "./CapabilityManagement";
 import { TeamManagement } from "./TeamManagement";
+import { SettingsView } from "./SettingsView";
 import { RunTeamPreview } from "./RunTeamPreview";
 import { ManagementHero, PageMetric } from "./ManagementHero";
 import { environmentSummary } from "./managementLayout";
 import { consultationEdgeState, shouldConfirmTeamExit } from "./teamGraph";
+import { applyTheme, DEFAULT_THEME, persistTheme, type Theme } from "./theme";
 import "./agents.css";
 import "./capabilities.css";
 import "./newRun.css";
@@ -63,7 +65,9 @@ function stateLabel(state: string, outcome?: string | null) {
   return ({ pending: "等待", ready: "就绪", running: "运行中", succeeded: "完成", failed: "失败", interrupted: "已中断", cancelled: "已取消", created: "已创建", provisioning: "准备中" } as Record<string, string>)[state] ?? state;
 }
 
-export default function App() {
+type AppProps = { initialTheme?: Theme };
+
+export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null);
@@ -85,9 +89,16 @@ export default function App() {
   const [environment, setEnvironment] = useState<"checking" | "ready" | "failed" | "preview">("checking");
   const [agents, setAgents] = useState<AgentManagementSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
 
   useEffect(() => { capabilityDirtyRef.current = capabilityDirty; }, [capabilityDirty]);
   useEffect(() => { teamDirtyRef.current = teamDirty; }, [teamDirty]);
+
+  function changeTheme(nextTheme: Theme) {
+    setTheme(nextTheme);
+    applyTheme(nextTheme);
+    persistTheme(nextTheme);
+  }
 
   async function navigate(nextView: AppView, nextRunId?: string | null) {
     if (shouldConfirmCapabilityExit(view, nextView, capabilityDirty)) {
@@ -259,7 +270,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark"><Box size={18} /></div><div><strong>Archmage</strong><span>Agent Workbench</span></div></div>
+        <div className="brand"><div className="brand-mark"><img src="/archmage-icon.png" alt="" /></div><div><strong>Archmage</strong><span>Agent Workbench</span></div></div>
         <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => navigate("runs", null)}><Plus size={17} />新建 Run</button>
         <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => navigate("agents")}><Bot size={17} />Agent 管理</button>
         <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => navigate("capabilities")}><Share2 size={17} />Capability 管理</button>
@@ -275,12 +286,15 @@ export default function App() {
           ))}
           {runs.length === 0 && <p className="empty-copy">还没有 Run。先从右侧创建第一个真实协作流程。</p>}
         </nav>
-        <div className="sidebar-foot"><span className="live-dot" />本地 Runtime</div>
+        <div className="sidebar-bottom">
+          <button className={`new-run settings-nav ${view === "settings" ? "active" : ""}`} onClick={() => navigate("settings")}><SettingsIcon size={17} />设置</button>
+          <div className="sidebar-foot"><span className="live-dot" />本地 Runtime</div>
+        </div>
       </aside>
 
       <main className="workspace">
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
-        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : !selectedId ? (
+        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : view === "settings" ? <SettingsView theme={theme} onThemeChange={changeTheme} /> : !selectedId ? (
           <section className="new-run-view">
             <ManagementHero eyebrow="TEAM RUN" title="把目标交给团队" description="定义任务、选择团队，并在启动前确认执行环境。" summary={<PageMetric {...runtimeStatus} />} />
             <div className="new-run-grid">

@@ -8,7 +8,7 @@
 .new-run-panel-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .new-run-task-panel textarea { min-height: 178px; margin-bottom: 0; }
 .new-run-team-panel .run-team-select { margin-bottom: 0; }
-.run-team-select { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: 9px; background: #0d1218; color: var(--text); padding: 0 12px; }
+.run-team-select { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: 9px; background: var(--input-bg); color: var(--text); padding: 0 12px; }
 .new-run-team-panel .run-team-preview { margin: 12px 0 0; }
 .new-run-issues { display: grid; gap: 8px; margin-top: 12px; }
 .new-run-issues .run-form-issue { margin: 0; }

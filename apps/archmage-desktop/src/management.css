@@ -2,9 +2,9 @@
   position: relative;
   overflow: hidden;
   padding: 24px;
-  border: 1px solid #304238;
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: linear-gradient(120deg, #111b24, #10231a);
+  background: var(--hero-gradient);
 }
 
 .management-hero::after {
@@ -34,18 +34,18 @@
 .management-hero-copy h1 { margin: 8px 0 7px; font-size: 34px; line-height: 1.08; letter-spacing: -.045em; }
 .management-hero-copy > p:last-child { max-width: 720px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .management-hero-actions { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
-.management-hero-actions button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid var(--border); border-radius: 9px; background: #151f29; color: var(--text); }
+.management-hero-actions button { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); color: var(--text); }
 .management-hero-actions button:disabled { opacity: .42; cursor: not-allowed; }
 .management-hero-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .management-hero-summary { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 20px; }
-.page-metric { min-width: 0; padding: 11px 12px; border: 1px solid #32463b; border-radius: 10px; background: rgba(10, 20, 16, .68); }
+.page-metric { min-width: 0; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .page-metric > span, .page-metric > strong, .page-metric > small { display: block; }
-.page-metric > span { color: #819689; font-size: 9px; }
+.page-metric > span { color: var(--muted); font-size: 9px; }
 .page-metric > strong { margin-top: 4px; color: var(--text); font: 700 17px ui-monospace, SFMono-Regular, monospace; }
-.page-metric > small { margin-top: 4px; color: #718278; font-size: 9px; line-height: 1.4; }
+.page-metric > small { margin-top: 4px; color: var(--subtle-text); font-size: 9px; line-height: 1.4; }
 .page-metric.ready > strong { color: var(--accent); }
 .page-metric.warning > strong { color: var(--warning); }
-.page-metric.failed > strong { color: #ff9ca3; }
+.page-metric.failed > strong { color: var(--danger); }
 
 @media (max-width: 780px) {
   .management-hero-top { flex-direction: column; }

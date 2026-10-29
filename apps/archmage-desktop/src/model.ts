@@ -8,7 +8,7 @@ export type TeamEdge = { from: CapabilityKey; to: CapabilityKey };
 export type TeamGraph = { nodes: TeamNode[]; edges: TeamEdge[]; mode?: "legacy" | "flow"; entry?: CapabilityKey | null; terminal?: CapabilityKey | null };
 export type Team = { id: string; name: string; revision: number; graph: TeamGraph };
 export type TeamLoadState = "loading" | "ready" | "failed";
-export type AppView = "runs" | "agents" | "capabilities" | "teams";
+export type AppView = "runs" | "agents" | "capabilities" | "teams" | "settings";
 
 export function selectedTeamForRun(teams: Team[], teamId: string, loadState: TeamLoadState): Team | null {
   return loadState === "ready" ? teams.find((team) => team.id === teamId) ?? null : null;

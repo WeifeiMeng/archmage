@@ -47,6 +47,7 @@ describe("team graph editor", () => {
     const saved: Team = { id: "default", name: "Default", revision: 1, graph };
     expect(isTeamDirty(saved, "Default", moved)).toBe(true);
     expect(shouldConfirmTeamExit("teams", "runs", true)).toBe(true);
+    expect(shouldConfirmTeamExit("teams", "settings", true)).toBe(true);
     expect(shouldConfirmTeamExit("teams", "teams", true)).toBe(false);
   });
 

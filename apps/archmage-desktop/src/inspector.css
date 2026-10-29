@@ -8,7 +8,7 @@
 
 .result-meta > div {
   min-width: 0;
-  background: #10151c;
+  background: var(--surface-2);
   padding: 12px 14px;
 }
 
@@ -18,7 +18,7 @@
 }
 
 .result-meta span {
-  color: #718095;
+  color: var(--subtle-text);
   font-size: 8px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -26,7 +26,7 @@
 
 .result-meta code {
   margin-top: 5px;
-  color: #aab8c7;
+  color: var(--text);
   font-size: 9px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -39,9 +39,9 @@
   align-items: flex-start;
   margin: 18px;
   padding: 14px;
-  border: 1px dashed #344151;
+  border: 1px dashed var(--border);
   border-radius: 9px;
-  color: #6f8094;
+  color: var(--muted);
 }
 
 .waiting-result strong,
@@ -51,7 +51,7 @@
 
 .waiting-result strong {
   font-size: 11px;
-  color: #aab7c6;
+  color: var(--text);
 }
 
 .waiting-result span {
@@ -71,7 +71,7 @@
 .result-summary > div {
   margin-bottom: 14px;
   padding-left: 11px;
-  border-left: 2px solid #37634e;
+  border-left: 2px solid var(--accent);
 }
 
 .result-summary span {
@@ -82,7 +82,7 @@
 
 .result-summary p {
   margin: 5px 0 0;
-  color: #bdc8d4;
+  color: var(--text);
   font-size: 11px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -94,7 +94,7 @@
 
 .inspect-section summary {
   cursor: pointer;
-  color: #7f8fa2;
+  color: var(--muted);
   font-size: 10px;
 }
 
@@ -103,7 +103,7 @@
 }
 
 .compact-event > span {
-  color: #8594a5;
+  color: var(--muted);
   font: 9px ui-monospace, SFMono-Regular, monospace;
 }
 
@@ -121,8 +121,8 @@
 }
 
 .preflight.failed {
-  border-color: #63363b;
-  background: #211316;
+  border-color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .preflight.failed svg {
@@ -130,20 +130,20 @@
 }
 
 .preflight.preview {
-  border-color: #3e4f68;
-  background: #111926;
+  border-color: var(--border);
+  background: var(--surface-2);
 }
 
 .preflight.preview svg {
-  color: #86a8d8;
+  color: var(--info);
 }
 
 .preflight > button {
   margin-left: auto;
-  border: 1px solid #654047;
+  border: 1px solid var(--danger);
   border-radius: 7px;
   background: transparent;
-  color: #ffadb2;
+  color: var(--danger);
   padding: 0 10px;
   font-size: 10px;
 }

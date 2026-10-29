@@ -1,14 +1,14 @@
-.run-team-preview { margin:12px 0 20px; padding:16px 18px; border:1px solid var(--border); border-radius:10px; background:#101923; }
+.run-team-preview { margin:12px 0 20px; padding:16px 18px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); }
 .run-team-preview-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .run-team-preview-heading strong { font-size:13px; }
-.run-team-preview-heading span { font-size:11px; color:#9ac0d6; }
+.run-team-preview-heading span { font-size:11px; color:var(--info); }
 .run-team-members,.run-team-routes { display:flex; flex-wrap:wrap; gap:8px; }
 .run-team-members { margin-top:14px; }
-.run-team-members span { padding:7px 10px; border:1px solid #3c4e60; border-radius:7px; background:#172431; color:var(--text); font-size:12px; font-weight:600; }
-.run-team-preview p { margin:12px 0 0; color:#b8c8d6; font-size:12px; line-height:1.5; }
+.run-team-members span { padding:7px 10px; border:1px solid var(--border); border-radius:7px; background:var(--node-bg); color:var(--text); font-size:12px; font-weight:600; }
+.run-team-preview p { margin:12px 0 0; color:var(--text); font-size:12px; line-height:1.5; }
 .run-team-routes { margin-top:12px; }
 .run-team-routes span { color:var(--muted); font-size:11px; }
-.run-form-issue { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin:12px 0; padding:11px 13px; border:1px solid #654047; border-radius:8px; background:#21191d; color:#ffbdc2; font-size:12px; line-height:1.5; }
+.run-form-issue { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin:12px 0; padding:11px 13px; border:1px solid var(--danger); border-radius:8px; background:var(--danger-bg); color:var(--danger); font-size:12px; line-height:1.5; }
 .run-form-issue button { padding:4px 0; border:0; background:transparent; color:var(--accent); font-size:12px; text-decoration:underline; text-underline-offset:3px; }
 .run-form-issue button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .run-team-select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }

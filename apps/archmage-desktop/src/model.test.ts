@@ -16,6 +16,7 @@ describe("capability topology", () => {
   });
   it("guards sidebar navigation away from a dirty Capability editor", () => {
     expect(shouldConfirmCapabilityExit("capabilities", "runs", true)).toBe(true);
+    expect(shouldConfirmCapabilityExit("capabilities", "settings", true)).toBe(true);
     expect(shouldConfirmCapabilityExit("capabilities", "agents", false)).toBe(false);
     expect(shouldConfirmCapabilityExit("runs", "agents", true)).toBe(false);
   });
