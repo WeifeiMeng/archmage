@@ -111,3 +111,62 @@ git add apps/archmage-desktop/src/App.tsx \
   docs/superpowers/plans/2026-10-29-sidebar-brand-and-navigation-localization.md
 git commit -m "Refresh sidebar brand and navigation labels"
 ```
+
+### Task 2: Emphasize the in-app wizard portrait
+
+**Files:**
+- Modify: `apps/archmage-desktop/src/sidebarNavigation.test.ts`
+- Modify: `apps/archmage-desktop/src/settings.css`
+
+- [x] **Step 1: Extend the style contract test**
+
+Read `settings.css` in `sidebarNavigation.test.ts` and assert that the brand image rule contains `transform: scale(1.15)` and `filter: contrast(1.18)`.
+
+- [x] **Step 2: Run the focused test and verify RED**
+
+Run `cd apps/archmage-desktop && npm test -- sidebarNavigation.test.ts`.
+
+Expected: the new assertion fails because the image currently has no transform or contrast filter.
+
+- [x] **Step 3: Apply the approved image-only emphasis**
+
+Update the existing `.brand-mark img` rule in `settings.css` to:
+
+```css
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transform: scale(1.15);
+  filter: contrast(1.18);
+}
+```
+
+Do not change the `44px` brand container or the shared PNG asset.
+
+- [x] **Step 4: Run focused and complete verification**
+
+Run:
+
+```bash
+cd apps/archmage-desktop
+npm test -- sidebarNavigation.test.ts
+npm test
+npm run build
+cd ../..
+git diff --check
+```
+
+Expected: all tests pass, the production build succeeds, and there are no whitespace errors.
+
+- [x] **Step 5: Visually verify and commit**
+
+Inspect the light-theme sidebar and confirm that the portrait is visibly larger and higher contrast without escaping the rounded `44px` container. Commit with:
+
+```bash
+git add apps/archmage-desktop/src/settings.css \
+  apps/archmage-desktop/src/sidebarNavigation.test.ts \
+  docs/superpowers/plans/2026-10-29-sidebar-brand-and-navigation-localization.md
+git commit -m "Emphasize sidebar wizard portrait"
+```

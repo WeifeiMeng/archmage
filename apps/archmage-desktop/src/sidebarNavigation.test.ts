@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const settingsStyles = readFileSync(new URL("./settings.css", import.meta.url), "utf8");
 
 describe("sidebar brand and navigation", () => {
   it("uses the approved Chinese labels and a distinct team icon", () => {
@@ -17,5 +18,10 @@ describe("sidebar brand and navigation", () => {
     expect(styles).toContain(".brand-mark{width:44px;height:44px");
     expect(styles).toContain(".brand strong{font-size:18px}");
     expect(styles).toContain(".brand span{font-size:12px");
+  });
+
+  it("emphasizes only the in-app wizard portrait", () => {
+    expect(settingsStyles).toContain("transform: scale(1.15)");
+    expect(settingsStyles).toContain("filter: contrast(1.18)");
   });
 });
