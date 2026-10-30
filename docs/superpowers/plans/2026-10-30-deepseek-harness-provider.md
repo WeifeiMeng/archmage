@@ -2,418 +2,503 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a real DeepSeek Harness Provider whose Archmage capabilities can be configured, verified, executed, cancelled, and resumed in one DSH conversation per Run and Capability.
+**Goal:** Replace the current experimental DeepSeek Harness headless-CLI integration with an Archmage-owned Python SDK sidecar, so a `Run + Capability` keeps one DSH conversation for its full live Run and Agent Management can configure, discover, verify, and bind that provider.
 
-**Architecture:** Extend `dsh --profile headless` with explicit create/resume session arguments while retaining one process per task. In Archmage, add a `deepseek_harness` adapter behind a provider-neutral invocation API and persist one guarded DSH session mapping per Run and Capability; consultations use temporary sessions. Existing contracts, worktrees, artifacts, and process-group cancellation remain authoritative.
+**Architecture:** Archmage ships a small JSONL Python bridge plus a Cordis composition and launches them through the published `deepseek-harness-sdk` / matching `deepseek-harness-runtime-bin`. Rust owns one long-lived bridge process per `(run_id, capability)`, uses temporary bridges for consultations, strictly parses the final assistant text as one JSON object, and destroys all sidecars at Run terminal/cancel boundaries. The existing Codex path remains stateless and unchanged; no DeepSeek Harness repository change is part of this delivery.
 
-**Tech Stack:** TypeScript/Vitest/Cordis in DeepSeek Harness; Rust/Tokio/Rusqlite in Archmage Core; React/TypeScript/Vitest/Tauri in Archmage Desktop.
+**Tech Stack:** Rust 2024, Tokio process/IO primitives, SQLite/rusqlite, Python 3 + `deepseek-harness-sdk`, JSONL, Cordis YAML, React/TypeScript/Vitest, Cargo tests.
 
 ---
 
-## File structure
+## Scope and replacement rules
 
-DeepSeek Harness repository (`/Users/mengweifei/Desktop/code/github/deepseek-harness`):
+- Work only in the Archmage repository. The existing DSH worktree/branch created for the superseded CLI design is not merged, edited, reset, or deleted by this plan.
+- Rewrite the unshipped migration `0016_deepseek_harness.sql` in place. This feature branch has not been released, so retaining the obsolete `provider_sessions` table or its seeded guessed-model Agent would create needless compatibility debt.
+- Preserve the already-added `ProviderKind::DeepseekHarness`, but replace every headless CLI flag, create/resume lease, and persisted-provider-session assumption with the SDK bridge/pool model.
+- Keep verification focused: unit/integration tests use controlled bridge/SDK fakes; the real credentialed smoke is one optional final command and is reported as skipped when prerequisites are absent.
 
-- `packages/bundle/headless/src/startup.ts`: parse mutually exclusive create/resume session options.
-- `packages/bundle/headless/src/index.ts`: create or resume the requested Agent and drive one owned turn.
-- `packages/bundle/headless/tests/{startup,headless}.spec.ts`: focused session-mode behavior.
-- `packages/bundle/headless/README.md`, `README.zh.md`: public CLI and persistence semantics.
-- `.agents/notes/implemented/feature/2026-10-30-headless-session-resume.{md,zh.md}` plus `.i18n.yaml`: required decision record.
-
-Archmage repository (`/Users/mengweifei/Desktop/code/github/archmage`):
-
-- `crates/archmage-core/migrations/0016_deepseek_harness.sql`: Provider constraint, seeded instance, and guarded Run/Capability session table.
-- `crates/archmage-core/src/provider/{mod.rs,deepseek_harness.rs,executor.rs}`: DSH protocol plus provider-neutral dispatch.
-- `crates/archmage-core/src/{agent.rs,store/mod.rs,runtime/{mod.rs,dispatch.rs,consultation.rs,flow.rs}}`: management, frozen bindings, session ownership, and all runtime routes.
-- `crates/archmage-core/tests/{agents.rs,deepseek_harness_protocol.rs,runtime.rs,consultations.rs,flow.rs}`: narrow persistence and routing coverage.
-- `apps/archmage-desktop/src/{model.ts,AgentManagement.tsx,CapabilityManagement.tsx,managementLayout.ts}` and focused tests: supported Provider UI.
-- `docs/runbooks/desktop-s0.md`: current Provider behavior.
-
-### Task 1: Add explicit headless session creation and resume to DeepSeek Harness
+## Task 1: Correct the Agent schema and frozen configuration
 
 **Files:**
-- Modify: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/src/startup.ts`
-- Modify: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/src/index.ts`
-- Modify: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/cordis.patch.yml`
-- Test: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/tests/startup.spec.ts`
-- Test: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/tests/headless.spec.ts`
+- Modify: `crates/archmage-core/migrations/0016_deepseek_harness.sql`
+- Modify: `crates/archmage-core/src/agent.rs`
+- Modify: `crates/archmage-core/src/store/mod.rs`
+- Modify: `crates/archmage-core/src/runtime/mod.rs`
+- Modify: `crates/archmage-core/tests/agents.rs`
+- Modify: `crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: Write failing startup parser tests**
+- [ ] **Step 1: Write failing schema and validation tests**
 
-Assert these resolved values and errors:
+Add tests proving:
 
-```ts
-expect((await bootStartup(['--session-id', 'run-designer', 'first task'])).task)
-  .toEqual({ task: 'first task', session: { mode: 'create', id: 'run-designer' } })
-expect((await bootStartup(['--resume-session-id', 'run-designer', 'next task'])).task)
-  .toEqual({ task: 'next task', session: { mode: 'resume', id: 'run-designer' } })
-expect((await bootStartup(['--session-id', 'a', '--resume-session-id', 'b', 'task'])).observed.out)
-  .toContain('mutually exclusive')
-```
+1. schema 8 upgrades preserve existing Codex instances/bindings and create no DSH instance automatically;
+2. `agent_instances` has nullable `provider_route` and no `provider_sessions` table;
+3. DSH input requires nonblank `provider_route` and `model`;
+4. Codex rejects `provider_route` but retains its optional `model` behavior;
+5. saving a changed Python path, route, or model invalidates verification;
+6. frozen Run bindings retain resolved Python path, route, and model after the global Agent is edited.
 
-- [ ] **Step 2: Run the parser test and confirm it fails**
+Use this input shape in all new fixtures:
 
-Run: `pnpm exec vitest run packages/bundle/headless/tests/startup.spec.ts`
-
-Expected: FAIL because `HeadlessStartupValues` has no session mode.
-
-- [ ] **Step 3: Parse and publish the session mode**
-
-Use one shared type in `startup.ts`:
-
-```ts
-export type HeadlessSession =
-  | { mode: 'fresh' }
-  | { mode: 'create'; id: SessionId }
-  | { mode: 'resume'; id: SessionId }
-
-export interface HeadlessStartupValues {
-  task: string
-  session: HeadlessSession
+```rust
+AgentInstanceInput {
+    id: "dsh-sdk".into(),
+    provider_kind: ProviderKind::DeepseekHarness,
+    display_name: "DSH SDK".into(),
+    executable_path: Some("/usr/bin/python3".into()),
+    provider_route: Some("deepseek-official".into()),
+    model: Some("deepseek-v4-flash".into()),
+    enabled: true,
 }
 ```
 
-Add Commander options `--session-id <id>` and `--resume-session-id <id>`, reject blank IDs and simultaneous options, and retain `{ mode: 'fresh' }` when neither is supplied. Forward both fields through `cordis.patch.yml` into runner config.
+- [ ] **Step 2: Run the focused tests and confirm the red state**
 
-- [ ] **Step 4: Write failing runner tests for create and resume**
+Run: `cargo test -p archmage-core --test agents --test runtime`
 
-Extend the scripted factory to record calls and assert:
+Expected: compile/assertion failures because `provider_route` is absent and migration 16 still seeds an Agent and creates `provider_sessions`.
 
-```ts
-expect(calls).toEqual([{ method: 'create', sessionId: 'run-designer' }])
-expect(calls).toEqual([{ method: 'resume', resumeSessionId: 'run-designer' }])
-```
+- [ ] **Step 3: Rewrite migration 16 and the Rust data model**
 
-Also assert the existing no-option path still creates `session-<uuid>`.
-
-- [ ] **Step 5: Implement runner selection**
-
-Change runner config to `{ task, session }`. Resolve the handle as follows, using the same model-selection setup for both methods:
-
-```ts
-const handle = config.session.mode === 'resume'
-  ? await agents.resume({ resumeSessionId: config.session.id, agentOptions, setup })
-  : await agents.create({
-      sessionId: config.session.mode === 'create' ? config.session.id : SessionId(`session-${randomUUID()}`),
-      meta: { cwd: process.cwd() }, agentOptions, setup,
-    })
-```
-
-Keep the existing idle interval, flush-before-output, exit codes, and final-text selection unchanged.
-
-- [ ] **Step 6: Run focused DeepSeek Harness tests**
-
-Run: `pnpm exec vitest run packages/bundle/headless/tests/startup.spec.ts packages/bundle/headless/tests/headless.spec.ts`
-
-Expected: PASS.
-
-- [ ] **Step 7: Commit the executable behavior**
-
-```bash
-git -C /Users/mengweifei/Desktop/code/github/deepseek-harness add packages/bundle/headless
-git -C /Users/mengweifei/Desktop/code/github/deepseek-harness commit -m "feat(headless): support persistent session turns"
-```
-
-### Task 2: Document the DeepSeek Harness session contract
-
-**Files:**
-- Modify: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/README.md`
-- Modify: `/Users/mengweifei/Desktop/code/github/deepseek-harness/packages/bundle/headless/README.zh.md`
-- Create: `/Users/mengweifei/Desktop/code/github/deepseek-harness/.agents/notes/implemented/feature/2026-10-30-headless-session-resume.md`
-- Create: `/Users/mengweifei/Desktop/code/github/deepseek-harness/.agents/notes/implemented/feature/2026-10-30-headless-session-resume.zh.md`
-- Create: `/Users/mengweifei/Desktop/code/github/deepseek-harness/.agents/notes/implemented/feature/2026-10-30-headless-session-resume.i18n.yaml`
-
-- [ ] **Step 1: Update the bilingual public contract**
-
-Document exactly:
-
-```text
---session-id <id>         create only; fail when the persisted ID exists
---resume-session-id <id>  resume only; fail when the persisted ID is absent or invalid
-no option                 preserve the current fresh random-session behavior
-```
-
-State that every invocation submits one turn, flushes it, prints only that interval's final assistant text, and exits.
-
-- [ ] **Step 2: Add the required implemented Agent Note triplet**
-
-Use the required sections `Problem`, `Decision`, `Alternatives considered`, and `Consequences`. Record that explicit create/resume beat create-or-resume because callers must not silently replace lost history; record ACP/JSON-RPC as the heavier rejected alternative.
-
-- [ ] **Step 3: Run documentation gates relevant to the changed files**
-
-Run: `pnpm run verify-agent-note-format && pnpm run verify-translation-pairing`
-
-Expected: PASS.
-
-- [ ] **Step 4: Commit the documentation**
-
-```bash
-git -C /Users/mengweifei/Desktop/code/github/deepseek-harness add packages/bundle/headless/README.md packages/bundle/headless/README.zh.md .agents/notes/implemented/feature/2026-10-30-headless-session-resume.*
-git -C /Users/mengweifei/Desktop/code/github/deepseek-harness commit -m "docs(headless): define session resume semantics"
-```
-
-### Task 3: Add DeepSeek Harness Provider data and session ownership to Archmage
-
-**Files:**
-- Create: `crates/archmage-core/migrations/0016_deepseek_harness.sql`
-- Modify: `crates/archmage-core/src/store/mod.rs`
-- Modify: `crates/archmage-core/src/agent.rs`
-- Test: `crates/archmage-core/tests/agents.rs`
-
-- [ ] **Step 1: Write failing migration and session-state tests**
-
-Cover the seeded unbound instance, unchanged Codex bindings, and this transition:
-
-```rust
-let lease = store.begin_provider_session(run_id, "coder", ProviderKind::DeepseekHarness)?;
-assert!(matches!(lease.mode, ProviderSessionMode::Create));
-store.mark_provider_session_ready(run_id, "coder", &lease.session_id)?;
-assert!(matches!(store.begin_provider_session(run_id, "coder", ProviderKind::DeepseekHarness)?.mode,
-                 ProviderSessionMode::Resume));
-```
-
-Also prove an interrupted create remains `uncertain` and cannot begin again.
-
-- [ ] **Step 2: Run the test and confirm it fails**
-
-Run: `cargo test -p archmage-core --test agents`
-
-Expected: FAIL because schema 16 and `DeepseekHarness` do not exist.
-
-- [ ] **Step 3: Add schema 16**
-
-Rebuild `agent_instances` and `capability_bindings` inside the migration so the Provider check includes `deepseek_harness`, preserving every existing row and foreign key. Insert:
+Make migration 16 rebuild `agent_instances` with this column order:
 
 ```sql
-INSERT INTO agent_instances(id,provider_kind,display_name,model)
-VALUES('deepseek-harness-default','deepseek_harness','DeepSeek Harness',NULL);
-
-CREATE TABLE provider_sessions(
- run_id TEXT NOT NULL REFERENCES runs(id),
- capability TEXT NOT NULL CHECK(capability IN ('designer','coder','tester','reviewer')),
- provider_kind TEXT NOT NULL CHECK(provider_kind='deepseek_harness'),
- session_id TEXT NOT NULL UNIQUE,
- state TEXT NOT NULL CHECK(state IN ('reserved','ready','uncertain')),
- created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
- updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
- PRIMARY KEY(run_id,capability)
-);
+id, provider_kind, display_name, executable_path, provider_route, model,
+enabled, connection_state, discovered_version, last_verified_at, last_error,
+verification_thread_id, created_at, updated_at
 ```
 
-Register migration 16 in both fresh and upgrade paths and update the expected schema version.
+Copy existing rows with `NULL AS provider_route`, rebuild `capability_bindings` to preserve foreign keys, and finish with only `INSERT INTO schema_migrations(version) VALUES(16);`. Do not seed a DSH Agent and do not create `provider_sessions`.
 
-- [ ] **Step 4: Add Provider and guarded Store methods**
+Add `provider_route: Option<String>` to `AgentInstanceInput`, `AgentInstance`, and `FrozenAgentBinding`. Validation must trim stored values and enforce this matrix:
 
-Add `ProviderKind::DeepseekHarness`, string form `deepseek_harness`, and `supported() == true`. Reject a non-null model for this Provider. Implement one immediate transaction that inserts `reserved`, changes `reserved -> uncertain` before returning `Create`, returns `Resume` for `ready`, and rejects `uncertain`; `mark_provider_session_ready` changes only the matching `uncertain` row to `ready`.
+```rust
+match self.provider_kind {
+    ProviderKind::Codex if self.provider_route.is_some() => {
+        Err(Error::Preflight("Codex does not use a provider route".into()))
+    }
+    ProviderKind::DeepseekHarness
+        if self.provider_route.as_deref().is_none_or(|v| v.trim().is_empty())
+            || self.model.as_deref().is_none_or(|v| v.trim().is_empty()) =>
+    {
+        Err(Error::Preflight(
+            "DeepSeek Harness provider route and model are required".into(),
+        ))
+    }
+    _ => Ok(()),
+}
+```
 
-- [ ] **Step 5: Run the Store tests**
+Update every Agent SELECT/row index and upsert. Verification state is retained only when `executable_path`, `provider_route`, and `model` are all unchanged. Bump `FrozenRunDefinition.version` from 5 to 6 and freeze all three DSH launch values.
+
+- [ ] **Step 4: Remove the persisted session lease API**
+
+Delete `ProviderSessionMode`, `ProviderSessionLease`, `Store::begin_provider_session`, and `Store::mark_provider_session_ready`, plus their tests. Session ownership will move to the live sidecar pool in Task 4.
+
+- [ ] **Step 5: Re-run focused tests and commit**
+
+Run: `cargo test -p archmage-core --test agents --test runtime`
+
+Expected: PASS.
+
+Commit: `git add crates/archmage-core && git commit -m "feat: configure DeepSeek Harness SDK agents"`
+
+## Task 2: Add the Archmage-owned SDK bridge and Cordis composition
+
+**Files:**
+- Create: `crates/archmage-core/resources/deepseek_harness_bridge.py`
+- Create: `crates/archmage-core/resources/deepseek_harness.cordis.yml`
+- Create: `crates/archmage-core/tests/fixtures/deepseek_harness_sdk/deepseek_harness/__init__.py`
+- Create: `crates/archmage-core/tests/deepseek_harness_bridge.rs`
+
+- [ ] **Step 1: Write a failing black-box bridge test**
+
+The test launches the real bridge script with `PYTHONPATH` pointing at the fake `deepseek_harness` package, sends two JSONL `invoke` frames, then a `close` frame. Assert:
+
+- stdout contains exactly `ready`, two matching `result` frames, and `closed`;
+- both results carry the same configured session ID;
+- the fake SDK log shows one `DeepSeekHarness` instance and two ordered `Session.run()` calls;
+- invalid input, duplicate invocation ID, oversized final text, and SDK exception each return one bounded `error` frame and terminate nonzero;
+- protocol output never contains SDK diagnostics written to stderr.
+
+Run: `cargo test -p archmage-core --test deepseek_harness_bridge`
+
+Expected: FAIL because the bridge/resources do not exist.
+
+- [ ] **Step 2: Implement the bridge protocol using only the public high-level SDK**
+
+The bridge reads one startup JSON object from stdin:
+
+```json
+{"op":"start","protocol":1,"cwd":"/repo","provider":"deepseek-official","model":"deepseek-v4-flash","sessionId":"archmage-...","cordis":"/private/cordis.yml","sessionRoot":"/private/sessions","maxResultBytes":1048576,"requestTimeoutSeconds":900}
+```
+
+It must instantiate exactly:
+
+```python
+config = DeepSeekHarnessConfig(
+    provider=start["provider"],
+    model=start["model"],
+    cwd=start["cwd"],
+    runtime_cwd=start["cwd"],
+    session_root=start["sessionRoot"],
+    cordis=start["cordis"],
+    request_timeout_seconds=start["requestTimeoutSeconds"],
+)
+harness = DeepSeekHarness(config)
+session = harness.start_session(start["sessionId"])
+```
+
+For each unique request:
+
+```json
+{"op":"invoke","id":"attempt-or-consultation-id","task":"...","schema":{}}
+```
+
+render one prompt containing the task followed by the compact schema and the instruction `Return exactly one JSON object matching this schema, without Markdown fences.`; call `session.run(prompt)`; reject non-`completed` finish reasons, empty responses, invalid UTF-8 at the process boundary, and responses over `maxResultBytes`; then emit:
+
+```json
+{"op":"result","id":"...","sessionId":"archmage-...","text":"{...}","finishReason":"completed"}
+```
+
+`close` calls `harness.close()` in `finally` and emits `closed`. Catch errors at the top level, emit a safe `{op:"error", id, code, message}` frame without environment/credential values, then exit nonzero. Use `importlib.metadata.version()` to verify `deepseek-harness-sdk` and `deepseek-harness-runtime-bin` are present and exactly version-matched before emitting `ready`.
+
+- [ ] **Step 3: Add the unattended Cordis composition**
+
+Base the resource on the runtime-wheel plugins proven by the official JSON-RPC and ACP examples. Include:
+
+- `@deepseek-ai/dsh-sdk-jsonrpc-server`;
+- `@deepseek-ai/dsh-llm-deepseek`;
+- `@deepseek-ai/dsh-sandbox-local` and `@deepseek-ai/dsh-sandbox-policy`, with `mode: !!js process.env.DSH_PERMISSION_MODE` and workspace root `DSH_CWD`;
+- local subprocess plus sandboxed Bash;
+- `@deepseek-ai/dsh-user-approval` with `policy: never`;
+- the agent spine with background jobs and interactive questions disabled;
+- JSONL persistence and checkpoint policy;
+- sandboxed filesystem, observation policy, and filesystem tools;
+- token meter and bounded compaction.
+
+No console logger, terminal UI, question tool, telemetry exporter, or interactive approval answerer may be present because stdout belongs to JSONL and Archmage execution is unattended.
+
+- [ ] **Step 4: Make the fake SDK assert applied configuration**
+
+The fake package must expose the same constructor surface used above and record provider, model, cwd, cordis, session root, session ID, prompts, and close count to a test-only path supplied by `FAKE_DSH_LOG`. It must also support deterministic exception/oversize/finish-reason modes through non-secret test variables.
+
+- [ ] **Step 5: Run and commit**
+
+Run: `cargo test -p archmage-core --test deepseek_harness_bridge`
+
+Expected: PASS.
+
+Commit: `git add crates/archmage-core/resources crates/archmage-core/tests && git commit -m "feat: add DeepSeek Harness SDK bridge"`
+
+## Task 3: Build the persistent Rust sidecar transport
+
+**Files:**
+- Modify: `crates/archmage-core/src/process.rs`
+- Replace: `crates/archmage-core/src/provider/deepseek_harness.rs`
+- Replace: `crates/archmage-core/tests/deepseek_harness_protocol.rs`
+- Modify: `crates/archmage-core/tests/provider_execution.rs`
+
+- [ ] **Step 1: Write failing transport tests with a fake JSONL bridge**
+
+Cover ready handshake, two sequential invocations on one process, invocation-ID matching, stdout line/result limits, timeout, malformed/duplicate frames, early exit, bounded stderr capture, graceful close, and process-group kill. The fake bridge must record its PID so the test can prove a cancelled sidecar is gone.
+
+Run: `cargo test -p archmage-core --test deepseek_harness_protocol --test provider_execution`
+
+Expected: FAIL because the current adapter launches one headless CLI process per call.
+
+- [ ] **Step 2: Add an owned piped-process primitive**
+
+Extend `process.rs` with `spawn_owned_piped(binary, args, cwd, env)` returning a type that owns `ChildStdin`, line-buffered `ChildStdout`, a background bounded-stderr drain, `ProcessIdentity`, `try_wait`, `wait`, and the existing identity-checked TERM/KILL ladder. Keep `spawn_owned` and bounded one-shot capture behavior unchanged for Codex and existing tests.
+
+Do not hold a blocking mutex across async reads/writes. A sidecar is serialized by one Tokio mutex at the provider-pool layer.
+
+- [ ] **Step 3: Replace the CLI adapter with an SDK sidecar**
+
+Define these core types:
+
+```rust
+pub struct SdkInspection {
+    pub python_binary: PathBuf,
+    pub sdk_version: String,
+    pub runtime_version: String,
+}
+
+pub struct SidecarConfig {
+    pub python_binary: PathBuf,
+    pub repository: PathBuf,
+    pub provider_route: String,
+    pub model: String,
+    pub session_id: String,
+    pub permission_mode: PermissionMode,
+    pub session_root: PathBuf,
+    pub diagnostics_dir: PathBuf,
+    pub deadline: Duration,
+    pub max_line_bytes: usize,
+    pub max_stream_bytes: usize,
+    pub max_result_bytes: usize,
+}
+
+pub struct DeepseekHarnessSidecar { /* process, framed IO, config, poisoned */ }
+```
+
+`DeepseekHarnessSidecar::start` materializes the embedded Python/YAML resources under `<data_root>/provider-resources/deepseek-harness/<sha256>/` with owner-only permissions, launches `<python> -u bridge.py`, inherits the current environment (including `DSH_HOME` and provider credentials), and overrides only `DSH_PERMISSION_MODE`. It sends `start`, waits for exactly one compatible `ready`, and exposes its process identity.
+
+`invoke(id, prompt, schema)` writes one frame, reads exactly the matching terminal frame under the deadline, validates byte/line bounds, strictly runs `serde_json::from_str::<serde_json::Value>(&text)`, and returns `ProviderOutcome { conversation_id: session_id, result }`. Any timeout/protocol/exit error marks the sidecar poisoned; later calls return the original stable failure without respawning.
+
+- [ ] **Step 4: Simplify the common executor boundary**
+
+Remove `ProviderSession`, `ProviderLifecycle::ConversationPersisted`, and all old DSH CLI invocation construction. Retain the Codex one-shot branch in `executor.rs`; expose a provider-neutral result and process-spawn observer, while DSH calls are supplied an already-owned sidecar by the pool in Task 4.
+
+- [ ] **Step 5: Run and commit**
+
+Run: `cargo test -p archmage-core --test deepseek_harness_protocol --test provider_execution`
+
+Expected: PASS.
+
+Commit: `git add crates/archmage-core/src crates/archmage-core/tests && git commit -m "feat: run DeepSeek Harness through an SDK sidecar"`
+
+## Task 4: Add the `(Run, Capability)` sidecar pool
+
+**Files:**
+- Create: `crates/archmage-core/src/provider/pool.rs`
+- Modify: `crates/archmage-core/src/provider/mod.rs`
+- Modify: `crates/archmage-core/src/runtime/mod.rs`
+- Create: `crates/archmage-core/tests/provider_pool.rs`
+
+- [ ] **Step 1: Write failing pool tests**
+
+Use a configurable fake bridge and assert:
+
+- two invocations for `(run-a, coder)` use one PID/session;
+- `(run-a, reviewer)` and `(run-b, coder)` use distinct PID/session values;
+- a consultation uses a fresh temporary sidecar and does not alter the target's main sidecar;
+- a poisoned key never respawns;
+- `close_run("run-a")` closes only run-a sidecars;
+- `cancel_capability("run-a", "coder")` kills only coder and poisons that key.
+
+Run: `cargo test -p archmage-core --test provider_pool`
+
+Expected: FAIL because no pool exists.
+
+- [ ] **Step 2: Implement pool ownership without global serialization**
+
+Use:
+
+```rust
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SidecarKey { pub run_id: String, pub capability: String }
+
+pub struct ProviderPool {
+    entries: tokio::sync::Mutex<HashMap<SidecarKey, Arc<tokio::sync::Mutex<PoolEntry>>>>,
+}
+```
+
+The map lock is held only for lookup/insert/remove; each sidecar lock serializes that Capability's turns. `invoke_main` lazily creates a stable `archmage-<uuid>` session and records either `Live(sidecar)` or `Poisoned(error)`. `invoke_temporary` uses `archmage-consult-<uuid>` and always closes/kills in a finally-style path. `close_run` removes entries before awaiting shutdown, so no new caller can acquire a closing entry.
+
+- [ ] **Step 3: Put the pool on Runtime**
+
+Change `Runtime` to hold `Arc<ProviderPool>` alongside `Config`, initialize it in `Runtime::open`, and keep `Clone` sharing the same pool. Add a test-only constructor or bridge override through `Config` rather than global environment mutation so parallel tests remain deterministic.
+
+- [ ] **Step 4: Run and commit**
+
+Run: `cargo test -p archmage-core --test provider_pool`
+
+Expected: PASS.
+
+Commit: `git add crates/archmage-core && git commit -m "feat: retain DSH conversations per run capability"`
+
+## Task 5: Route normal, flow, consultation, cancellation, and recovery paths
+
+**Files:**
+- Modify: `crates/archmage-core/src/runtime/dispatch.rs`
+- Modify: `crates/archmage-core/src/runtime/flow.rs`
+- Modify: `crates/archmage-core/src/runtime/consultation.rs`
+- Modify: `crates/archmage-core/src/runtime/recovery.rs`
+- Modify: `crates/archmage-core/src/runtime/mod.rs`
+- Modify: `crates/archmage-core/tests/runtime.rs`
+- Modify: `crates/archmage-core/tests/flow.rs`
+- Modify: `crates/archmage-core/tests/consultations.rs`
+
+- [ ] **Step 1: Add failing runtime continuity tests**
+
+Add only the four high-value scenarios:
+
+1. reviewer feedback reopens coder and coder's fake bridge log shows two ordered turns on one session;
+2. a flow delivery revisiting the same Capability reuses its sidecar;
+3. consultation gets a temporary session and the later main target turn uses its untouched main session;
+4. cancel/terminal completion leaves no recorded fake bridge PID alive.
+
+Run: `cargo test -p archmage-core --test runtime --test flow --test consultations`
+
+Expected: FAIL until all runtime paths use the pool and terminal cleanup is centralized.
+
+- [ ] **Step 2: Route DSH executions through the pool**
+
+Replace `main_provider_session(...)` and the old provider-session lease calls. Build a `SidecarConfig` from the frozen binding (`executable_path`, `provider_route`, `model`), workspace, schema, limits, and capability permission:
+
+```rust
+let permission = match kind {
+    CapabilityKind::Designer | CapabilityKind::Reviewer => PermissionMode::ReadOnly,
+    CapabilityKind::Coder | CapabilityKind::Tester => PermissionMode::WorkspaceWrite,
+};
+```
+
+Normal and flow paths call `pool.invoke_main(SidecarKey { run_id, capability }, ...)`. Consultation calls `pool.invoke_temporary(...)` with read-only permission. Codex continues through the existing executor. Attach the DSH bridge `ProcessIdentity` to the active attempt/consultation record so existing recovery can kill orphan process groups after a crash.
+
+- [ ] **Step 3: Centralize live-run cleanup**
+
+Wrap both legacy and flow terminal drivers so every return path performs `pool.close_run(run_id).await`. On explicit cancellation, request cancellation, call `pool.cancel_run(run_id).await`, kill any database-recorded orphan identity as a fallback, then apply the cancel transition. Cleanup errors are recorded as diagnostics and may turn an otherwise successful provider cleanup into a reported infrastructure failure, but never turn a failed/cancelled Run into success.
+
+`reconcile_interrupted` remains restart-safe: the in-memory pool is empty after restart, so it kills persisted active attempt/consultation identities and marks the Run interrupted. Do not claim or implement DSH session resume across Archmage restarts.
+
+- [ ] **Step 4: Run and commit**
+
+Run: `cargo test -p archmage-core --test runtime --test flow --test consultations`
+
+Expected: PASS.
+
+Commit: `git add crates/archmage-core && git commit -m "feat: route Archmage runs through persistent DSH sidecars"`
+
+## Task 6: Replace discovery and verification with SDK checks
+
+**Files:**
+- Modify: `crates/archmage-core/src/agent.rs`
+- Modify: `crates/archmage-core/src/provider/deepseek_harness.rs`
+- Modify: `crates/archmage-core/tests/agents.rs`
+
+- [ ] **Step 1: Write failing management tests**
+
+Test default Python resolution (`python3`), explicit Python path, import failure, missing runtime distribution, SDK/runtime version mismatch, nonblank route/model validation, and a successful verification that performs one temporary read-only model turn and closes the process.
+
+Run: `cargo test -p archmage-core --test agents`
+
+Expected: FAIL because discovery still inspects the DSH CLI and verification uses headless flags.
+
+- [ ] **Step 2: Implement safe SDK inspection**
+
+Resolve the configured executable or `python3`, then run a bounded probe equivalent to:
+
+```python
+import json
+from importlib.metadata import version
+import deepseek_harness
+sdk = version("deepseek-harness-sdk")
+runtime = version("deepseek-harness-runtime-bin")
+print(json.dumps({"sdkVersion": sdk, "runtimeVersion": runtime}))
+```
+
+Require exact version equality. Return a combined display version such as `SDK 0.4.0 / runtime 0.4.0`, and sanitize all errors before persisting them.
+
+- [ ] **Step 3: Verify through the real bridge boundary**
+
+`AgentService::verify` creates a private temporary Git directory, starts a temporary read-only sidecar with the configured route/model, requests a fixed tiny schema such as `{"ok": boolean}`, requires `{"ok": true}`, closes the sidecar, and stores `Ready { version, thread_id: session_id }`. It must not read, rewrite, or display `DSH_HOME` or credentials.
+
+- [ ] **Step 4: Run and commit**
 
 Run: `cargo test -p archmage-core --test agents`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit persistence and domain changes**
+Commit: `git add crates/archmage-core && git commit -m "feat: discover and verify DeepSeek Harness SDK agents"`
 
-```bash
-git add crates/archmage-core/migrations/0016_deepseek_harness.sql crates/archmage-core/src/store/mod.rs crates/archmage-core/src/agent.rs crates/archmage-core/tests/agents.rs
-git commit -m "feat: persist DeepSeek Harness agents and sessions"
-```
-
-### Task 4: Implement the DeepSeek Harness adapter and provider-neutral executor
-
-**Files:**
-- Create: `crates/archmage-core/src/provider/deepseek_harness.rs`
-- Create: `crates/archmage-core/src/provider/executor.rs`
-- Modify: `crates/archmage-core/src/provider/mod.rs`
-- Test: `crates/archmage-core/tests/deepseek_harness_protocol.rs`
-
-- [ ] **Step 1: Write protocol tests with an executable fake `dsh`**
-
-Assert discovery calls `--version` and `--profile headless --help`; create and resume argv are respectively:
-
-```rust
-["--profile", "headless", "--session-id", session_id, prompt]
-["--profile", "headless", "--resume-session-id", session_id, prompt]
-```
-
-Assert code 0 plus one JSON object succeeds, while prose-wrapped JSON, nonzero exit, and oversized output fail.
-
-- [ ] **Step 2: Run the protocol test and confirm it fails**
-
-Run: `cargo test -p archmage-core --test deepseek_harness_protocol`
-
-Expected: FAIL because the modules do not exist.
-
-- [ ] **Step 3: Implement inspection and invocation**
-
-Use the existing bounded process capture and process-group identity callback. Set `DSH_PERMISSION_MODE` to `read-only` or `workspace-write` for the child while inheriting all other environment, including `DSH_HOME`. Persist stdout, stderr, argv, version, exit and capture error under the invocation diagnostics directory with private permissions.
-
-Expose provider-neutral types:
-
-```rust
-pub enum ProviderSession { None, Create(String), Resume(String) }
-pub struct ProviderRequest<'a> { /* binding, cwd, prompt, schema, sandbox, limits, session */ }
-pub struct ProviderOutcome { pub conversation_id: String, pub result: serde_json::Value }
-pub enum ProviderLifecycle<'a> { Spawned(&'a ProcessIdentity), ConversationPersisted }
-```
-
-The DSH prompt appends the exact schema plus the instruction to return one JSON object without Markdown. The executor accepts one `FnMut(ProviderLifecycle)`: emit `Spawned` after process creation and emit `ConversationPersisted` after exit code 0 but before JSON parsing. This lets Runtime mark the session resumable even when the completed assistant turn violates Archmage's JSON contract. Parse the complete trimmed stdout with `serde_json::from_slice`; do not scan for braces or code fences.
-
-- [ ] **Step 4: Preserve Codex through the same executor**
-
-Move the current Codex invocation construction into `executor.rs`. Return the Codex thread ID as `conversation_id`; return the supplied DSH session ID for DSH. Keep Codex model override behavior and reject a DSH model override.
-
-- [ ] **Step 5: Run focused protocol tests**
-
-Run: `cargo test -p archmage-core --test codex_protocol --test deepseek_harness_protocol`
-
-Expected: PASS.
-
-- [ ] **Step 6: Commit the adapters**
-
-```bash
-git add crates/archmage-core/src/provider crates/archmage-core/tests/deepseek_harness_protocol.rs
-git commit -m "feat: execute DeepSeek Harness providers"
-```
-
-### Task 5: Route management and every Runtime path through the new executor
-
-**Files:**
-- Modify: `crates/archmage-core/src/agent.rs`
-- Modify: `crates/archmage-core/src/runtime/mod.rs`
-- Modify: `crates/archmage-core/src/runtime/dispatch.rs`
-- Modify: `crates/archmage-core/src/runtime/consultation.rs`
-- Modify: `crates/archmage-core/src/runtime/flow.rs`
-- Test: `crates/archmage-core/tests/runtime.rs`
-- Test: `crates/archmage-core/tests/consultations.rs`
-- Test: `crates/archmage-core/tests/flow.rs`
-
-- [ ] **Step 1: Write narrow failing routing tests**
-
-Use fake executables to prove: a DSH-bound Capability reaches DSH; two successful attempts for the same Run/Capability use create then resume; another Capability gets a different ID; consultation gets a temporary create ID and does not touch `provider_sessions`; flow delivery reuse matches ordinary dispatch.
-
-- [ ] **Step 2: Run the focused tests and confirm they fail**
-
-Run: `cargo test -p archmage-core --test runtime --test consultations --test flow`
-
-Expected: FAIL on unsupported Provider or missing session routing.
-
-- [ ] **Step 3: Add provider-aware discovery and verification**
-
-Switch `AgentService::discover` and `verify` on Provider kind. DSH verification uses a temporary Git directory, a fresh random headless session, read-only permission, and a fixed object schema. Record the real DSH version and the probe session ID as the verification execution identity; keep user-facing failure summaries credential-free.
-
-- [ ] **Step 4: Resolve frozen DSH bindings at Run creation**
-
-In `Runtime::start_run`, inspect either Codex or DSH and freeze the resolved executable. Continue rejecting Claude, OpenClaw, and Hermes.
-
-- [ ] **Step 5: Replace direct Codex calls in all three paths**
-
-For ordinary and flow dispatch, call `begin_provider_session` only for DSH and pass create/resume mode to the executor. Handle `Spawned` by attaching the process and `ConversationPersisted` by changing the matching session to `ready`; leave it `uncertain` on timeout, cancellation, or nonzero exit. For consultations, generate a temporary create ID, ignore `ConversationPersisted`, and never insert a main-session row. Preserve existing result validation, artifact publication, Changeset publication, and state transitions.
-
-- [ ] **Step 6: Run focused Runtime tests**
-
-Run: `cargo test -p archmage-core --test agents --test runtime --test consultations --test flow`
-
-Expected: PASS.
-
-- [ ] **Step 7: Commit Runtime integration**
-
-```bash
-git add crates/archmage-core/src/agent.rs crates/archmage-core/src/runtime crates/archmage-core/tests
-git commit -m "feat: route capabilities through DeepSeek Harness"
-```
-
-### Task 6: Expose DeepSeek Harness in the desktop management UI
+## Task 7: Update Agent Management UI and API types
 
 **Files:**
 - Modify: `apps/archmage-desktop/src/model.ts`
 - Modify: `apps/archmage-desktop/src/AgentManagement.tsx`
-- Modify: `apps/archmage-desktop/src/CapabilityManagement.tsx`
-- Modify: `apps/archmage-desktop/src/managementLayout.ts`
-- Modify: `apps/archmage-desktop/src/agents.css`
-- Test: `apps/archmage-desktop/src/AgentManagement.test.tsx`
-- Test: `apps/archmage-desktop/src/managementLayout.test.ts`
-- Test: `apps/archmage-desktop/src/model.test.ts`
+- Modify: `apps/archmage-desktop/src/AgentManagement.test.tsx`
+- Modify: `apps/archmage-desktop/src/model.test.ts`
+- Modify: `apps/archmage-desktop/src/managementLayout.test.ts`
 
 - [ ] **Step 1: Write failing UI/model tests**
 
-Add `deepseek_harness` to `ProviderKind`; assert metrics count Codex plus DSH and exclude unsupported Providers; assert Capability metrics accept either supported kind; render a DSH card/new-instance form and check the inherited `DSH_HOME`/default-model message.
+Assert a DSH Agent carries `providerRoute`, the create/edit form shows `Python 路径`, `Provider route`, and `Model`, route/model are required for DSH, model remains optional for Codex, and the explanatory copy says credentials/endpoints inherit Archmage's environment while route/model are explicit.
 
-- [ ] **Step 2: Run the focused tests and confirm they fail**
+Run: `npm test -- --run AgentManagement.test.tsx model.test.ts managementLayout.test.ts` from `apps/archmage-desktop`.
 
-Run: `npm test -- AgentManagement.test.tsx managementLayout.test.ts model.test.ts`
+Expected: FAIL because the current form hides DSH model and describes inherited `DSH_HOME` model selection.
 
-Workdir: `apps/archmage-desktop`
+- [ ] **Step 2: Update types and forms**
 
-Expected: FAIL because filters and forms are Codex-only.
+Add `providerRoute: string | null` to `AgentInstance`, `AgentInstanceInput`, and `FrozenAgentBinding`. For DSH, default Python path to blank (backend resolves `python3`) and submit trimmed nonblank route/model. For Codex, submit `providerRoute: null`. Keep unsupported Provider cards non-creatable.
 
-- [ ] **Step 3: Implement Provider-aware forms and labels**
+Display discovered SDK/runtime versions and existing connection state fields without showing environment values or credential material.
 
-Define helpers rather than scattering comparisons:
+- [ ] **Step 3: Run build/tests and commit**
 
-```ts
-export const isSupportedProvider = (kind: ProviderKind) =>
-  kind === "codex" || kind === "deepseek_harness";
-export const providerLabel = (kind: ProviderKind) =>
-  kind === "deepseek_harness" ? "DeepSeek Harness" : kind === "codex" ? "Codex" : kind;
+Run from `apps/archmage-desktop`:
+
+```bash
+npm test
+npm run build
 ```
-
-Let “添加实例” choose Codex or DeepSeek Harness. Reuse the card fields but show `dsh CLI 路径`, hide model override, and explain inherited `DSH_HOME` for DSH. Save the actual `providerKind`. Capability options and metrics use the helpers and display the Provider label.
-
-- [ ] **Step 4: Run frontend tests and build**
-
-Run: `npm test -- AgentManagement.test.tsx managementLayout.test.ts model.test.ts && npm run build`
-
-Workdir: `apps/archmage-desktop`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the desktop UI**
+Commit: `git add apps/archmage-desktop && git commit -m "feat: configure DSH SDK agents in the desktop UI"`
 
-```bash
-git add apps/archmage-desktop/src
-git commit -m "feat: manage DeepSeek Harness agents"
-```
-
-### Task 7: Minimal end-to-end verification and current-state docs
+## Task 8: Replace obsolete docs and run the compact acceptance suite
 
 **Files:**
+- Modify: `README.md`
 - Modify: `docs/runbooks/desktop-s0.md`
+- Modify/Delete: obsolete headless-CLI test fixtures under `crates/archmage-core/tests/`
+- Review: `docs/superpowers/specs/2026-10-30-deepseek-harness-provider-design.md`
 
-- [ ] **Step 1: Update the runbook**
+- [ ] **Step 1: Remove obsolete CLI language and fixtures**
 
-Replace the statement that only Codex is supported. Document inherited `DSH_HOME`, real verification cost, per-Run/Capability conversation reuse, and consultation isolation. Keep Hermes, Claude, and OpenClaw marked unsupported.
+Delete tests/fixtures whose only purpose is asserting `--headless`, `--session-id`, or `--resume-session`. Update the runbook to document:
 
-- [ ] **Step 2: Run the minimal repository checks**
+- install matching `deepseek-harness-sdk` / runtime wheel into the configured Python;
+- create a DSH Agent with Python path, route, and model;
+- inherited environment/`DSH_HOME` behavior;
+- live Run continuity scope and no cross-restart resume;
+- read-only versus workspace-write capability permissions;
+- one optional real verification/smoke procedure.
 
-DeepSeek Harness:
+State explicitly that no DeepSeek Harness repository patch is required or delivered. Do not delete/reset the separate superseded DSH branch; leave that cleanup for an explicit user decision.
+
+- [ ] **Step 2: Run formatting and the focused full suite**
+
+Run:
 
 ```bash
-pnpm exec vitest run packages/bundle/headless/tests/startup.spec.ts packages/bundle/headless/tests/headless.spec.ts
-pnpm run typecheck
-```
-
-Archmage:
-
-```bash
-cargo test -p archmage-core --test agents --test codex_protocol --test deepseek_harness_protocol --test runtime --test consultations --test flow
 cargo fmt --all -- --check
-(cd apps/archmage-desktop && npm test -- AgentManagement.test.tsx managementLayout.test.ts model.test.ts && npm run build)
-git diff --check
+cargo test -p archmage-core
+(cd apps/archmage-desktop && npm test && npm run build)
 ```
 
-Expected: all commands PASS.
+Expected: PASS.
 
-- [ ] **Step 3: Run one real smoke Run**
+- [ ] **Step 3: Run one optional real SDK smoke**
 
-Using the inherited default `DSH_HOME`, create a small temporary Git repository, bind one Capability to `deepseek-harness-default`, and run a minimal Team through Archmage. Confirm the stored provider session is `ready`, the result passes its Capability contract, and a second turn for the same Capability uses `--resume-session-id`.
+If the selected Python can import both matching packages and required provider credentials are present, create a temporary Agent/config and run one tiny verification plus a two-turn Run using one existing Capability schema. Otherwise record the precise missing prerequisite and mark only the real smoke as skipped; do not substitute a fake result.
 
-If credentials or the required built `dsh` are unavailable, record the exact missing prerequisite and leave this acceptance item explicitly incomplete; do not substitute the fake CLI result.
+- [ ] **Step 4: Inspect the final diff for scope and secrets**
 
-- [ ] **Step 4: Commit the runbook**
+Run:
 
 ```bash
-git add docs/runbooks/desktop-s0.md
-git commit -m "docs: verify DeepSeek Harness provider flow"
+git diff --check
+git status --short
+git diff --stat HEAD~8..HEAD
+rg -n -- "--headless|--resume-session|provider_sessions|DEEPSEEK_API_KEY=|api[_-]?key" crates apps README.md docs
 ```
 
+Expected: no obsolete runtime dependencies, no credential values, and only intended Archmage files changed.
+
+- [ ] **Step 5: Commit documentation/cleanup**
+
+Commit: `git add README.md docs crates/archmage-core/tests && git commit -m "docs: document the DeepSeek Harness SDK provider"`
+
+## Final acceptance checklist
+
+- [ ] Agent Management can create, discover, verify, edit, and bind a DSH SDK Agent with explicit Python/route/model.
+- [ ] Same `Run + Capability` reuses one bridge PID and DSH session across retries, reviewer feedback, and flow revisits.
+- [ ] Different Run/Capability keys and consultations are isolated.
+- [ ] Cancel, failure, completion, and interruption leave no owned sidecar process group running.
+- [ ] DSH final text is accepted only as one valid JSON object satisfying the existing Capability contract.
+- [ ] Cordis enforces read-only/workspace-write and automatic approval rejection without interactive UI.
+- [ ] Codex behavior and existing Run persistence remain green.
+- [ ] No DSH repository change is required for delivery.
