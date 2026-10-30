@@ -8,7 +8,9 @@ use crate::{
     error::{Error, Result},
     provider::{
         codex::Sandbox,
+        deepseek_harness::{PermissionMode, SidecarConfig},
         executor::{self, ProviderExecution, ProviderLifecycle, ProviderSession},
+        pool::SidecarKey,
     },
     store::{AttemptOutcome, Store},
     team::TeamMode,
@@ -19,6 +21,16 @@ use std::{collections::HashMap, fs, path::Path, time::Duration};
 
 impl Runtime {
     pub async fn run_to_terminal(&self, run_id: &str) -> Result<super::RunSnapshot> {
+        let result = self.run_to_terminal_inner(run_id).await;
+        let cleanup = self.provider_pool.close_run(run_id).await;
+        match (result, cleanup) {
+            (Ok(snapshot), Ok(())) => Ok(snapshot),
+            (Ok(_), Err(error)) => Err(error),
+            (Err(error), _) => Err(error),
+        }
+    }
+
+    async fn run_to_terminal_inner(&self, run_id: &str) -> Result<super::RunSnapshot> {
         let _owner =
             super::control::RunOwnerLock::acquire(&self.config.data_root.join("locks"), run_id)?;
         let mut store = self.store()?;
@@ -337,25 +349,60 @@ impl Runtime {
             CapabilityKind::Designer | CapabilityKind::Reviewer => Sandbox::ReadOnly,
             CapabilityKind::Coder | CapabilityKind::Tester => Sandbox::WorkspaceWrite,
         };
-        let session = main_provider_session(store, run_id, kind.key(), binding.provider_kind)?;
-        let invocation = provider_execution(
-            binding,
-            repository.root.clone(),
-            schema_path,
-            result_path,
-            diagnostics_dir,
-            sandbox,
-            session,
-            &self.config,
-        );
-
-        let outcome = executor::invoke(&invocation, &context.rendered, |event| match event {
-            ProviderLifecycle::Spawned(identity) => {
-                store.attach_attempt_process(attempt_id, attempt_revision, generation, &identity)
-            }
-            ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
-        })
-        .await?;
+        let outcome = if binding.provider_kind == ProviderKind::DeepseekHarness {
+            let schema: serde_json::Value = serde_json::from_str(kind.schema())
+                .map_err(|error| Error::Preflight(error.to_string()))?;
+            let sidecar = dsh_sidecar_config(
+                binding,
+                repository.root.clone(),
+                diagnostics_dir,
+                permission_mode(sandbox),
+                self.config
+                    .data_root
+                    .join("provider-sessions")
+                    .join(run_id)
+                    .join(kind.key()),
+                &self.config,
+            )?;
+            self.provider_pool
+                .invoke_main(
+                    SidecarKey::new(run_id, kind.key()),
+                    sidecar,
+                    attempt_id,
+                    &context.rendered,
+                    &schema,
+                    |identity| {
+                        store.attach_attempt_process(
+                            attempt_id,
+                            attempt_revision,
+                            generation,
+                            identity,
+                        )
+                    },
+                )
+                .await?
+        } else {
+            let invocation = provider_execution(
+                binding,
+                repository.root.clone(),
+                schema_path,
+                result_path,
+                diagnostics_dir,
+                sandbox,
+                ProviderSession::None,
+                &self.config,
+            );
+            executor::invoke(&invocation, &context.rendered, |event| match event {
+                ProviderLifecycle::Spawned(identity) => store.attach_attempt_process(
+                    attempt_id,
+                    attempt_revision,
+                    generation,
+                    &identity,
+                ),
+                ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
+            })
+            .await?
+        };
 
         let bytes = serde_json::to_vec(&outcome.result)
             .map_err(|error| Error::Preflight(error.to_string()))?;
@@ -383,20 +430,6 @@ impl Runtime {
     }
 }
 
-pub(super) fn main_provider_session(
-    _store: &mut Store,
-    run_id: &str,
-    capability: &str,
-    provider_kind: ProviderKind,
-) -> Result<ProviderSession> {
-    if provider_kind == ProviderKind::Codex {
-        return Ok(ProviderSession::None);
-    }
-    Ok(ProviderSession::Create(format!(
-        "archmage-{run_id}-{capability}"
-    )))
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) fn provider_execution(
     binding: &FrozenAgentBinding,
@@ -422,6 +455,48 @@ pub(super) fn provider_execution(
         max_line_bytes: config.max_line_bytes,
         max_stream_bytes: config.max_stream_bytes,
         max_result_bytes: config.max_result_bytes,
+    }
+}
+
+pub(super) fn dsh_sidecar_config(
+    binding: &FrozenAgentBinding,
+    repository: std::path::PathBuf,
+    diagnostics_dir: std::path::PathBuf,
+    permission_mode: PermissionMode,
+    session_root: std::path::PathBuf,
+    config: &crate::config::Config,
+) -> Result<SidecarConfig> {
+    Ok(SidecarConfig {
+        python_binary: binding
+            .executable_path
+            .clone()
+            .ok_or_else(|| Error::Preflight("DeepSeek Harness Python path is missing".into()))?,
+        data_root: config.data_root.clone(),
+        repository,
+        provider_route: binding
+            .provider_route
+            .clone()
+            .ok_or_else(|| Error::Preflight("DeepSeek Harness provider route is missing".into()))?,
+        model: binding
+            .model
+            .clone()
+            .ok_or_else(|| Error::Preflight("DeepSeek Harness model is missing".into()))?,
+        session_id: String::new(),
+        permission_mode,
+        session_root,
+        diagnostics_dir,
+        deadline: Duration::from_secs(config.node_timeout_seconds),
+        max_line_bytes: config.max_line_bytes,
+        max_stream_bytes: config.max_stream_bytes,
+        max_result_bytes: config.max_result_bytes,
+        environment: std::collections::BTreeMap::new(),
+    })
+}
+
+pub(super) fn permission_mode(sandbox: Sandbox) -> PermissionMode {
+    match sandbox {
+        Sandbox::ReadOnly => PermissionMode::ReadOnly,
+        Sandbox::WorkspaceWrite => PermissionMode::WorkspaceWrite,
     }
 }
 

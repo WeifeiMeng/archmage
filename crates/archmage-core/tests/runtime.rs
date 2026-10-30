@@ -466,10 +466,10 @@ async fn start_run_freezes_a_deepseek_harness_executable() {
     std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
     git(&repo, &["add", "README.md"]);
     git(&repo, &["commit", "--quiet", "-m", "fixture"]);
-    let binary = temp.path().join("dsh-test");
+    let binary = temp.path().join("python-test");
     std::fs::write(
         &binary,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'dsh 0.1.0'; else echo '--session-id --resume-session-id'; fi\n",
+        "#!/bin/sh\nprintf '%s\\n' '{\"sdkVersion\":\"0.1.0\",\"runtimeVersion\":\"0.1.0\"}'\n",
     )
     .unwrap();
     std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();

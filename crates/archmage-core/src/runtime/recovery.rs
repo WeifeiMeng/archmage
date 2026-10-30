@@ -9,6 +9,9 @@ impl Runtime {
     pub async fn cancel(&self, run_id: &str) -> Result<()> {
         let mut store = self.store()?;
         store.request_cancel(run_id)?;
+        drop(store);
+        self.provider_pool.cancel_run(run_id).await?;
+        let mut store = self.store()?;
         if let Some(process) = store.active_process_for_run(run_id)? {
             cancel_process(&process.identity, Duration::from_secs(5)).await?;
         }

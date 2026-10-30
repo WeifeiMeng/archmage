@@ -1,6 +1,9 @@
 use super::{
     Runtime,
-    dispatch::{capability, error_code, main_provider_session, private_dir, provider_execution},
+    dispatch::{
+        capability, dsh_sidecar_config, error_code, permission_mode, private_dir,
+        provider_execution,
+    },
 };
 use crate::{
     artifact::ArtifactStore,
@@ -10,7 +13,8 @@ use crate::{
     error::{Error, Result},
     provider::{
         codex::Sandbox,
-        executor::{self, ProviderLifecycle},
+        executor::{self, ProviderLifecycle, ProviderSession},
+        pool::SidecarKey,
     },
     store::{AttemptOutcome, FlowDelivery, Store},
     workspace::{inspect_repository, publish_changeset, snapshot},
@@ -215,24 +219,61 @@ impl Runtime {
             CapabilityKind::Designer | CapabilityKind::Reviewer => Sandbox::ReadOnly,
             CapabilityKind::Coder | CapabilityKind::Tester => Sandbox::WorkspaceWrite,
         };
-        let session = main_provider_session(store, &run.id, kind.key(), binding.provider_kind)?;
-        let invocation = provider_execution(
-            binding,
-            repository.root.clone(),
-            schema_path,
-            attempt_dir.join("result.json"),
-            attempt_dir.join("diagnostics"),
-            sandbox,
-            session,
-            &self.config,
-        );
-        let outcome = executor::invoke(&invocation, &context.rendered, |event| match event {
-            ProviderLifecycle::Spawned(identity) => {
-                store.attach_attempt_process(attempt_id, attempt_revision, generation, &identity)
-            }
-            ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
-        })
-        .await?;
+        let diagnostics_dir = attempt_dir.join("diagnostics");
+        let outcome = if binding.provider_kind == crate::agent::ProviderKind::DeepseekHarness {
+            let schema: serde_json::Value = serde_json::from_str(&flow_output_schema(kind)?)
+                .map_err(|error| Error::Preflight(error.to_string()))?;
+            let sidecar = dsh_sidecar_config(
+                binding,
+                repository.root.clone(),
+                diagnostics_dir,
+                permission_mode(sandbox),
+                self.config
+                    .data_root
+                    .join("provider-sessions")
+                    .join(&run.id)
+                    .join(kind.key()),
+                &self.config,
+            )?;
+            self.provider_pool
+                .invoke_main(
+                    SidecarKey::new(&run.id, kind.key()),
+                    sidecar,
+                    attempt_id,
+                    &context.rendered,
+                    &schema,
+                    |identity| {
+                        store.attach_attempt_process(
+                            attempt_id,
+                            attempt_revision,
+                            generation,
+                            identity,
+                        )
+                    },
+                )
+                .await?
+        } else {
+            let invocation = provider_execution(
+                binding,
+                repository.root.clone(),
+                schema_path,
+                attempt_dir.join("result.json"),
+                diagnostics_dir,
+                sandbox,
+                ProviderSession::None,
+                &self.config,
+            );
+            executor::invoke(&invocation, &context.rendered, |event| match event {
+                ProviderLifecycle::Spawned(identity) => store.attach_attempt_process(
+                    attempt_id,
+                    attempt_revision,
+                    generation,
+                    &identity,
+                ),
+                ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
+            })
+            .await?
+        };
         let bytes = serde_json::to_vec(&outcome.result)
             .map_err(|error| Error::Preflight(error.to_string()))?;
         let contract = flow_contract_context(kind, delivery, store)?;

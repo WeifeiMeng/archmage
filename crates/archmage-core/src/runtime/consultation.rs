@@ -1,4 +1,7 @@
-use super::{Runtime, dispatch::provider_execution};
+use super::{
+    Runtime,
+    dispatch::{dsh_sidecar_config, provider_execution},
+};
 use crate::{
     capability::{CapabilityConfiguration, CapabilityKind, GUIDANCE_NOTE},
     contract::{CONSULTATION_SCHEMA, validate_consultation},
@@ -151,47 +154,67 @@ impl Runtime {
         fs::create_dir_all(&attempt_dir)?;
         let schema_path = attempt_dir.join("schema.json");
         fs::write(&schema_path, CONSULTATION_SCHEMA)?;
-        let session = match binding.provider_kind {
-            crate::agent::ProviderKind::Codex => ProviderSession::None,
-            crate::agent::ProviderKind::DeepseekHarness => {
-                ProviderSession::Create(format!("archmage-consult-{}", uuid::Uuid::new_v4()))
-            }
-            kind => {
-                return Err(Error::Preflight(format!(
-                    "{kind} provider is not supported yet"
-                )));
-            }
-        };
-        let invocation = provider_execution(
-            binding,
-            workspace,
-            schema_path,
-            attempt_dir.join("result.json"),
-            attempt_dir.join("diagnostics"),
-            Sandbox::ReadOnly,
-            session,
-            &self.config,
-        );
         let process_id = uuid::Uuid::new_v4().to_string();
         let registration = self.clone();
         let registered_id = process_id.clone();
         let registered_run = run_id.to_owned();
         let registered_attempt = source_attempt_id.to_owned();
         let registered_target = target.to_owned();
-        let result = executor::invoke(&invocation, &prompt, move |event| match event {
-            ProviderLifecycle::Spawned(identity) => {
-                registration.store()?.register_consultation_process(
-                    &registered_id,
-                    &registered_run,
-                    &registered_attempt,
-                    &registered_target,
-                    generation,
-                    &identity,
+        let result = if binding.provider_kind == crate::agent::ProviderKind::DeepseekHarness {
+            let schema: serde_json::Value = serde_json::from_str(CONSULTATION_SCHEMA)
+                .map_err(|error| Error::Preflight(error.to_string()))?;
+            let sidecar = dsh_sidecar_config(
+                binding,
+                workspace,
+                attempt_dir.join("diagnostics"),
+                crate::provider::deepseek_harness::PermissionMode::ReadOnly,
+                attempt_dir.join("sessions"),
+                &self.config,
+            )?;
+            self.provider_pool
+                .invoke_temporary(
+                    sidecar,
+                    source_attempt_id,
+                    &prompt,
+                    &schema,
+                    move |identity| {
+                        registration.store()?.register_consultation_process(
+                            &registered_id,
+                            &registered_run,
+                            &registered_attempt,
+                            &registered_target,
+                            generation,
+                            identity,
+                        )
+                    },
                 )
-            }
-            ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
-        })
-        .await;
+                .await
+        } else {
+            let invocation = provider_execution(
+                binding,
+                workspace,
+                schema_path,
+                attempt_dir.join("result.json"),
+                attempt_dir.join("diagnostics"),
+                Sandbox::ReadOnly,
+                ProviderSession::None,
+                &self.config,
+            );
+            executor::invoke(&invocation, &prompt, move |event| match event {
+                ProviderLifecycle::Spawned(identity) => {
+                    registration.store()?.register_consultation_process(
+                        &registered_id,
+                        &registered_run,
+                        &registered_attempt,
+                        &registered_target,
+                        generation,
+                        &identity,
+                    )
+                }
+                ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
+            })
+            .await
+        };
         self.store()?.finish_consultation_process(&process_id)?;
         let outcome = result?;
         let raw = serde_json::to_vec(&outcome.result)
