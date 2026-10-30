@@ -27,7 +27,7 @@ pub struct Store {
 
 pub(crate) enum AgentObservation<'a> {
     Discovered(&'a str),
-    DiscoveryFailed,
+    DiscoveryFailed(&'a str),
     Ready {
         version: &'a str,
         thread_id: &'a str,
@@ -651,13 +651,13 @@ impl Store {
                     rusqlite::params![expected.id, version],
                 )?;
             }
-            AgentObservation::DiscoveryFailed => {
+            AgentObservation::DiscoveryFailed(message) => {
                 tx.execute(
                     "UPDATE agent_instances SET connection_state='failed', discovered_version=NULL,
-                        last_verified_at=NULL, last_error='Codex executable inspection failed',
+                        last_verified_at=NULL, last_error=?2,
                         verification_thread_id=NULL,
                         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
-                    [&expected.id],
+                    rusqlite::params![expected.id, message],
                 )?;
             }
             AgentObservation::Ready { version, thread_id } => {

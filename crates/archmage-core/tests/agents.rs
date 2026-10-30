@@ -522,14 +522,17 @@ async fn deepseek_harness_can_be_discovered_and_verified() {
     let config = Config::resolve(Some(&temp.path().join("data")), None).unwrap();
     config.prepare().unwrap();
     let service = AgentService::new(config.data_root.clone());
-    let binary = temp.path().join("dsh-test");
+    let binary = temp.path().join("python-test");
+    let fake_sdk = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/deepseek_harness_sdk");
+    let sdk_log = temp.path().join("sdk.jsonl");
     std::fs::write(
         &binary,
-        r#"#!/bin/sh
-if [ "$1" = "--version" ]; then echo 'dsh 0.1.0'; exit 0; fi
-if [ "$1" = "--profile" ] && [ "$3" = "--help" ]; then echo '--session-id --resume-session-id'; exit 0; fi
-printf '{"ok":true}\n'
-"#,
+        format!(
+            "#!/bin/sh\nexport PYTHONPATH='{}'\nexport FAKE_DSH_LOG='{}'\nexport PYTHONDONTWRITEBYTECODE=1\nexec python3 \"$@\"\n",
+            fake_sdk.display(),
+            sdk_log.display()
+        ),
     )
     .unwrap();
     std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -551,7 +554,10 @@ printf '{"ok":true}\n'
         .iter()
         .find(|item| item.id == "dsh-local")
         .unwrap();
-    assert_eq!(instance.discovered_version.as_deref(), Some("dsh 0.1.0"));
+    assert_eq!(
+        instance.discovered_version.as_deref(),
+        Some("SDK 0.1.0 / runtime 0.1.0")
+    );
     assert_eq!(instance.connection_state, ConnectionState::Unverified);
 
     let verified = service.verify("dsh-local").await.unwrap();
@@ -567,4 +573,8 @@ printf '{"ok":true}\n'
             .as_deref()
             .is_some_and(|id| id.starts_with("archmage-probe-"))
     );
+    let events = std::fs::read_to_string(sdk_log).unwrap();
+    assert!(events.contains("\"provider\":\"deepseek-official\""));
+    assert!(events.contains("\"model\":\"deepseek-v4-flash\""));
+    assert!(events.contains("\"event\":\"close\""));
 }

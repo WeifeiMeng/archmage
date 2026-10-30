@@ -281,9 +281,16 @@ impl AgentService {
                 )?;
             }
             Err(_) => {
+                let message = match instance.provider_kind {
+                    ProviderKind::Codex => "Codex executable inspection failed",
+                    ProviderKind::DeepseekHarness => {
+                        "DeepSeek Harness Python SDK inspection failed"
+                    }
+                    _ => "Agent inspection failed",
+                };
                 self.store()?.record_agent_observation_if_current(
                     &instance,
-                    AgentObservation::DiscoveryFailed,
+                    AgentObservation::DiscoveryFailed(message),
                 )?;
             }
         }
