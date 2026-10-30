@@ -1,4 +1,4 @@
-import type { AgentManagementSnapshot, CapabilityManagementSnapshot, TeamGraph } from "./model";
+import { isSupportedProvider, type AgentManagementSnapshot, type CapabilityManagementSnapshot, type TeamGraph } from "./model";
 import type { PageMetricTone } from "./ManagementHero";
 
 export type EnvironmentState = "checking" | "ready" | "failed" | "preview";
@@ -16,7 +16,7 @@ export function environmentSummary(state: EnvironmentState): PageStatus {
 }
 
 export function agentMetrics(snapshot: AgentManagementSnapshot): PageMetricData[] {
-  const supported = snapshot.instances.filter((item) => item.providerKind === "codex");
+  const supported = snapshot.instances.filter((item) => isSupportedProvider(item.providerKind));
   const active = supported.filter((item) => item.enabled);
   return [
     { label: "已验证", value: active.filter((item) => item.connectionState === "ready").length, tone: "ready" },
@@ -29,7 +29,7 @@ export function agentMetrics(snapshot: AgentManagementSnapshot): PageMetricData[
 export function capabilityMetrics(snapshot: CapabilityManagementSnapshot) {
   const bound = snapshot.configurations.filter((configuration) => {
     const instance = snapshot.instances.find((item) => item.id === configuration.agentInstanceId);
-    return instance?.enabled && instance.providerKind === "codex";
+    return !!instance?.enabled && isSupportedProvider(instance.providerKind);
   }).length;
   return {
     capabilities: snapshot.configurations.length,

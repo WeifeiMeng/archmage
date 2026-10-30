@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capabilityDraft, capabilityDisplayName, isCapabilityDirty, groupTopologyEdges, initialTimelineState, reduceEvent, runBindingIssues, selectedTeamForRun, shouldConfirmCapabilityExit, teamRunOverview, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration, type Team } from "./model";
+import { capabilityDraft, capabilityDisplayName, isCapabilityDirty, groupTopologyEdges, initialTimelineState, isSupportedProvider, providerLabel, reduceEvent, runBindingIssues, selectedTeamForRun, shouldConfirmCapabilityExit, teamRunOverview, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration, type Team } from "./model";
 
 describe("capability topology", () => {
   it("keeps execution dependencies separate from extra context handoffs", () => {
@@ -64,6 +64,12 @@ describe("run request", () => {
 });
 
 describe("agent routing", () => {
+  it("treats Codex and DeepSeek Harness as supported providers", () => {
+    expect(isSupportedProvider("codex")).toBe(true);
+    expect(isSupportedProvider("deepseek_harness")).toBe(true);
+    expect(isSupportedProvider("hermes")).toBe(false);
+    expect(providerLabel("deepseek_harness")).toBe("DeepSeek Harness");
+  });
   it("blocks a run when a capability has no enabled supported instance", () => {
     const snapshot: AgentManagementSnapshot = {
       adapters: [],
@@ -80,6 +86,14 @@ describe("agent routing", () => {
     };
     expect(runBindingIssues(snapshot, ["coder", "reviewer"])).toEqual([]);
     expect(runBindingIssues(snapshot, ["coder", "tester"])).toEqual(["tester: 未绑定 Agent"]);
+  });
+  it("allows a capability bound to DeepSeek Harness", () => {
+    const snapshot: AgentManagementSnapshot = {
+      adapters: [],
+      instances: [{ id: "dsh", providerKind: "deepseek_harness", displayName: "DSH", executablePath: null, model: null, enabled: true, connectionState: "ready", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
+      bindings: [{ capability: "coder", agentInstanceId: "dsh" }],
+    };
+    expect(runBindingIssues(snapshot, ["coder"])).toEqual([]);
   });
 });
 
