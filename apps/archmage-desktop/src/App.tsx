@@ -13,11 +13,9 @@ import {
   LoaderCircle,
   Play,
   Plus,
-  RefreshCw,
   Settings as SettingsIcon,
   Share2,
   ShieldCheck,
-  Square,
   TestTube2,
   UsersRound,
   WandSparkles,
@@ -28,6 +26,7 @@ import { CapabilityManagement } from "./CapabilityManagement";
 import { TeamManagement } from "./TeamManagement";
 import { SettingsView } from "./SettingsView";
 import { RunTeamPreview } from "./RunTeamPreview";
+import { RunHeaderActions } from "./RunHeaderActions";
 import { ManagementHero, PageMetric } from "./ManagementHero";
 import { environmentSummary } from "./managementLayout";
 import { consultationEdgeState, shouldConfirmTeamExit } from "./teamGraph";
@@ -336,7 +335,7 @@ function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal }: { s
   const node = snapshot.nodes.find((item) => item.id === selectedNode) ?? snapshot.nodes[0];
   const nodeEvents = timeline.events.filter((event) => event.node_id === node?.id);
   return <div className="run-view">
-    <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span>{snapshot.team && <span>团队：{snapshot.team.name} · v{snapshot.team.revision}</span>}<code>{snapshot.id}</code></div></div><div className="header-actions"><button onClick={onRefresh}><RefreshCw size={16} />刷新</button><button onClick={onReveal} disabled={!snapshot.workspace}><FolderOpen size={16} />工作区</button>{isActive(snapshot.state) && <button className="danger" onClick={onCancel}><Square size={14} fill="currentColor" />取消</button>}</div></header>
+    <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span>{snapshot.team && <span>团队：{snapshot.team.name} · v{snapshot.team.revision}</span>}<code>{snapshot.id}</code></div></div><RunHeaderActions workspaceAvailable={Boolean(snapshot.workspace)} cancellable={isActive(snapshot.state)} onRefresh={onRefresh} onReveal={onReveal} onCancel={onCancel} /></header>
     <section className="node-strip" aria-label="能力进度">{snapshot.nodes.map((item, index) => { const meta = nodeMeta[item.key]; const binding = snapshot.agentBindings[item.key]; const Icon = meta.icon; return <button key={item.id} className={`${item.state} ${selectedNode === item.id ? "selected" : ""}`} onClick={() => setSelectedNode(item.id)}><span className="node-index">{item.state === "succeeded" ? <Check size={15} /> : item.state === "running" ? <LoaderCircle className="spin" size={15} /> : index + 1}</span><Icon size={18} /><span><strong>{capabilityDisplayName(snapshot.capabilityConfigurations[item.key], item.key)}</strong><small>{stateLabel(item.state)} · {binding ? `${binding.displayName} (${binding.providerKind})` : "历史配置"}</small></span></button>; })}</section>
     {snapshot.team && <section className="panel team-run-panel"><div className="panel-title"><div><span>冻结的团队拓扑</span><small>{snapshot.team.name} · v{snapshot.team.revision}</small></div></div><div className="team-run-edges">{snapshot.team.graph.edges.map((edge) => <span key={`${edge.from}-${edge.to}`}>{edge.from} → {edge.to}</span>)}</div></section>}
     {snapshot.team?.graph.mode === "flow" ? <FlowProgress snapshot={snapshot} /> : snapshot.team && <ConsultationProgress snapshot={snapshot} />}
