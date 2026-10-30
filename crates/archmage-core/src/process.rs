@@ -369,10 +369,38 @@ pub async fn capture_observed_with_identity(
     on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
     observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
 ) -> Result<Captured> {
+    capture_observed_with_identity_env(
+        binary,
+        args,
+        cwd,
+        input,
+        deadline,
+        max,
+        &[],
+        on_spawn,
+        observer,
+    )
+    .await
+}
+
+/// Captures a process with inherited environment plus explicit overrides.
+#[allow(clippy::too_many_arguments)]
+pub async fn capture_observed_with_identity_env(
+    binary: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    input: &[u8],
+    deadline: Duration,
+    max: usize,
+    environment: &[(OsString, OsString)],
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
+) -> Result<Captured> {
     let observer = std::sync::Mutex::new(observer);
     let mut command = Command::new(binary);
     command
         .args(args)
+        .envs(environment.iter().cloned())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
