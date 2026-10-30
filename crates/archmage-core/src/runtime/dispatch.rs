@@ -1,12 +1,16 @@
-use super::{Runtime, scheduler};
+use super::{FrozenAgentBinding, Runtime, scheduler};
 use crate::{
+    agent::ProviderKind,
     artifact::ArtifactStore,
     capability::CapabilityKind,
     context::{ContextRef, resolve_context_for_team, resolve_context_with_revision},
     contract::{ContractContext, validate_output},
     error::{Error, Result},
-    provider::codex::{self, CodexInvocation, Sandbox},
-    store::{AttemptOutcome, Store},
+    provider::{
+        codex::Sandbox,
+        executor::{self, ProviderExecution, ProviderLifecycle, ProviderSession},
+    },
+    store::{AttemptOutcome, ProviderSessionMode, Store},
     team::TeamMode,
     workspace::{GitRepository, inspect_repository, publish_changeset, snapshot},
 };
@@ -284,7 +288,6 @@ impl Runtime {
         let binding = run.agent_bindings.get(kind.key()).ok_or_else(|| {
             Error::Preflight(format!("missing frozen Agent binding for {}", kind.key()))
         })?;
-        let tools = codex::inspect_at(binding.executable_path.as_deref()).await?;
         let workspace_record = store.workspace_for_run(run_id)?;
         let repository = inspect_repository(Path::new(&workspace_record.path))?;
         let artifacts = ArtifactStore::open(&self.config.data_root.join("artifacts"))?;
@@ -334,24 +337,27 @@ impl Runtime {
             CapabilityKind::Designer | CapabilityKind::Reviewer => Sandbox::ReadOnly,
             CapabilityKind::Coder | CapabilityKind::Tester => Sandbox::WorkspaceWrite,
         };
-        let mut invocation = CodexInvocation::new(
+        let session = main_provider_session(store, run_id, kind.key(), binding.provider_kind)?;
+        let invocation = provider_execution(
+            binding,
             repository.root.clone(),
             schema_path,
             result_path,
             diagnostics_dir,
             sandbox,
+            session,
+            &self.config,
         );
-        invocation.deadline = Duration::from_secs(self.config.node_timeout_seconds);
-        invocation.max_line_bytes = self.config.max_line_bytes;
-        invocation.max_result_bytes = self.config.max_result_bytes;
-        invocation.max_stream_bytes = self.config.max_stream_bytes;
-        invocation.model = binding.model.clone();
 
-        let outcome =
-            codex::invoke_with_identity(&tools, &invocation, &context.rendered, |identity| {
-                store.attach_attempt_process(attempt_id, attempt_revision, generation, identity)
-            })
-            .await?;
+        let outcome = executor::invoke(&invocation, &context.rendered, |event| match event {
+            ProviderLifecycle::Spawned(identity) => {
+                store.attach_attempt_process(attempt_id, attempt_revision, generation, &identity)
+            }
+            ProviderLifecycle::ConversationPersisted { session_id } => {
+                store.mark_provider_session_ready(run_id, kind.key(), &session_id)
+            }
+        })
+        .await?;
 
         let bytes = serde_json::to_vec(&outcome.result)
             .map_err(|error| Error::Preflight(error.to_string()))?;
@@ -372,10 +378,54 @@ impl Runtime {
             current.revision,
             generation,
             validated,
-            &outcome.thread_id,
+            &outcome.conversation_id,
             &result_artifact,
             changeset_artifact.as_deref(),
         )
+    }
+}
+
+pub(super) fn main_provider_session(
+    store: &mut Store,
+    run_id: &str,
+    capability: &str,
+    provider_kind: ProviderKind,
+) -> Result<ProviderSession> {
+    if provider_kind == ProviderKind::Codex {
+        return Ok(ProviderSession::None);
+    }
+    let lease = store.begin_provider_session(run_id, capability, provider_kind)?;
+    Ok(match lease.mode {
+        ProviderSessionMode::Create => ProviderSession::Create(lease.session_id),
+        ProviderSessionMode::Resume => ProviderSession::Resume(lease.session_id),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn provider_execution(
+    binding: &FrozenAgentBinding,
+    repository: std::path::PathBuf,
+    schema_path: std::path::PathBuf,
+    result_path: std::path::PathBuf,
+    diagnostics_dir: std::path::PathBuf,
+    sandbox: Sandbox,
+    session: ProviderSession,
+    config: &crate::config::Config,
+) -> ProviderExecution {
+    ProviderExecution {
+        provider_kind: binding.provider_kind,
+        executable_path: binding.executable_path.clone(),
+        model: binding.model.clone(),
+        repository,
+        schema_path,
+        result_path,
+        diagnostics_dir,
+        sandbox,
+        session,
+        deadline: Duration::from_secs(config.node_timeout_seconds),
+        max_line_bytes: config.max_line_bytes,
+        max_stream_bytes: config.max_stream_bytes,
+        max_result_bytes: config.max_result_bytes,
     }
 }
 

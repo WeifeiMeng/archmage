@@ -1,6 +1,6 @@
 use super::{
     Runtime,
-    dispatch::{capability, error_code, private_dir},
+    dispatch::{capability, error_code, main_provider_session, private_dir, provider_execution},
 };
 use crate::{
     artifact::ArtifactStore,
@@ -8,12 +8,15 @@ use crate::{
     context::{ContextRef, resolve_context_for_flow},
     contract::{ContractContext, flow_output_schema, validate_flow_output},
     error::{Error, Result},
-    provider::codex::{self, CodexInvocation, Sandbox},
+    provider::{
+        codex::Sandbox,
+        executor::{self, ProviderLifecycle},
+    },
     store::{AttemptOutcome, FlowDelivery, Store},
     workspace::{inspect_repository, publish_changeset, snapshot},
 };
 use serde_json::json;
-use std::{collections::HashMap, fs, path::Path, time::Duration};
+use std::{collections::HashMap, fs, path::Path};
 
 impl Runtime {
     pub(super) async fn run_flow_to_terminal(
@@ -126,7 +129,6 @@ impl Runtime {
         let kind = capability(&delivery.target)?;
         let graph = &run.team.as_ref().ok_or(Error::Conflict)?.graph;
         let binding = run.agent_bindings.get(kind.key()).ok_or(Error::Conflict)?;
-        let tools = codex::inspect_at(binding.executable_path.as_deref()).await?;
         let workspace = store.workspace_for_run(&run.id)?;
         let repository = inspect_repository(Path::new(&workspace.path))?;
         let artifacts = ArtifactStore::open(&self.config.data_root.join("artifacts"))?;
@@ -213,23 +215,26 @@ impl Runtime {
             CapabilityKind::Designer | CapabilityKind::Reviewer => Sandbox::ReadOnly,
             CapabilityKind::Coder | CapabilityKind::Tester => Sandbox::WorkspaceWrite,
         };
-        let mut invocation = CodexInvocation::new(
+        let session = main_provider_session(store, &run.id, kind.key(), binding.provider_kind)?;
+        let invocation = provider_execution(
+            binding,
             repository.root.clone(),
             schema_path,
             attempt_dir.join("result.json"),
             attempt_dir.join("diagnostics"),
             sandbox,
+            session,
+            &self.config,
         );
-        invocation.deadline = Duration::from_secs(self.config.node_timeout_seconds);
-        invocation.max_line_bytes = self.config.max_line_bytes;
-        invocation.max_result_bytes = self.config.max_result_bytes;
-        invocation.max_stream_bytes = self.config.max_stream_bytes;
-        invocation.model = binding.model.clone();
-        let outcome =
-            codex::invoke_with_identity(&tools, &invocation, &context.rendered, |identity| {
-                store.attach_attempt_process(attempt_id, attempt_revision, generation, identity)
-            })
-            .await?;
+        let outcome = executor::invoke(&invocation, &context.rendered, |event| match event {
+            ProviderLifecycle::Spawned(identity) => {
+                store.attach_attempt_process(attempt_id, attempt_revision, generation, &identity)
+            }
+            ProviderLifecycle::ConversationPersisted { session_id } => {
+                store.mark_provider_session_ready(&run.id, kind.key(), &session_id)
+            }
+        })
+        .await?;
         let bytes = serde_json::to_vec(&outcome.result)
             .map_err(|error| Error::Preflight(error.to_string()))?;
         let contract = flow_contract_context(kind, delivery, store)?;
@@ -247,7 +252,7 @@ impl Runtime {
             &result_artifact,
             changeset.as_deref(),
             &deliverable,
-            &outcome.thread_id,
+            &outcome.conversation_id,
             &routing.next,
             routing.decision == "complete",
         )

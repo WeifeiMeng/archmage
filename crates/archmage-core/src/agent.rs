@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    provider::codex,
+    provider::{codex, deepseek_harness},
     store::{AgentObservation, Store},
 };
 use serde::{Deserialize, Serialize};
@@ -236,17 +236,26 @@ impl AgentService {
         if !instance.enabled {
             return Err(Error::Preflight("agent instance is disabled".into()));
         }
-        if instance.provider_kind != ProviderKind::Codex {
-            return Err(Error::Preflight(format!(
-                "{} provider is not supported yet",
-                instance.provider_kind
-            )));
-        }
-        match codex::inspect_at(instance.executable_path.as_deref()).await {
-            Ok(tools) => {
+        let discovered = match instance.provider_kind {
+            ProviderKind::Codex => codex::inspect_at(instance.executable_path.as_deref())
+                .await
+                .map(|tools| tools.codex_version),
+            ProviderKind::DeepseekHarness => {
+                deepseek_harness::inspect_at(instance.executable_path.as_deref())
+                    .await
+                    .map(|tools| tools.dsh_version)
+            }
+            kind => {
+                return Err(Error::Preflight(format!(
+                    "{kind} provider is not supported yet"
+                )));
+            }
+        };
+        match discovered {
+            Ok(version) => {
                 self.store()?.record_agent_observation_if_current(
                     &instance,
-                    AgentObservation::Discovered(&tools.codex_version),
+                    AgentObservation::Discovered(&version),
                 )?;
             }
             Err(_) => {
@@ -263,6 +272,9 @@ impl AgentService {
         let instance = self.store()?.agent_instance(id)?;
         if !instance.enabled {
             return Err(Error::Preflight("agent instance is disabled".into()));
+        }
+        if instance.provider_kind == ProviderKind::DeepseekHarness {
+            return self.verify_deepseek_harness(&instance).await;
         }
         if instance.provider_kind != ProviderKind::Codex {
             return Err(Error::Preflight(format!(
@@ -304,6 +316,62 @@ impl AgentService {
                 self.snapshot()
             }
         }
+    }
+
+    async fn verify_deepseek_harness(
+        &self,
+        instance: &AgentInstance,
+    ) -> Result<AgentManagementSnapshot> {
+        let tools = match deepseek_harness::inspect_at(instance.executable_path.as_deref()).await {
+            Ok(tools) => tools,
+            Err(_) => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Failed("DeepSeek Harness executable inspection failed"),
+                )?;
+                return self.snapshot();
+            }
+        };
+        let root = self.data_root.join("probes").join(&instance.id);
+        private_directory(&root)?;
+        let probe = tempfile::Builder::new()
+            .prefix("probe-")
+            .tempdir_in(&root)?;
+        let session_id = format!("archmage-probe-{}", uuid::Uuid::new_v4());
+        let schema = r#"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}"#;
+        let invocation = deepseek_harness::DeepseekHarnessInvocation::new(
+            probe.path().to_path_buf(),
+            probe.path().join("diagnostics"),
+            codex::Sandbox::ReadOnly,
+            deepseek_harness::HarnessSession::Create(session_id.clone()),
+        );
+        match deepseek_harness::invoke_with_identity(
+            &tools,
+            &invocation,
+            b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
+            schema,
+            |_| Ok(()),
+            || Ok(()),
+        )
+        .await
+        {
+            Ok(outcome) if outcome.result["ok"] == true => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Ready {
+                        version: &tools.dsh_version,
+                        thread_id: &session_id,
+                    },
+                )?;
+            }
+            _ => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Failed("DeepSeek Harness connection verification failed"),
+                )?;
+            }
+        }
+        self.snapshot()
     }
 }
 

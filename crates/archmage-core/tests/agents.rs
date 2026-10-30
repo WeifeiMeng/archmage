@@ -512,3 +512,57 @@ async fn configured_model_is_used_for_real_agent_verification() {
         Some("thread-test")
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn deepseek_harness_can_be_discovered_and_verified() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let config = Config::resolve(Some(&temp.path().join("data")), None).unwrap();
+    config.prepare().unwrap();
+    let service = AgentService::new(config.data_root.clone());
+    let binary = temp.path().join("dsh-test");
+    std::fs::write(
+        &binary,
+        r#"#!/bin/sh
+if [ "$1" = "--version" ]; then echo 'dsh 0.1.0'; exit 0; fi
+if [ "$1" = "--profile" ] && [ "$3" = "--help" ]; then echo '--session-id --resume-session-id'; exit 0; fi
+printf '{"ok":true}\n'
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    service
+        .save(&AgentInstanceInput {
+            id: "dsh-local".into(),
+            provider_kind: ProviderKind::DeepseekHarness,
+            display_name: "DeepSeek Harness Local".into(),
+            executable_path: Some(binary),
+            model: None,
+            enabled: true,
+        })
+        .unwrap();
+
+    let discovered = service.discover("dsh-local").await.unwrap();
+    let instance = discovered
+        .instances
+        .iter()
+        .find(|item| item.id == "dsh-local")
+        .unwrap();
+    assert_eq!(instance.discovered_version.as_deref(), Some("dsh 0.1.0"));
+    assert_eq!(instance.connection_state, ConnectionState::Unverified);
+
+    let verified = service.verify("dsh-local").await.unwrap();
+    let instance = verified
+        .instances
+        .iter()
+        .find(|item| item.id == "dsh-local")
+        .unwrap();
+    assert_eq!(instance.connection_state, ConnectionState::Ready);
+    assert!(
+        instance
+            .verification_thread_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("archmage-probe-"))
+    );
+}

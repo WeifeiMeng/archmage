@@ -450,3 +450,53 @@ fn changing_global_binding_does_not_change_existing_run() {
             .is_empty()
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn start_run_freezes_a_deepseek_harness_executable() {
+    use archmage_core::agent::{AgentInstanceInput, ProviderKind};
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--quiet"]);
+    git(&repo, &["config", "user.email", "archmage@example.invalid"]);
+    git(&repo, &["config", "user.name", "Archmage Test"]);
+    std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
+    git(&repo, &["add", "README.md"]);
+    git(&repo, &["commit", "--quiet", "-m", "fixture"]);
+    let binary = temp.path().join("dsh-test");
+    std::fs::write(
+        &binary,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'dsh 0.1.0'; else echo '--session-id --resume-session-id'; fi\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
+    let agents = runtime.agent_service();
+    agents
+        .save(&AgentInstanceInput {
+            id: "dsh-local".into(),
+            provider_kind: ProviderKind::DeepseekHarness,
+            display_name: "DSH Local".into(),
+            executable_path: Some(binary.canonicalize().unwrap()),
+            model: None,
+            enabled: true,
+        })
+        .unwrap();
+    for capability in ["designer", "coder", "tester", "reviewer"] {
+        agents.bind(capability, "dsh-local").unwrap();
+    }
+
+    let run_id = runtime
+        .start_run(&RunRequest::new(&repo, "goal").unwrap())
+        .await
+        .unwrap();
+    let run = runtime.snapshot(&run_id).unwrap();
+    let expected_binary = binary.canonicalize().unwrap();
+    assert!(run.agent_bindings.values().all(|binding| {
+        binding.provider_kind == ProviderKind::DeepseekHarness
+            && binding.executable_path.as_deref() == Some(expected_binary.as_path())
+    }));
+}
