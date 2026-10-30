@@ -1,0 +1,61 @@
+/* Run 交付泳道：面板高度由内容决定，不再继承整页级 min-height。 */
+.panel.flow-panel { min-height: 0; margin: 8px 0 14px; }
+.flow-panel .panel-title { height: auto; min-height: 58px; padding: 11px 17px; gap: 12px; flex-wrap: wrap; }
+.flow-panel .panel-title > div { min-width: 0; }
+.flow-empty { margin: 0; padding: 14px 17px 16px; color: var(--subtle-text); font-size: 11px; line-height: 1.55; }
+.flow-visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.flow-swimlane-scroll { padding: 0 0 12px; overflow-x: auto; }
+.flow-swimlane { width: 100%; min-width: 520px; border-collapse: collapse; table-layout: fixed; }
+.flow-swimlane th, .flow-swimlane td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.flow-swimlane thead th { color: var(--muted); font-size: 9px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.flow-swimlane .flow-lane-index-head, .flow-swimlane .flow-lane-index { width: 52px; padding-right: 4px; }
+.flow-swimlane .flow-lane-index { color: var(--subtle-text); font: 600 10px ui-monospace, SFMono-Regular, monospace; }
+.flow-swimlane tbody tr:last-child th, .flow-swimlane tbody tr:last-child td { border-bottom: 0; }
+.flow-lane-status { color: var(--muted); font-size: 10px; line-height: 1.5; }
+
+.flow-delivery-card { border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); color: var(--text); overflow: hidden; }
+.flow-delivery-card[data-state="running"] { border-color: var(--accent); }
+.flow-delivery-card[data-state="completed"] { border-color: var(--success); background: var(--success-bg); }
+.flow-delivery-card[data-state="failed"], .flow-delivery-card[data-state="cancelled"], .flow-delivery-card[data-state="interrupted"] { border-color: var(--danger); background: var(--danger-bg); }
+.flow-delivery-card[data-state^="skipped"] { border-style: dashed; background: transparent; color: var(--muted); }
+.flow-delivery-toggle, .flow-delivery-static { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 7px; width: 100%; padding: 9px 10px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.flow-delivery-toggle { cursor: pointer; }
+.flow-delivery-toggle:hover { background: var(--accent-soft); }
+.flow-delivery-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.flow-delivery-seq { color: var(--accent-strong); font: 600 9px ui-monospace, SFMono-Regular, monospace; }
+.flow-delivery-direction { font-size: 11px; font-weight: 650; }
+.flow-delivery-state { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 9px; white-space: nowrap; }
+.flow-delivery-card[data-state="completed"] .flow-delivery-state { border-color: var(--success); color: var(--success); }
+.flow-delivery-card[data-state="failed"] .flow-delivery-state, .flow-delivery-card[data-state="cancelled"] .flow-delivery-state, .flow-delivery-card[data-state="interrupted"] .flow-delivery-state { border-color: var(--danger); color: var(--danger); }
+.flow-delivery-chevron { margin-left: auto; color: var(--muted); transition: transform .15s ease; }
+.flow-delivery-chevron.open { transform: rotate(180deg); }
+.flow-delivery-reason, .flow-delivery-summary { flex-basis: 100%; color: var(--muted); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.flow-delivery-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+
+.flow-delivery-detail { padding: 11px 12px 13px; border-top: 1px solid var(--border); background: var(--surface); }
+.flow-detail-empty { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.flow-detail-group + .flow-detail-group { margin-top: 11px; }
+.flow-detail-group h4 { margin: 0 0 6px; color: var(--subtle-text); font-size: 9px; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; }
+.flow-detail-group dl, .flow-detail-nested { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.flow-detail-group dl > div, .flow-detail-nested > div { min-width: 0; }
+.flow-detail-group dt, .flow-detail-nested dt { color: var(--muted); font-size: 9px; }
+.flow-detail-group dd, .flow-detail-nested dd { margin: 2px 0 0; color: var(--text); font-size: 11px; line-height: 1.55; overflow-wrap: anywhere; }
+.flow-detail-group dd p, .flow-detail-nested dd p { margin: 0; }
+.flow-detail-group dd ul { margin: 0; padding-left: 16px; }
+.flow-detail-group dd li { margin: 2px 0; }
+.flow-detail-raw { margin-top: 11px; }
+.flow-detail-raw summary { color: var(--muted); font-size: 10px; cursor: pointer; }
+.flow-detail-raw pre { margin: 8px 0 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--code-bg); color: var(--text); font: 10px/1.55 ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* 小窗口或能力较多时退化为纵向交付卡片，避免整页横向滚动。 */
+@media (max-width: 1080px) {
+  .flow-swimlane, .flow-swimlane thead, .flow-swimlane tbody, .flow-swimlane tr, .flow-swimlane th, .flow-swimlane td { display: block; width: auto; }
+  .flow-swimlane { min-width: 0; }
+  .flow-swimlane thead { display: none; }
+  .flow-swimlane-scroll { overflow-x: visible; }
+  .flow-swimlane tbody tr { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  .flow-swimlane tbody tr:last-child { border-bottom: 0; }
+  .flow-swimlane th, .flow-swimlane td { padding: 0; border: 0; }
+  .flow-swimlane .flow-lane-index, .flow-swimlane .flow-lane-status { display: none; }
+}

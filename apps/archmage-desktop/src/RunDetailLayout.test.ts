@@ -7,7 +7,12 @@ describe("Run detail layout", () => {
   it("does not repeat the frozen Team topology below capability progress", () => {
     expect(appSource).not.toContain("冻结的团队拓扑");
     expect(appSource).not.toContain("snapshot.team.graph.edges.map");
-    expect(appSource).toContain("<FlowProgress snapshot={snapshot} />");
     expect(appSource).toContain("<ConsultationProgress snapshot={snapshot} />");
+  });
+
+  it("delegates delivery rendering to the swimlane component", () => {
+    expect(appSource).toContain("<FlowDeliverySwimlane");
+    expect(appSource).not.toContain("flow-deliveries");
+    expect(appSource).not.toContain("function FlowProgress");
   });
 });

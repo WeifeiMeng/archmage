@@ -27,6 +27,8 @@ import { TeamManagement } from "./TeamManagement";
 import { SettingsView } from "./SettingsView";
 import { RunTeamPreview } from "./RunTeamPreview";
 import { RunHeaderActions } from "./RunHeaderActions";
+import { FlowDeliverySwimlane } from "./FlowDeliverySwimlane";
+import { flowLaneMembers } from "./flowDelivery";
 import { ManagementHero, PageMetric } from "./ManagementHero";
 import { environmentSummary } from "./managementLayout";
 import { consultationEdgeState, shouldConfirmTeamExit } from "./teamGraph";
@@ -337,7 +339,7 @@ function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal }: { s
   return <div className="run-view">
     <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span>{snapshot.team && <span>团队：{snapshot.team.name} · v{snapshot.team.revision}</span>}<code>{snapshot.id}</code></div></div><RunHeaderActions workspaceAvailable={Boolean(snapshot.workspace)} cancellable={isActive(snapshot.state)} onRefresh={onRefresh} onReveal={onReveal} onCancel={onCancel} /></header>
     <section className="node-strip" aria-label="能力进度">{snapshot.nodes.map((item, index) => { const meta = nodeMeta[item.key]; const binding = snapshot.agentBindings[item.key]; const Icon = meta.icon; return <button key={item.id} className={`${item.state} ${selectedNode === item.id ? "selected" : ""}`} onClick={() => setSelectedNode(item.id)}><span className="node-index">{item.state === "succeeded" ? <Check size={15} /> : item.state === "running" ? <LoaderCircle className="spin" size={15} /> : index + 1}</span><Icon size={18} /><span><strong>{capabilityDisplayName(snapshot.capabilityConfigurations[item.key], item.key)}</strong><small>{stateLabel(item.state)} · {binding ? `${binding.displayName} (${binding.providerKind})` : "历史配置"}</small></span></button>; })}</section>
-    {snapshot.team?.graph.mode === "flow" ? <FlowProgress snapshot={snapshot} /> : snapshot.team && <ConsultationProgress snapshot={snapshot} />}
+    {snapshot.team?.graph.mode === "flow" ? <FlowDeliverySwimlane members={flowLaneMembers(snapshot.team, snapshot.capabilityConfigurations)} deliveries={snapshot.flowDeliveries ?? []} stepLimit={snapshot.flowStepLimit ?? 24} /> : snapshot.team && <ConsultationProgress snapshot={snapshot} />}
     <div className="run-grid"><section className="panel timeline-panel"><div className="panel-title"><div><span>运行时间线</span><small>{timeline.events.length} 个持久化事件</small></div><span className="sequence">SEQ {timeline.lastSequence}</span></div><div className="timeline">{timeline.events.map((event) => <EventRow key={event.sequence} event={event} />)}{timeline.events.length === 0 && <p className="empty-copy">等待 Runtime 事件……</p>}</div></section><section className="panel inspector"><div className="panel-title"><div><span>节点检查器</span><small>{node ? nodeMeta[node.key].label : "—"}</small></div></div>{node ? <><div className="inspect-state"><span className={`status-dot ${node.state}`} /><strong>{stateLabel(node.state)}</strong><code>{node.id}</code></div>{node.result ? <><div className="result-meta"><MetaItem label="Codex Thread" value={node.result.threadId} /><MetaItem label="Attempt" value={node.result.attemptId} /><MetaItem label="Result Artifact" value={node.result.resultArtifactId} />{node.result.changesetArtifactId && <MetaItem label="ChangeSet" value={node.result.changesetArtifactId} />}</div><div className="inspect-section output-section"><label>结构化结果</label><ResultSummary output={node.result.output} /><details><summary>查看原始 JSON</summary><pre>{JSON.stringify(node.result.output, null, 2)}</pre></details></div></> : <div className="waiting-result"><LoaderCircle className={node.state === "running" ? "spin" : ""} size={17} /><div><strong>尚无结构化结果</strong><span>{node.state === "running" ? "Codex 正在执行，完成后会在此显示结果和 Artifact。" : "节点开始并成功完成后，结果会持久化到这里。"}</span></div></div>}<div className="inspect-section"><label>下游咨询</label>{snapshot.consultations.filter((item) => item.sourceNodeId === node.id).map((item) => <div className="consultation-card" key={item.id}><strong>{item.targetCapability} · {item.decision === "approved" ? "认可" : "要求修改"} · 第 {item.round + 1} 轮</strong><p>{item.summary}</p>{item.suggestions.map((suggestion) => <p key={suggestion}>建议：{suggestion}</p>)}<code>{item.threadId}</code></div>)}{!snapshot.consultations.some((item) => item.sourceNodeId === node.id) && <p className="empty-copy">暂无咨询结果。</p>}</div><div className="inspect-section"><label>运行记录</label>{nodeEvents.length ? nodeEvents.map((event) => <div className="compact-event" key={event.sequence}><span>#{event.sequence} · {event.event_type}</span>{Object.keys(event.payload).length > 0 && <pre>{JSON.stringify(event.payload, null, 2)}</pre>}</div>) : <p className="empty-copy">该节点还没有事件。</p>}</div></> : null}</section></div>
   </div>;
 }
@@ -346,20 +348,6 @@ function ConsultationProgress({ snapshot }: { snapshot: RunSnapshot }) {
   const team = snapshot.team;
   if (!team) return null;
   return <section className="panel team-run-panel"><div className="panel-title"><div><span>审阅进度</span><small>咨询与主任务分开；每条边都必须认可当前上游结果</small></div></div><div className="team-run-edges">{team.graph.edges.map((edge) => <span key={`${edge.from}-${edge.to}`}>{edge.from} → {edge.to} · {consultationEdgeState(snapshot, edge)}</span>)}</div></section>;
-}
-
-function FlowProgress({ snapshot }: { snapshot: RunSnapshot }) {
-  const deliveries = snapshot.flowDeliveries ?? [];
-  const stateLabels: Record<string, string> = {
-    queued: "待执行", running: "执行中", completed: "已交付", failed: "失败",
-    cancelled: "已取消", interrupted: "已中断", skipped_due_terminal: "流程完成，已跳过",
-    skipped_due_failure: "流程失败，已跳过", skipped_due_cancel: "流程取消，已跳过",
-    skipped_due_interruption: "流程中断，已跳过",
-  };
-  return <section className="panel team-run-panel"><div className="panel-title"><div><span>交付消息</span><small>每条消息独立触发一次目标能力；最多执行 24 次</small></div></div><div className="flow-deliveries">
-    {deliveries.map((item) => <div key={item.id} className="flow-delivery"><strong>#{item.sequence} · {item.target}</strong><span>{stateLabels[item.state] ?? item.state}</span>{item.routing && <code>{item.routing.decision === "complete" ? "完成" : `→ ${item.routing.next.join(", ")}`}</code>}</div>)}
-    {!deliveries.length && <p className="empty-copy">尚未产生交付消息。</p>}
-  </div></section>;
 }
 
 function MetaItem({ label, value }: { label: string; value: string }) {

@@ -60,9 +60,6 @@
 .team-run-panel { min-height: 0; margin: 8px 0 14px; }
 .team-run-edges { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 17px; }
 .team-run-edges span { border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; color: var(--text); font-size: 11px; }
-.flow-deliveries { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 17px; }
-.flow-delivery { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 11px; }
-.flow-delivery code { color: var(--accent); }
 .consultation-card { margin: 9px 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
 .consultation-card strong { font-size: 11px; color: var(--accent); }
 .consultation-card p { font-size: 11px; line-height: 1.5; color: var(--text); }

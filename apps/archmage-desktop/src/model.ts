@@ -138,6 +138,16 @@ export type NodeSnapshot = {
   } | null;
 };
 
+export type FlowDeliveryRouting = { decision: string; next: CapabilityKey[] };
+
+export type FlowDelivery = {
+  id: string; runId: string; sequence: number;
+  sourceAttemptId: string | null; target: CapabilityKey;
+  payloadArtifactId: string | null; state: string;
+  attemptId: string | null; routing: FlowDeliveryRouting | null;
+  output?: Record<string, unknown> | null;
+};
+
 export type RunSnapshot = {
   id: string;
   goal: string;
@@ -167,11 +177,8 @@ export type RunSnapshot = {
     threadId: string;
   }[];
   consultationProcesses: { sourceNodeId: string; sourceAttemptId: string; targetCapability: CapabilityKey }[];
-  flowDeliveries?: {
-    id: string; runId: string; sequence: number; sourceAttemptId: string | null;
-    target: CapabilityKey; payloadArtifactId: string | null; state: string;
-    attemptId: string | null; routing: { decision: string; next: CapabilityKey[] } | null;
-  }[];
+  flowDeliveries?: FlowDelivery[];
+  flowStepLimit?: number;
   workspace: string | null;
 };
 
