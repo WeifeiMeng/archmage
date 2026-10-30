@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 const BUILTIN_NODES: [&str; 4] = ["designer", "coder", "tester", "reviewer"];
@@ -81,6 +82,8 @@ pub struct FrozenAgentBinding {
     pub display_name: String,
     pub provider_kind: ProviderKind,
     pub executable_path: Option<PathBuf>,
+    #[serde(default)]
+    pub provider_route: Option<String>,
     pub model: Option<String>,
 }
 
@@ -145,6 +148,7 @@ pub struct RunSnapshot {
 #[derive(Clone)]
 pub struct Runtime {
     pub(crate) config: Config,
+    pub(crate) provider_pool: Arc<crate::provider::pool::ProviderPool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -173,7 +177,10 @@ impl Runtime {
         config.prepare()?;
         validate_builtin_schemas()?;
         Store::open(&config.data_root.join("archmage.db"))?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            provider_pool: Arc::new(crate::provider::pool::ProviderPool::new()),
+        })
     }
 
     pub(crate) fn store(&self) -> Result<Store> {
@@ -212,7 +219,7 @@ impl Runtime {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         let definition = FrozenRunDefinition {
-            version: 5,
+            version: 6,
             repository,
             checks: Vec::new(),
             agent_bindings,
@@ -247,6 +254,19 @@ impl Runtime {
                                 ))
                             })?;
                     binding.executable_path = Some(tools.codex_binary);
+                }
+                ProviderKind::DeepseekHarness => {
+                    let tools = crate::provider::deepseek_harness::inspect_at(
+                        binding.executable_path.as_deref(),
+                    )
+                    .await
+                    .map_err(|error| {
+                        Error::Preflight(format!(
+                            "capability {capability} uses Agent {}: {error}",
+                            binding.agent_instance_id
+                        ))
+                    })?;
+                    binding.executable_path = Some(tools.python_binary);
                 }
                 kind => {
                     return Err(Error::Preflight(format!(
@@ -404,6 +424,7 @@ impl Runtime {
                     display_name: instance.display_name,
                     provider_kind: instance.provider_kind,
                     executable_path: instance.executable_path,
+                    provider_route: instance.provider_route,
                     model: instance.model,
                 },
             );

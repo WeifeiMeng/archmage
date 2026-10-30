@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
 };
 
@@ -21,6 +21,14 @@ pub struct ProcessIdentity {
 pub struct OwnedProcess {
     child: tokio::process::Child,
     identity: ProcessIdentity,
+}
+
+pub struct OwnedPipedProcess {
+    child: tokio::process::Child,
+    identity: ProcessIdentity,
+    stdin: tokio::process::ChildStdin,
+    stdout: BufReader<tokio::process::ChildStdout>,
+    stderr_task: Option<tokio::task::JoinHandle<Result<Vec<u8>>>>,
 }
 
 #[cfg(unix)]
@@ -181,6 +189,114 @@ pub async fn spawn_owned(
         started: String::new(),
     };
     Ok(OwnedProcess { child, identity })
+}
+
+pub async fn spawn_owned_piped(
+    binary: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    environment: &[(OsString, OsString)],
+    max_stderr: usize,
+) -> Result<OwnedPipedProcess> {
+    let mut command = Command::new(binary);
+    command
+        .args(args)
+        .envs(environment.iter().cloned())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
+    }
+    configure_process_group(&mut command);
+    let mut child = command
+        .spawn()
+        .map_err(|error| Error::Spawn(error.to_string()))?;
+    let pid = child
+        .id()
+        .ok_or_else(|| Error::Spawn("child PID unavailable".into()))?;
+    #[cfg(unix)]
+    let identity = ProcessIdentity {
+        pid,
+        pgid: pid as i32,
+        started: process_started(pid)?,
+    };
+    #[cfg(not(unix))]
+    let identity = ProcessIdentity {
+        pid,
+        pgid: pid as i32,
+        started: String::new(),
+    };
+    let stdin = child.stdin.take().expect("piped stdin");
+    let stdout = BufReader::new(child.stdout.take().expect("piped stdout"));
+    let mut stderr = child.stderr.take().expect("piped stderr");
+    let stderr_task = tokio::spawn(async move {
+        let mut captured = Vec::new();
+        let mut chunk = [0_u8; 8192];
+        let mut exceeded = false;
+        loop {
+            let count = stderr.read(&mut chunk).await?;
+            if count == 0 {
+                break;
+            }
+            if captured.len().saturating_add(count) <= max_stderr {
+                captured.extend_from_slice(&chunk[..count]);
+            } else {
+                exceeded = true;
+            }
+        }
+        if exceeded {
+            Err(Error::Limit("process stderr limit exceeded".into()))
+        } else {
+            Ok(captured)
+        }
+    });
+    Ok(OwnedPipedProcess {
+        child,
+        identity,
+        stdin,
+        stdout,
+        stderr_task: Some(stderr_task),
+    })
+}
+
+impl OwnedPipedProcess {
+    pub fn identity(&self) -> &ProcessIdentity {
+        &self.identity
+    }
+
+    pub fn stdin(&mut self) -> &mut tokio::process::ChildStdin {
+        &mut self.stdin
+    }
+
+    pub fn stdout(&mut self) -> &mut BufReader<tokio::process::ChildStdout> {
+        &mut self.stdout
+    }
+
+    pub fn try_wait(&mut self) -> Result<Option<ExitStatus>> {
+        Ok(self.child.try_wait()?)
+    }
+
+    pub async fn wait(&mut self) -> Result<(ExitStatus, Vec<u8>)> {
+        let status = self.child.wait().await?;
+        let stderr = self
+            .stderr_task
+            .take()
+            .ok_or_else(|| Error::Conflict)?
+            .await
+            .map_err(|error| Error::Preflight(error.to_string()))??;
+        Ok((status, stderr))
+    }
+
+    pub async fn cancel(&mut self, grace: Duration) -> Result<()> {
+        cancel_process(&self.identity, grace).await?;
+        let _ = self.child.wait().await?;
+        if let Some(task) = self.stderr_task.take() {
+            let _ = task.await;
+        }
+        Ok(())
+    }
 }
 
 impl OwnedProcess {
@@ -369,10 +485,38 @@ pub async fn capture_observed_with_identity(
     on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
     observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
 ) -> Result<Captured> {
+    capture_observed_with_identity_env(
+        binary,
+        args,
+        cwd,
+        input,
+        deadline,
+        max,
+        &[],
+        on_spawn,
+        observer,
+    )
+    .await
+}
+
+/// Captures a process with inherited environment plus explicit overrides.
+#[allow(clippy::too_many_arguments)]
+pub async fn capture_observed_with_identity_env(
+    binary: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    input: &[u8],
+    deadline: Duration,
+    max: usize,
+    environment: &[(OsString, OsString)],
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
+) -> Result<Captured> {
     let observer = std::sync::Mutex::new(observer);
     let mut command = Command::new(binary);
     command
         .args(args)
+        .envs(environment.iter().cloned())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

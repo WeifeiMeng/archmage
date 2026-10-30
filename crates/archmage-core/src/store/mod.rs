@@ -27,7 +27,7 @@ pub struct Store {
 
 pub(crate) enum AgentObservation<'a> {
     Discovered(&'a str),
-    DiscoveryFailed,
+    DiscoveryFailed(&'a str),
     Ready {
         version: &'a str,
         thread_id: &'a str,
@@ -169,6 +169,7 @@ impl Store {
             tx.execute_batch(include_str!(
                 "../../migrations/0015_flow_terminal_states.sql"
             ))?;
+            tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -237,7 +238,11 @@ impl Store {
                 ))?;
                 version = 15;
             }
-            if version != 15 {
+            if version == 15 {
+                tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
+                version = 16;
+            }
+            if version != 16 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -398,7 +403,7 @@ impl Store {
 
     pub fn agent_instances(&self) -> Result<Vec<AgentInstance>> {
         let mut query = self.db.prepare(
-            "SELECT id,provider_kind,display_name,executable_path,model,enabled,
+            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,enabled,
                     connection_state,discovered_version,last_verified_at,last_error,
                     verification_thread_id
              FROM agent_instances ORDER BY created_at,id",
@@ -410,7 +415,7 @@ impl Store {
 
     pub fn agent_instance(&self, id: &str) -> Result<AgentInstance> {
         Ok(self.db.query_row(
-            "SELECT id,provider_kind,display_name,executable_path,model,enabled,
+            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,enabled,
                     connection_state,discovered_version,last_verified_at,last_error,
                     verification_thread_id
              FROM agent_instances WHERE id=?1",
@@ -439,31 +444,37 @@ impl Store {
             .map(|path| path.to_string_lossy().into_owned());
         self.db.execute(
             "INSERT INTO agent_instances(
-                id,provider_kind,display_name,executable_path,model,enabled
-             ) VALUES(?1,?2,?3,?4,?5,?6)
+                id,provider_kind,display_name,executable_path,provider_route,model,enabled
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7)
              ON CONFLICT(id) DO UPDATE SET
                 display_name=excluded.display_name,
                 executable_path=excluded.executable_path,
+                provider_route=excluded.provider_route,
                 model=excluded.model,
                 enabled=excluded.enabled,
                 connection_state=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.connection_state ELSE 'unverified' END,
                 discovered_version=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.discovered_version ELSE NULL END,
                 last_verified_at=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.last_verified_at ELSE NULL END,
                 last_error=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.last_error ELSE NULL END,
                 verification_thread_id=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.verification_thread_id ELSE NULL END,
                 updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
@@ -472,6 +483,7 @@ impl Store {
                 input.provider_kind.as_str(),
                 input.display_name.trim(),
                 executable_path,
+                input.provider_route.as_ref().map(|value| value.trim()),
                 input.model.as_ref().map(|value| value.trim()),
                 input.enabled,
             ],
@@ -605,14 +617,14 @@ impl Store {
         let tx = self
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let current: Option<(String, Option<String>, Option<String>, bool)> = tx
+        let current: Option<(String, Option<String>, Option<String>, Option<String>, bool)> = tx
             .query_row(
-                "SELECT provider_kind,executable_path,model,enabled FROM agent_instances WHERE id=?1",
+                "SELECT provider_kind,executable_path,provider_route,model,enabled FROM agent_instances WHERE id=?1",
                 [&expected.id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
             )
             .optional()?;
-        let Some((provider, path, model, enabled)) = current else {
+        let Some((provider, path, provider_route, model, enabled)) = current else {
             return Ok(false);
         };
         let expected_path = expected
@@ -621,6 +633,7 @@ impl Store {
             .map(|value| value.to_string_lossy().into_owned());
         if provider != expected.provider_kind.as_str()
             || path != expected_path
+            || provider_route != expected.provider_route
             || model != expected.model
             || enabled != expected.enabled
         {
@@ -638,13 +651,13 @@ impl Store {
                     rusqlite::params![expected.id, version],
                 )?;
             }
-            AgentObservation::DiscoveryFailed => {
+            AgentObservation::DiscoveryFailed(message) => {
                 tx.execute(
                     "UPDATE agent_instances SET connection_state='failed', discovered_version=NULL,
-                        last_verified_at=NULL, last_error='Codex executable inspection failed',
+                        last_verified_at=NULL, last_error=?2,
                         verification_thread_id=NULL,
                         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1",
-                    [&expected.id],
+                    rusqlite::params![expected.id, message],
                 )?;
             }
             AgentObservation::Ready { version, thread_id } => {
@@ -689,12 +702,12 @@ impl Store {
 
 fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance> {
     let provider: String = row.get(1)?;
-    let connection: String = row.get(6)?;
+    let connection: String = row.get(7)?;
     let provider_kind = provider.parse().map_err(|error: Error| {
         rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let connection_state = connection.parse().map_err(|error: Error| {
-        rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(error))
+        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let executable_path: Option<String> = row.get(3)?;
     Ok(AgentInstance {
@@ -702,13 +715,14 @@ fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance
         provider_kind,
         display_name: row.get(2)?,
         executable_path: executable_path.map(Into::into),
-        model: row.get(4)?,
-        enabled: row.get(5)?,
+        provider_route: row.get(4)?,
+        model: row.get(5)?,
+        enabled: row.get(6)?,
         connection_state,
-        discovered_version: row.get(7)?,
-        last_verified_at: row.get(8)?,
-        last_error: row.get(9)?,
-        verification_thread_id: row.get(10)?,
+        discovered_version: row.get(8)?,
+        last_verified_at: row.get(9)?,
+        last_error: row.get(10)?,
+        verification_thread_id: row.get(11)?,
     })
 }
 fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {

@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    provider::codex,
+    provider::{codex, deepseek_harness},
     store::{AgentObservation, Store},
 };
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,8 @@ pub const BUILTIN_CAPABILITIES: [&str; 4] = ["designer", "coder", "tester", "rev
 #[serde(rename_all = "lowercase")]
 pub enum ProviderKind {
     Codex,
+    #[serde(rename = "deepseek_harness")]
+    DeepseekHarness,
     Claude,
     OpenClaw,
     Hermes,
@@ -21,6 +23,7 @@ impl ProviderKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Codex => "codex",
+            Self::DeepseekHarness => "deepseek_harness",
             Self::Claude => "claude",
             Self::OpenClaw => "openclaw",
             Self::Hermes => "hermes",
@@ -28,7 +31,7 @@ impl ProviderKind {
     }
 
     pub fn supported(self) -> bool {
-        matches!(self, Self::Codex)
+        matches!(self, Self::Codex | Self::DeepseekHarness)
     }
 }
 
@@ -44,6 +47,7 @@ impl FromStr for ProviderKind {
     fn from_str(value: &str) -> Result<Self> {
         match value {
             "codex" => Ok(Self::Codex),
+            "deepseek_harness" => Ok(Self::DeepseekHarness),
             "claude" => Ok(Self::Claude),
             "openclaw" => Ok(Self::OpenClaw),
             "hermes" => Ok(Self::Hermes),
@@ -92,6 +96,8 @@ pub struct AgentInstanceInput {
     pub provider_kind: ProviderKind,
     pub display_name: String,
     pub executable_path: Option<PathBuf>,
+    #[serde(default)]
+    pub provider_route: Option<String>,
     pub model: Option<String>,
     pub enabled: bool,
 }
@@ -122,6 +128,30 @@ impl AgentInstanceInput {
         {
             return Err(Error::Preflight("agent model cannot be blank".into()));
         }
+        if self
+            .provider_route
+            .as_ref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err(Error::Preflight(
+                "agent provider route cannot be blank".into(),
+            ));
+        }
+        match self.provider_kind {
+            ProviderKind::Codex if self.provider_route.is_some() => {
+                return Err(Error::Preflight(
+                    "Codex does not use a provider route".into(),
+                ));
+            }
+            ProviderKind::DeepseekHarness
+                if self.provider_route.is_none() || self.model.is_none() =>
+            {
+                return Err(Error::Preflight(
+                    "DeepSeek Harness provider route and model are required".into(),
+                ));
+            }
+            _ => {}
+        }
         Ok(())
     }
 }
@@ -133,6 +163,7 @@ pub struct AgentInstance {
     pub provider_kind: ProviderKind,
     pub display_name: String,
     pub executable_path: Option<PathBuf>,
+    pub provider_route: Option<String>,
     pub model: Option<String>,
     pub enabled: bool,
     pub connection_state: ConnectionState,
@@ -168,6 +199,7 @@ pub struct AgentManagementSnapshot {
 pub fn adapter_descriptors() -> Vec<AdapterDescriptor> {
     [
         (ProviderKind::Codex, "Codex"),
+        (ProviderKind::DeepseekHarness, "DeepSeek Harness"),
         (ProviderKind::Claude, "Claude"),
         (ProviderKind::OpenClaw, "OpenClaw"),
         (ProviderKind::Hermes, "Hermes"),
@@ -226,23 +258,39 @@ impl AgentService {
         if !instance.enabled {
             return Err(Error::Preflight("agent instance is disabled".into()));
         }
-        if instance.provider_kind != ProviderKind::Codex {
-            return Err(Error::Preflight(format!(
-                "{} provider is not supported yet",
-                instance.provider_kind
-            )));
-        }
-        match codex::inspect_at(instance.executable_path.as_deref()).await {
-            Ok(tools) => {
+        let discovered = match instance.provider_kind {
+            ProviderKind::Codex => codex::inspect_at(instance.executable_path.as_deref())
+                .await
+                .map(|tools| tools.codex_version),
+            ProviderKind::DeepseekHarness => {
+                deepseek_harness::inspect_at(instance.executable_path.as_deref())
+                    .await
+                    .map(|tools| deepseek_harness::python_version_label(&tools))
+            }
+            kind => {
+                return Err(Error::Preflight(format!(
+                    "{kind} provider is not supported yet"
+                )));
+            }
+        };
+        match discovered {
+            Ok(version) => {
                 self.store()?.record_agent_observation_if_current(
                     &instance,
-                    AgentObservation::Discovered(&tools.codex_version),
+                    AgentObservation::Discovered(&version),
                 )?;
             }
             Err(_) => {
+                let message = match instance.provider_kind {
+                    ProviderKind::Codex => "Codex executable inspection failed",
+                    ProviderKind::DeepseekHarness => {
+                        "DeepSeek Harness Python SDK inspection failed"
+                    }
+                    _ => "Agent inspection failed",
+                };
                 self.store()?.record_agent_observation_if_current(
                     &instance,
-                    AgentObservation::DiscoveryFailed,
+                    AgentObservation::DiscoveryFailed(message),
                 )?;
             }
         }
@@ -253,6 +301,9 @@ impl AgentService {
         let instance = self.store()?.agent_instance(id)?;
         if !instance.enabled {
             return Err(Error::Preflight("agent instance is disabled".into()));
+        }
+        if instance.provider_kind == ProviderKind::DeepseekHarness {
+            return self.verify_deepseek_harness(&instance).await;
         }
         if instance.provider_kind != ProviderKind::Codex {
             return Err(Error::Preflight(format!(
@@ -294,6 +345,87 @@ impl AgentService {
                 self.snapshot()
             }
         }
+    }
+
+    async fn verify_deepseek_harness(
+        &self,
+        instance: &AgentInstance,
+    ) -> Result<AgentManagementSnapshot> {
+        let tools = match deepseek_harness::inspect_at(instance.executable_path.as_deref()).await {
+            Ok(tools) => tools,
+            Err(_) => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Failed("DeepSeek Harness executable inspection failed"),
+                )?;
+                return self.snapshot();
+            }
+        };
+        let root = self.data_root.join("probes").join(&instance.id);
+        private_directory(&root)?;
+        let probe = tempfile::Builder::new()
+            .prefix("probe-")
+            .tempdir_in(&root)?;
+        let session_id = format!("archmage-probe-{}", uuid::Uuid::new_v4());
+        let config = deepseek_harness::SidecarConfig {
+            python_binary: tools.python_binary.clone(),
+            data_root: self.data_root.clone(),
+            repository: probe.path().to_path_buf(),
+            provider_route: instance.provider_route.clone().ok_or_else(|| {
+                Error::Preflight("DeepSeek Harness provider route is required".into())
+            })?,
+            model: instance
+                .model
+                .clone()
+                .ok_or_else(|| Error::Preflight("DeepSeek Harness model is required".into()))?,
+            session_id: session_id.clone(),
+            permission_mode: deepseek_harness::PermissionMode::ReadOnly,
+            session_root: probe.path().join("sessions"),
+            diagnostics_dir: probe.path().join("diagnostics"),
+            deadline: std::time::Duration::from_secs(60),
+            max_line_bytes: 1024 * 1024,
+            max_stream_bytes: 4 * 1024 * 1024,
+            max_result_bytes: 1024 * 1024,
+            environment: std::collections::BTreeMap::new(),
+        };
+        let result = async {
+            let mut sidecar = deepseek_harness::DeepseekHarnessSidecar::start(config).await?;
+            let outcome = match sidecar
+                .invoke(
+                    "verification",
+                    b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
+                    &serde_json::json!({"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}),
+                )
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let _ = sidecar.cancel().await;
+                    return Err(error);
+                }
+            };
+            sidecar.close().await?;
+            Ok::<_, Error>(outcome)
+        }
+        .await;
+        match result {
+            Ok(outcome) if outcome.result["ok"] == true => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Ready {
+                        version: &deepseek_harness::python_version_label(&tools),
+                        thread_id: &session_id,
+                    },
+                )?;
+            }
+            _ => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Failed("DeepSeek Harness connection verification failed"),
+                )?;
+            }
+        }
+        self.snapshot()
     }
 }
 

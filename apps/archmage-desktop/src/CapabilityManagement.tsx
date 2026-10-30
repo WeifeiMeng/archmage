@@ -9,6 +9,8 @@ import {
   capabilityDraft,
   connectionLabel,
   isCapabilityDirty,
+  isSupportedProvider,
+  providerLabel,
   type CapabilityConfigurationInput,
   type CapabilityKey,
   type CapabilityManagementSnapshot,
@@ -52,8 +54,8 @@ export function CapabilityManagement({ onError, onDirtyChange }: { onError: (mes
   const dirty = !!saved && !!draft && isCapabilityDirty(saved, draft);
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
   const instance = snapshot?.instances.find((item) => item.id === draft?.agentInstanceId);
-  const availableInstances = snapshot?.instances.filter((item) => item.enabled && item.providerKind === "codex") ?? [];
-  const canSave = !!instance?.enabled && instance.providerKind === "codex";
+  const availableInstances = snapshot?.instances.filter((item) => item.enabled && isSupportedProvider(item.providerKind)) ?? [];
+  const canSave = !!instance?.enabled && isSupportedProvider(instance.providerKind);
 
   async function select(key: CapabilityKey) {
     if (key === selected || !snapshot) return;
@@ -114,7 +116,7 @@ export function CapabilityManagement({ onError, onDirtyChange }: { onError: (mes
       <div className="cap-editor-heading"><span className="cap-editor-icon"><Settings2 size={19} /></span><div><p className="eyebrow">SELECTED CAPABILITY</p><h2>{saved.displayName}</h2><span>稳定标识：{selected} · 内置职责与输出契约保持固定</span></div></div>
       <p className="cap-role-description">{saved.description}</p>
       <div className="cap-fields">
-        <label>执行 Agent<select disabled={busy} value={draft.agentInstanceId} onChange={(event) => setDraft({ ...draft, agentInstanceId: event.target.value })}>{!availableInstances.some((item) => item.id === draft.agentInstanceId) && <option value={draft.agentInstanceId} disabled>{instance ? `${instance.displayName} · 已禁用` : "当前绑定不可用"}</option>}{availableInstances.map((item) => <option key={item.id} value={item.id}>{item.displayName} · Codex</option>)}</select><small>{instance ? `当前连接：${connectionLabel(instance.connectionState)}` : "当前绑定不可用，请先到 Agent 管理添加或启用实例。"}</small></label>
+        <label>执行 Agent<select disabled={busy} value={draft.agentInstanceId} onChange={(event) => setDraft({ ...draft, agentInstanceId: event.target.value })}>{!availableInstances.some((item) => item.id === draft.agentInstanceId) && <option value={draft.agentInstanceId} disabled>{instance ? `${instance.displayName} · 已禁用` : "当前绑定不可用"}</option>}{availableInstances.map((item) => <option key={item.id} value={item.id}>{item.displayName} · {providerLabel(item.providerKind)}</option>)}</select><small>{instance ? `当前连接：${connectionLabel(instance.connectionState)}` : "当前绑定不可用，请先到 Agent 管理添加或启用实例。"}</small></label>
         <label>角色补充提示词<textarea disabled={busy} rows={5} maxLength={8000} value={draft.extraInstructions} onChange={(event) => setDraft({ ...draft, extraInstructions: event.target.value })} placeholder="描述这个能力的工作风格、侧重点和交付偏好" /><small>会追加到内置职责之后；不替换内置输出契约。</small></label>
       </div>
       <div className="cap-guidance-grid">{(["skills", "tools"] as const).map((field) => <div className="cap-guidance" key={field}><div className="cap-guidance-header"><div><h3>{field === "skills" ? "Skills" : "Tools"}</h3><p>手动填写名称与用途，让执行 Agent 理解它们如何辅助当前能力。</p></div><button type="button" disabled={busy || draft[field].length >= 16} onClick={() => setDraft({ ...draft, [field]: [...draft[field], { name: "", purpose: "" }] })}><Plus size={14} />添加</button></div>{draft[field].length === 0 ? <p className="cap-guidance-empty">尚未配置</p> : draft[field].map((item, index) => <div className="cap-guidance-row" key={`${field}-${index}`}><input disabled={busy} aria-label={`${field} ${index + 1} 名称`} placeholder={field === "skills" ? "例如 brainstorming" : "例如 web_search"} maxLength={80} value={item.name} onChange={(event) => setDraft({ ...draft, [field]: draft[field].map((entry, entryIndex) => entryIndex === index ? { ...entry, name: event.target.value } : entry) })} /><input disabled={busy} aria-label={`${field} ${index + 1} 用途`} placeholder="用途说明" maxLength={500} value={item.purpose} onChange={(event) => setDraft({ ...draft, [field]: draft[field].map((entry, entryIndex) => entryIndex === index ? { ...entry, purpose: event.target.value } : entry) })} /><button type="button" disabled={busy} aria-label={`移除 ${field} ${item.name || index + 1}`} onClick={() => setDraft({ ...draft, [field]: draft[field].filter((_, entryIndex) => entryIndex !== index) })}><Trash2 size={15} /></button></div>)}</div>)}</div>

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import "./management.css";
 
 type ManagementHeroProps = {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -16,7 +16,7 @@ export function ManagementHero({ eyebrow, title, description, actions, summary, 
   return <header className="management-hero">
     <div className="management-hero-top">
       <div className="management-hero-copy">
-        <p className="eyebrow">{eyebrow}</p>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>

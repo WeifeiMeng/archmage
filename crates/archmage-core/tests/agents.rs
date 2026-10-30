@@ -8,7 +8,7 @@ use archmage_core::{
 #[test]
 fn capability_config_is_seeded_and_saved_with_revision_guard() {
     let (_temp, mut store) = fixture_store();
-    assert_eq!(store.schema_version().unwrap(), 15);
+    assert_eq!(store.schema_version().unwrap(), 16);
     let configs = store.capability_configurations().unwrap();
     assert_eq!(configs.len(), 4);
     assert_eq!(configs[0].key, "designer");
@@ -127,15 +127,38 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15);",
+            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15,16);",
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();
-    assert_eq!(upgraded.schema_version().unwrap(), 15);
+    assert_eq!(upgraded.schema_version().unwrap(), 16);
     assert_eq!(upgraded.capability_configurations().unwrap().len(), 4);
     assert_eq!(
         upgraded.capability_bindings().unwrap()[0].agent_instance_id,
         "codex-default"
+    );
+    assert_eq!(upgraded.agent_instances().unwrap().len(), 1);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let provider_route_columns = db
+        .prepare("PRAGMA table_info(agent_instances)")
+        .unwrap()
+        .query_map([], |row| row.get::<_, String>(1))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    assert!(
+        provider_route_columns
+            .iter()
+            .any(|name| name == "provider_route")
+    );
+    assert_eq!(
+        db.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provider_sessions'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        0
     );
 }
 
@@ -146,19 +169,51 @@ fn fixture_store() -> (tempfile::TempDir, Store) {
 }
 
 #[test]
-fn seeds_one_codex_instance_and_binds_all_builtin_capabilities() {
+fn seeds_only_codex_and_keeps_builtin_capabilities_on_codex() {
     let (_temp, store) = fixture_store();
     let snapshot = store.agent_management_snapshot().unwrap();
 
     assert_eq!(snapshot.instances.len(), 1);
-    assert_eq!(snapshot.instances[0].id, "codex-default");
-    assert_eq!(snapshot.instances[0].provider_kind, ProviderKind::Codex);
+    assert!(snapshot.instances.iter().any(|instance| {
+        instance.id == "codex-default" && instance.provider_kind == ProviderKind::Codex
+    }));
     assert_eq!(snapshot.bindings.len(), 4);
     assert!(
         snapshot
             .bindings
             .iter()
             .all(|binding| binding.agent_instance_id == "codex-default")
+    );
+}
+
+#[test]
+fn deepseek_harness_requires_provider_route_and_model() {
+    let base = AgentInstanceInput {
+        id: "dsh".into(),
+        provider_kind: ProviderKind::DeepseekHarness,
+        display_name: "DeepSeek Harness".into(),
+        executable_path: None,
+        provider_route: None,
+        model: None,
+        enabled: true,
+    };
+    assert!(base.validate().is_err());
+    assert!(
+        AgentInstanceInput {
+            provider_route: Some("deepseek-official".into()),
+            ..base.clone()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        AgentInstanceInput {
+            provider_route: Some("deepseek-official".into()),
+            model: Some("deepseek-v4".into()),
+            ..base
+        }
+        .validate()
+        .is_ok()
     );
 }
 
@@ -171,6 +226,7 @@ fn stores_multiple_codex_instances_with_stable_ids() {
             provider_kind: ProviderKind::Codex,
             display_name: "Codex Work".into(),
             executable_path: Some("/opt/codex/bin/codex".into()),
+            provider_route: None,
             model: Some("gpt-5.4".into()),
             enabled: true,
         })
@@ -196,6 +252,7 @@ fn changing_execution_config_invalidates_verification() {
             provider_kind: ProviderKind::Codex,
             display_name: "Codex".into(),
             executable_path: Some("/opt/codex/bin/codex".into()),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -215,6 +272,7 @@ fn bound_instance_cannot_be_disabled_or_deleted() {
         provider_kind: ProviderKind::Codex,
         display_name: "Codex".into(),
         executable_path: None,
+        provider_route: None,
         model: None,
         enabled: false,
     };
@@ -280,6 +338,7 @@ fn renaming_a_failed_instance_preserves_its_failure_message() {
             provider_kind: ProviderKind::Codex,
             display_name: "Renamed".into(),
             executable_path: None,
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -314,6 +373,7 @@ async fn stale_verification_cannot_mark_a_changed_model_ready() {
             provider_kind: ProviderKind::Codex,
             display_name: "Race".into(),
             executable_path: Some(binary.clone()),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -335,6 +395,7 @@ async fn stale_verification_cannot_mark_a_changed_model_ready() {
             provider_kind: ProviderKind::Codex,
             display_name: "Race".into(),
             executable_path: Some(binary),
+            provider_route: None,
             model: Some("new-model".into()),
             enabled: true,
         })
@@ -364,6 +425,7 @@ async fn verification_failure_is_persisted_as_safe_state() {
             provider_kind: ProviderKind::Codex,
             display_name: "Broken Codex".into(),
             executable_path: Some(temp.path().join("missing-codex")),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -399,6 +461,7 @@ async fn discovery_does_not_claim_online_verification() {
             provider_kind: ProviderKind::Codex,
             display_name: "Discovery".into(),
             executable_path: Some(binary),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -432,6 +495,7 @@ async fn configured_model_is_used_for_real_agent_verification() {
             provider_kind: ProviderKind::Codex,
             display_name: "Model".into(),
             executable_path: Some(binary),
+            provider_route: None,
             model: Some("test-model".into()),
             enabled: true,
         })
@@ -448,4 +512,69 @@ async fn configured_model_is_used_for_real_agent_verification() {
         instance.verification_thread_id.as_deref(),
         Some("thread-test")
     );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn deepseek_harness_can_be_discovered_and_verified() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let config = Config::resolve(Some(&temp.path().join("data")), None).unwrap();
+    config.prepare().unwrap();
+    let service = AgentService::new(config.data_root.clone());
+    let binary = temp.path().join("python-test");
+    let fake_sdk = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/deepseek_harness_sdk");
+    let sdk_log = temp.path().join("sdk.jsonl");
+    std::fs::write(
+        &binary,
+        format!(
+            "#!/bin/sh\nexport PYTHONPATH='{}'\nexport FAKE_DSH_LOG='{}'\nexport PYTHONDONTWRITEBYTECODE=1\nexec python3 \"$@\"\n",
+            fake_sdk.display(),
+            sdk_log.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    service
+        .save(&AgentInstanceInput {
+            id: "dsh-local".into(),
+            provider_kind: ProviderKind::DeepseekHarness,
+            display_name: "DeepSeek Harness Local".into(),
+            executable_path: Some(binary),
+            provider_route: Some("deepseek-official".into()),
+            model: Some("deepseek-v4-flash".into()),
+            enabled: true,
+        })
+        .unwrap();
+
+    let discovered = service.discover("dsh-local").await.unwrap();
+    let instance = discovered
+        .instances
+        .iter()
+        .find(|item| item.id == "dsh-local")
+        .unwrap();
+    assert_eq!(
+        instance.discovered_version.as_deref(),
+        Some("SDK 0.1.0 / runtime 0.1.0")
+    );
+    assert_eq!(instance.connection_state, ConnectionState::Unverified);
+
+    let verified = service.verify("dsh-local").await.unwrap();
+    let instance = verified
+        .instances
+        .iter()
+        .find(|item| item.id == "dsh-local")
+        .unwrap();
+    assert_eq!(instance.connection_state, ConnectionState::Ready);
+    assert!(
+        instance
+            .verification_thread_id
+            .as_deref()
+            .is_some_and(|id| id.starts_with("archmage-probe-"))
+    );
+    let events = std::fs::read_to_string(sdk_log).unwrap();
+    assert!(events.contains("\"provider\":\"deepseek-official\""));
+    assert!(events.contains("\"model\":\"deepseek-v4-flash\""));
+    assert!(events.contains("\"event\":\"close\""));
 }

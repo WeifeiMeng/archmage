@@ -1,12 +1,18 @@
-use super::Runtime;
+use super::{
+    Runtime,
+    dispatch::{dsh_sidecar_config, provider_execution},
+};
 use crate::{
     capability::{CapabilityConfiguration, CapabilityKind, GUIDANCE_NOTE},
     contract::{CONSULTATION_SCHEMA, validate_consultation},
     error::{Error, Result},
-    provider::codex::{self, CodexInvocation, Sandbox},
+    provider::{
+        codex::Sandbox,
+        executor::{self, ProviderLifecycle},
+    },
 };
 use serde_json::{Value, json};
-use std::{fs, time::Duration};
+use std::fs;
 use tokio::task::JoinSet;
 
 fn kind(key: &str) -> Result<CapabilityKind> {
@@ -129,7 +135,6 @@ impl Runtime {
             .agent_bindings
             .get(target)
             .ok_or_else(|| Error::Preflight(format!("missing frozen Agent for {target}")))?;
-        let tools = codex::inspect_at(binding.executable_path.as_deref()).await?;
         let prompt = render_consultation_prompt(
             target,
             source,
@@ -149,35 +154,65 @@ impl Runtime {
         fs::create_dir_all(&attempt_dir)?;
         let schema_path = attempt_dir.join("schema.json");
         fs::write(&schema_path, CONSULTATION_SCHEMA)?;
-        let mut invocation = CodexInvocation::new(
-            workspace,
-            schema_path,
-            attempt_dir.join("result.json"),
-            attempt_dir.join("diagnostics"),
-            Sandbox::ReadOnly,
-        );
-        invocation.model = binding.model.clone();
-        invocation.deadline = Duration::from_secs(self.config.node_timeout_seconds);
-        invocation.max_line_bytes = self.config.max_line_bytes;
-        invocation.max_result_bytes = self.config.max_result_bytes;
-        invocation.max_stream_bytes = self.config.max_stream_bytes;
         let process_id = uuid::Uuid::new_v4().to_string();
         let registration = self.clone();
         let registered_id = process_id.clone();
         let registered_run = run_id.to_owned();
         let registered_attempt = source_attempt_id.to_owned();
         let registered_target = target.to_owned();
-        let result = codex::invoke_with_identity(&tools, &invocation, &prompt, move |identity| {
-            registration.store()?.register_consultation_process(
-                &registered_id,
-                &registered_run,
-                &registered_attempt,
-                &registered_target,
-                generation,
-                identity,
-            )
-        })
-        .await;
+        let result = if binding.provider_kind == crate::agent::ProviderKind::DeepseekHarness {
+            let schema: serde_json::Value = serde_json::from_str(CONSULTATION_SCHEMA)
+                .map_err(|error| Error::Preflight(error.to_string()))?;
+            let sidecar = dsh_sidecar_config(
+                binding,
+                workspace,
+                attempt_dir.join("diagnostics"),
+                crate::provider::deepseek_harness::PermissionMode::ReadOnly,
+                attempt_dir.join("sessions"),
+                &self.config,
+            )?;
+            self.provider_pool
+                .invoke_temporary(
+                    sidecar,
+                    source_attempt_id,
+                    &prompt,
+                    &schema,
+                    move |identity| {
+                        registration.store()?.register_consultation_process(
+                            &registered_id,
+                            &registered_run,
+                            &registered_attempt,
+                            &registered_target,
+                            generation,
+                            identity,
+                        )
+                    },
+                )
+                .await
+        } else {
+            let invocation = provider_execution(
+                binding,
+                workspace,
+                schema_path,
+                attempt_dir.join("result.json"),
+                attempt_dir.join("diagnostics"),
+                Sandbox::ReadOnly,
+                &self.config,
+            );
+            executor::invoke(&invocation, &prompt, move |event| match event {
+                ProviderLifecycle::Spawned(identity) => {
+                    registration.store()?.register_consultation_process(
+                        &registered_id,
+                        &registered_run,
+                        &registered_attempt,
+                        &registered_target,
+                        generation,
+                        &identity,
+                    )
+                }
+            })
+            .await
+        };
         self.store()?.finish_consultation_process(&process_id)?;
         let outcome = result?;
         let raw = serde_json::to_vec(&outcome.result)
@@ -195,7 +230,7 @@ impl Runtime {
             &decision.decision,
             &decision.summary,
             &decision.suggestions,
-            &outcome.thread_id,
+            &outcome.conversation_id,
             &outcome.result,
         )?;
         Ok(())

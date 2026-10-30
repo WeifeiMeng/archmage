@@ -1,5 +1,5 @@
 export type RunRequest = { repository: string; goal: string; teamId?: string };
-export type ProviderKind = "codex" | "claude" | "openclaw" | "hermes";
+export type ProviderKind = "codex" | "deepseek_harness" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
 export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
 
@@ -29,6 +29,7 @@ export type AgentInstance = {
   providerKind: ProviderKind;
   displayName: string;
   executablePath: string | null;
+  providerRoute: string | null;
   model: string | null;
   enabled: boolean;
   connectionState: ConnectionState;
@@ -41,7 +42,7 @@ export type AgentInstance = {
 export type AgentInstanceInput = Pick<
   AgentInstance,
   "id" | "providerKind" | "displayName" | "executablePath" | "model" | "enabled"
->;
+> & { providerRoute: string | null };
 
 export type CapabilityBinding = {
   capability: CapabilityKey;
@@ -119,6 +120,7 @@ export type FrozenAgentBinding = {
   displayName: string;
   providerKind: ProviderKind;
   executablePath: string | null;
+  providerRoute: string | null;
   model: string | null;
 };
 
@@ -208,6 +210,17 @@ export function toRunRequest(repository: string, goal: string, teamId?: string):
 export const connectionLabel = (state: ConnectionState) =>
   ({ unverified: "连接未验证", ready: "可用", failed: "连接失败" })[state];
 
+export const isSupportedProvider = (provider: ProviderKind) =>
+  provider === "codex" || provider === "deepseek_harness";
+
+export const providerLabel = (provider: ProviderKind) =>
+  ({ codex: "Codex", deepseek_harness: "DeepSeek Harness", claude: "Claude", openclaw: "OpenClaw", hermes: "Hermes" })[provider];
+
+export function agentInputIsComplete(input: Pick<AgentInstanceInput, "providerKind" | "providerRoute" | "model">): boolean {
+  return input.providerKind !== "deepseek_harness"
+    || Boolean(input.providerRoute?.trim() && input.model?.trim());
+}
+
 export function runBindingIssues(snapshot: AgentManagementSnapshot, capabilities: CapabilityKey[] = ["designer", "coder", "tester", "reviewer"]): string[] {
   return capabilities.flatMap((capability) => {
     const binding = snapshot.bindings.find((item) => item.capability === capability);
@@ -215,7 +228,7 @@ export function runBindingIssues(snapshot: AgentManagementSnapshot, capabilities
     const instance = snapshot.instances.find((item) => item.id === binding.agentInstanceId);
     if (!instance) return [`${capability}: Agent 实例不存在`];
     if (!instance.enabled) return [`${capability}: Agent 实例已禁用`];
-    if (instance.providerKind !== "codex") return [`${capability}: Provider 尚未支持`];
+    if (!isSupportedProvider(instance.providerKind)) return [`${capability}: Provider 尚未支持`];
     return [];
   });
 }

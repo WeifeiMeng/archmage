@@ -7,6 +7,7 @@ const instance = (id: string, state: AgentInstance["connectionState"], enabled =
   providerKind,
   displayName: id,
   executablePath: null,
+  providerRoute: null,
   model: null,
   enabled,
   connectionState: state,
@@ -39,15 +40,15 @@ describe("management layout summaries", () => {
   it("counts supported enabled Agent connection states", () => {
     const snapshot: AgentManagementSnapshot = {
       adapters: [{ kind: "codex", displayName: "Codex", supported: true }, { kind: "claude", displayName: "Claude", supported: false }],
-      instances: [instance("ready", "ready"), instance("unverified", "unverified"), instance("failed", "failed"), instance("disabled", "ready", false), instance("claude", "ready", true, "claude")],
+      instances: [instance("ready", "ready"), instance("dsh", "ready", true, "deepseek_harness"), instance("unverified", "unverified"), instance("failed", "failed"), instance("disabled", "ready", false), instance("claude", "ready", true, "claude")],
       bindings: [],
     };
 
     expect(agentMetrics(snapshot)).toEqual([
-      { label: "已验证", value: 1, tone: "ready" },
+      { label: "已验证", value: 2, tone: "ready" },
       { label: "未验证", value: 1, tone: "warning" },
       { label: "连接失败", value: 1, tone: "failed" },
-      { label: "总实例", value: 4, tone: "default" },
+      { label: "总实例", value: 5, tone: "default" },
     ]);
   });
 
