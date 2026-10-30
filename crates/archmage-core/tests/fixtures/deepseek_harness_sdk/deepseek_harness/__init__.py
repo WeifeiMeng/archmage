@@ -15,8 +15,9 @@ class DeepSeekHarnessConfig:
     model: str
     cwd: str
     runtime_cwd: str
-    session_root: str
-    cordis: str
+    profile: str
+    patches: tuple[str, ...]
+    dsh_home: str
     request_timeout_seconds: float
 
 
@@ -49,8 +50,9 @@ class DeepSeekHarness:
             model=config.model,
             cwd=config.cwd,
             runtimeCwd=config.runtime_cwd,
-            sessionRoot=config.session_root,
-            cordis=config.cordis,
+            profile=config.profile,
+            patches=config.patches,
+            dshHome=config.dsh_home,
         )
 
     def start_session(self, session_id):

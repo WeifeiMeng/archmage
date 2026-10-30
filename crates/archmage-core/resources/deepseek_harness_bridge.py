@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from importlib.metadata import version
+from pathlib import Path
 
 from deepseek_harness import DeepSeekHarness, DeepSeekHarnessConfig
 
@@ -51,13 +53,15 @@ def main() -> int:
         timeout = start.get("requestTimeoutSeconds")
         if not isinstance(timeout, (int, float)) or timeout <= 0:
             raise ValueError("requestTimeoutSeconds must be positive")
+        dsh_home = os.environ.get("DSH_HOME") or str(Path.home() / ".dsh")
         config = DeepSeekHarnessConfig(
             provider=require_string(start, "provider"),
             model=require_string(start, "model"),
             cwd=require_string(start, "cwd"),
             runtime_cwd=require_string(start, "cwd"),
-            session_root=require_string(start, "sessionRoot"),
-            cordis=require_string(start, "cordis"),
+            profile="sdk",
+            patches=(require_string(start, "cordis"),),
+            dsh_home=dsh_home,
             request_timeout_seconds=float(timeout),
         )
         harness = DeepSeekHarness(config)

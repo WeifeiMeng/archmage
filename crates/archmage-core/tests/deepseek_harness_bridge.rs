@@ -33,6 +33,7 @@ fn run_bridge(
         .args(["-u", bridge_path().to_str().unwrap()])
         .env("PYTHONPATH", fake_sdk_path())
         .env("FAKE_DSH_LOG", log)
+        .env("DSH_HOME", _root.join("dsh-home"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -56,6 +57,7 @@ fn bridge_reuses_one_named_sdk_session_for_two_invocations() {
         .args(["-u", bridge_path().to_str().unwrap()])
         .env("PYTHONPATH", fake_sdk_path())
         .env("FAKE_DSH_LOG", &log)
+        .env("DSH_HOME", temp.path().join("dsh-home"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -118,6 +120,19 @@ fn bridge_reuses_one_named_sdk_session_for_two_invocations() {
             .filter(|event| event["event"] == "run")
             .count(),
         2
+    );
+    let harness = events
+        .iter()
+        .find(|event| event["event"] == "harness")
+        .unwrap();
+    assert_eq!(harness["profile"], "sdk");
+    assert_eq!(
+        harness["dshHome"],
+        temp.path().join("dsh-home").to_string_lossy().as_ref()
+    );
+    assert_eq!(
+        harness["patches"],
+        json!([temp.path().join("cordis.yml").to_string_lossy()])
     );
     assert_eq!(events.last().unwrap()["event"], "close");
 }
