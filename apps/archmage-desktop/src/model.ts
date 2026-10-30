@@ -29,6 +29,7 @@ export type AgentInstance = {
   providerKind: ProviderKind;
   displayName: string;
   executablePath: string | null;
+  providerRoute: string | null;
   model: string | null;
   enabled: boolean;
   connectionState: ConnectionState;
@@ -41,7 +42,7 @@ export type AgentInstance = {
 export type AgentInstanceInput = Pick<
   AgentInstance,
   "id" | "providerKind" | "displayName" | "executablePath" | "model" | "enabled"
->;
+> & { providerRoute: string | null };
 
 export type CapabilityBinding = {
   capability: CapabilityKey;
@@ -119,6 +120,7 @@ export type FrozenAgentBinding = {
   displayName: string;
   providerKind: ProviderKind;
   executablePath: string | null;
+  providerRoute: string | null;
   model: string | null;
 };
 
@@ -213,6 +215,11 @@ export const isSupportedProvider = (provider: ProviderKind) =>
 
 export const providerLabel = (provider: ProviderKind) =>
   ({ codex: "Codex", deepseek_harness: "DeepSeek Harness", claude: "Claude", openclaw: "OpenClaw", hermes: "Hermes" })[provider];
+
+export function agentInputIsComplete(input: Pick<AgentInstanceInput, "providerKind" | "providerRoute" | "model">): boolean {
+  return input.providerKind !== "deepseek_harness"
+    || Boolean(input.providerRoute?.trim() && input.model?.trim());
+}
 
 export function runBindingIssues(snapshot: AgentManagementSnapshot, capabilities: CapabilityKey[] = ["designer", "coder", "tester", "reviewer"]): string[] {
   return capabilities.flatMap((capability) => {

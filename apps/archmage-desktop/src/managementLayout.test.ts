@@ -7,6 +7,7 @@ const instance = (id: string, state: AgentInstance["connectionState"], enabled =
   providerKind,
   displayName: id,
   executablePath: null,
+  providerRoute: null,
   model: null,
   enabled,
   connectionState: state,

@@ -7,6 +7,7 @@ import { ManagementHero, PageMetric } from "./ManagementHero";
 import { agentMetrics } from "./managementLayout";
 import {
   connectionLabel,
+  agentInputIsComplete,
   isSupportedProvider,
   providerLabel,
   type AgentInstance,
@@ -78,22 +79,26 @@ function AgentCard({ instance, bound, busy, onSave, onDiscover, onVerify, onDele
   const isDsh = instance.providerKind === "deepseek_harness";
   const [name, setName] = useState(instance.displayName);
   const [path, setPath] = useState(instance.executablePath ?? "");
+  const [providerRoute, setProviderRoute] = useState(instance.providerRoute ?? "");
   const [model, setModel] = useState(instance.model ?? "");
   const [enabled, setEnabled] = useState(instance.enabled);
-  useEffect(() => { setName(instance.displayName); setPath(instance.executablePath ?? ""); setModel(instance.model ?? ""); setEnabled(instance.enabled); }, [instance]);
-  const dirty = useMemo(() => name !== instance.displayName || path !== (instance.executablePath ?? "") || model !== (instance.model ?? "") || enabled !== instance.enabled, [instance, model, name, path, enabled]);
+  useEffect(() => { setName(instance.displayName); setPath(instance.executablePath ?? ""); setProviderRoute(instance.providerRoute ?? ""); setModel(instance.model ?? ""); setEnabled(instance.enabled); }, [instance]);
+  const dirty = useMemo(() => name !== instance.displayName || path !== (instance.executablePath ?? "") || providerRoute !== (instance.providerRoute ?? "") || model !== (instance.model ?? "") || enabled !== instance.enabled, [instance, model, name, path, providerRoute, enabled]);
+  const complete = agentInputIsComplete({ providerKind: instance.providerKind, providerRoute, model });
   const Icon = instance.connectionState === "ready" ? CheckCircle2 : instance.connectionState === "failed" ? CircleAlert : Wifi;
   return <article className="agent-card supported">
     <div className="agent-card-top"><span className="agent-logo"><Bot size={19} /></span><div><h3>{instance.displayName}</h3><span>{instance.id} · {providerLabel(instance.providerKind)}</span></div><span className={`status-chip ${instance.connectionState}`}><Icon size={13} />{!instance.enabled ? "已禁用" : instance.connectionState === "unverified" ? instance.discoveredVersion ? "CLI 可用 · 未验证" : "CLI 未检查" : connectionLabel(instance.connectionState)}</span></div>
     <div className="agent-fields">
       <label>实例名称<input value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label>{isDsh ? "DSH CLI 路径" : "Codex CLI 路径"}<input value={path} onChange={(event) => setPath(event.target.value)} placeholder="留空则从 PATH 自动发现" /></label>
-      {isDsh ? <p className="agent-provider-note">继承当前 Archmage 进程中的 DSH_HOME；模型与认证由该环境管理。</p> : <label>模型覆盖<input value={model} onChange={(event) => setModel(event.target.value)} placeholder="留空则使用 Codex 默认模型" /></label>}
+      <label>{isDsh ? "Python 路径" : "Codex CLI 路径"}<input value={path} onChange={(event) => setPath(event.target.value)} placeholder={isDsh ? "留空则从 PATH 发现 python3" : "留空则从 PATH 自动发现"} /></label>
+      {isDsh && <label>Provider route<input value={providerRoute} onChange={(event) => setProviderRoute(event.target.value)} placeholder="例如 deepseek-official" /></label>}
+      <label>{isDsh ? "Model" : "模型覆盖"}<input value={model} onChange={(event) => setModel(event.target.value)} placeholder={isDsh ? "例如 deepseek-v4-flash" : "留空则使用 Codex 默认模型"} /></label>
+      {isDsh && <p className="agent-provider-note">凭证、endpoint 与 DSH_HOME 继承 Archmage 启动环境；Provider route 与 model 由此实例明确配置。</p>}
       <label className="agent-enabled"><input type="checkbox" checked={enabled} disabled={bound} onChange={(event) => setEnabled(event.target.checked)} />启用实例{bound && <span>（已绑定能力）</span>}</label>
     </div>
     <div className="agent-facts"><span>版本<strong>{instance.discoveredVersion ?? "尚未读取"}</strong></span><span>上次验证<strong>{instance.lastVerifiedAt ? new Date(instance.lastVerifiedAt).toLocaleString() : "从未"}</strong></span></div>
     {instance.lastError && <p className="inline-agent-error"><CircleAlert size={14} />{instance.lastError}</p>}
-    <div className="agent-actions"><button disabled={!dirty || busy || !name.trim()} onClick={() => onSave({ id: instance.id, providerKind: instance.providerKind, displayName: name.trim(), executablePath: path.trim() || null, model: isDsh ? null : model.trim() || null, enabled })}><Save size={15} />保存配置</button><button disabled={busy || dirty || !enabled} onClick={onDiscover}>检查 CLI</button><button className="verify" disabled={busy || dirty || !enabled} onClick={onVerify}>{busy ? <LoaderCircle className="spin" size={15} /> : <Wifi size={15} />}验证连接</button>{!bound && <button disabled={busy} onClick={onDelete}>删除</button>}</div>
+    <div className="agent-actions"><button disabled={!dirty || busy || !name.trim() || !complete} onClick={() => onSave({ id: instance.id, providerKind: instance.providerKind, displayName: name.trim(), executablePath: path.trim() || null, providerRoute: isDsh ? providerRoute.trim() || null : null, model: model.trim() || null, enabled })}><Save size={15} />保存配置</button><button disabled={busy || dirty || !enabled} onClick={onDiscover}>{isDsh ? "检查 SDK" : "检查 CLI"}</button><button className="verify" disabled={busy || dirty || !enabled} onClick={onVerify}>{busy ? <LoaderCircle className="spin" size={15} /> : <Wifi size={15} />}验证连接</button>{!bound && <button disabled={busy} onClick={onDelete}>删除</button>}</div>
   </article>;
 }
 
@@ -101,5 +106,10 @@ function NewAgentCard({ busy, onCancel, onSave }: { busy: boolean; onCancel: () 
   const [provider, setProvider] = useState<Extract<ProviderKind, "codex" | "deepseek_harness">>("codex");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
-  return <article className="agent-card supported new-agent"><div className="agent-card-top"><span className="agent-logo"><Plus size={19} /></span><div><h3>新 Agent 实例</h3><span>本地 Provider</span></div></div><div className="agent-fields"><label>Provider<select value={provider} onChange={(event) => setProvider(event.target.value as typeof provider)}><option value="codex">Codex</option><option value="deepseek_harness">DeepSeek Harness</option></select></label><label>实例 ID<input value={id} onChange={(event) => setId(event.target.value)} placeholder={provider === "codex" ? "例如 codex-work" : "例如 dsh-work"} /></label><label>实例名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder={providerLabel(provider)} /></label>{provider === "deepseek_harness" && <p className="agent-provider-note">默认从 PATH 发现 dsh，并继承当前环境的 DSH_HOME。</p>}</div><div className="agent-actions"><button onClick={onCancel}>取消</button><button className="verify" disabled={busy || !id.trim() || !name.trim()} onClick={() => onSave({ id: id.trim(), providerKind: provider, displayName: name.trim(), executablePath: null, model: null, enabled: true })}>{busy ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />}创建实例</button></div></article>;
+  const [path, setPath] = useState("");
+  const [providerRoute, setProviderRoute] = useState("");
+  const [model, setModel] = useState("");
+  const isDsh = provider === "deepseek_harness";
+  const complete = agentInputIsComplete({ providerKind: provider, providerRoute: isDsh ? providerRoute : null, model: model || null });
+  return <article className="agent-card supported new-agent"><div className="agent-card-top"><span className="agent-logo"><Plus size={19} /></span><div><h3>新 Agent 实例</h3><span>本地 Provider</span></div></div><div className="agent-fields"><label>Provider<select value={provider} onChange={(event) => setProvider(event.target.value as typeof provider)}><option value="codex">Codex</option><option value="deepseek_harness">DeepSeek Harness</option></select></label><label>实例 ID<input value={id} onChange={(event) => setId(event.target.value)} placeholder={provider === "codex" ? "例如 codex-work" : "例如 dsh-work"} /></label><label>实例名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder={providerLabel(provider)} /></label><label>{isDsh ? "Python 路径" : "Codex CLI 路径"}<input value={path} onChange={(event) => setPath(event.target.value)} placeholder={isDsh ? "留空则从 PATH 发现 python3" : "留空则从 PATH 自动发现"} /></label>{isDsh && <label>Provider route<input value={providerRoute} onChange={(event) => setProviderRoute(event.target.value)} placeholder="例如 deepseek-official" /></label>}<label>{isDsh ? "Model" : "模型覆盖"}<input value={model} onChange={(event) => setModel(event.target.value)} placeholder={isDsh ? "例如 deepseek-v4-flash" : "留空则使用 Codex 默认模型"} /></label>{isDsh && <p className="agent-provider-note">凭证、endpoint 与 DSH_HOME 继承 Archmage 启动环境。</p>}</div><div className="agent-actions"><button onClick={onCancel}>取消</button><button className="verify" disabled={busy || !id.trim() || !name.trim() || !complete} onClick={() => onSave({ id: id.trim(), providerKind: provider, displayName: name.trim(), executablePath: path.trim() || null, providerRoute: isDsh ? providerRoute.trim() || null : null, model: model.trim() || null, enabled: true })}>{busy ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />}创建实例</button></div></article>;
 }
