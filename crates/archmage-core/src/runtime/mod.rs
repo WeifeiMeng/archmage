@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 const BUILTIN_NODES: [&str; 4] = ["designer", "coder", "tester", "reviewer"];
@@ -147,6 +148,7 @@ pub struct RunSnapshot {
 #[derive(Clone)]
 pub struct Runtime {
     pub(crate) config: Config,
+    pub(crate) provider_pool: Arc<crate::provider::pool::ProviderPool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -175,7 +177,10 @@ impl Runtime {
         config.prepare()?;
         validate_builtin_schemas()?;
         Store::open(&config.data_root.join("archmage.db"))?;
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            provider_pool: Arc::new(crate::provider::pool::ProviderPool::new()),
+        })
     }
 
     pub(crate) fn store(&self) -> Result<Store> {
