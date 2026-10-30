@@ -2,7 +2,7 @@ use archmage_core::{
     agent::ProviderKind,
     provider::{
         codex::Sandbox,
-        executor::{ProviderExecution, ProviderSession, invoke},
+        executor::{ProviderExecution, invoke},
     },
 };
 
@@ -18,7 +18,6 @@ async fn direct_deepseek_execution_is_reserved_for_the_runtime_pool() {
         result_path: temp.path().join("result.json"),
         diagnostics_dir: temp.path().join("diagnostics"),
         sandbox: Sandbox::WorkspaceWrite,
-        session: ProviderSession::Create("session-a".into()),
         deadline: std::time::Duration::from_secs(1),
         max_line_bytes: 1024,
         max_stream_bytes: 1024,

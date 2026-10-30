@@ -9,7 +9,7 @@ use crate::{
     provider::{
         codex::Sandbox,
         deepseek_harness::{PermissionMode, SidecarConfig},
-        executor::{self, ProviderExecution, ProviderLifecycle, ProviderSession},
+        executor::{self, ProviderExecution, ProviderLifecycle},
         pool::SidecarKey,
     },
     store::{AttemptOutcome, Store},
@@ -389,7 +389,6 @@ impl Runtime {
                 result_path,
                 diagnostics_dir,
                 sandbox,
-                ProviderSession::None,
                 &self.config,
             );
             executor::invoke(&invocation, &context.rendered, |event| match event {
@@ -399,7 +398,6 @@ impl Runtime {
                     generation,
                     &identity,
                 ),
-                ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
             })
             .await?
         };
@@ -438,7 +436,6 @@ pub(super) fn provider_execution(
     result_path: std::path::PathBuf,
     diagnostics_dir: std::path::PathBuf,
     sandbox: Sandbox,
-    session: ProviderSession,
     config: &crate::config::Config,
 ) -> ProviderExecution {
     ProviderExecution {
@@ -450,7 +447,6 @@ pub(super) fn provider_execution(
         result_path,
         diagnostics_dir,
         sandbox,
-        session,
         deadline: Duration::from_secs(config.node_timeout_seconds),
         max_line_bytes: config.max_line_bytes,
         max_stream_bytes: config.max_stream_bytes,

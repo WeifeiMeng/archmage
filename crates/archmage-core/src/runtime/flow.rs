@@ -13,7 +13,7 @@ use crate::{
     error::{Error, Result},
     provider::{
         codex::Sandbox,
-        executor::{self, ProviderLifecycle, ProviderSession},
+        executor::{self, ProviderLifecycle},
         pool::SidecarKey,
     },
     store::{AttemptOutcome, FlowDelivery, Store},
@@ -260,7 +260,6 @@ impl Runtime {
                 attempt_dir.join("result.json"),
                 diagnostics_dir,
                 sandbox,
-                ProviderSession::None,
                 &self.config,
             );
             executor::invoke(&invocation, &context.rendered, |event| match event {
@@ -270,7 +269,6 @@ impl Runtime {
                     generation,
                     &identity,
                 ),
-                ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
             })
             .await?
         };

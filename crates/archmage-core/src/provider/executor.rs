@@ -7,16 +7,8 @@ use crate::{
 use std::{path::PathBuf, sync::Mutex, time::Duration};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ProviderSession {
-    None,
-    Create(String),
-    Resume(String),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProviderLifecycle {
     Spawned(ProcessIdentity),
-    ConversationPersisted { session_id: String },
 }
 
 #[derive(Clone, Debug)]
@@ -29,7 +21,6 @@ pub struct ProviderExecution {
     pub result_path: PathBuf,
     pub diagnostics_dir: PathBuf,
     pub sandbox: codex::Sandbox,
-    pub session: ProviderSession,
     pub deadline: Duration,
     pub max_line_bytes: usize,
     pub max_stream_bytes: usize,

@@ -175,8 +175,17 @@ impl DeepseekHarnessSidecar {
             max_result_bytes: config.max_result_bytes,
             request_timeout_seconds: config.deadline.as_secs().max(1),
         };
-        write_frame(&mut process, &start).await?;
-        let ready = read_frame(&mut process, config.deadline, config.max_line_bytes).await?;
+        if let Err(error) = write_frame(&mut process, &start).await {
+            let _ = process.cancel(Duration::from_secs(1)).await;
+            return Err(error);
+        }
+        let ready = match read_frame(&mut process, config.deadline, config.max_line_bytes).await {
+            Ok(ready) => ready,
+            Err(error) => {
+                let _ = process.cancel(Duration::from_secs(1)).await;
+                return Err(error);
+            }
+        };
         if ready.op != "ready" || ready.session_id.as_deref() != Some(&config.session_id) {
             let _ = process.cancel(Duration::from_secs(1)).await;
             return Err(Error::Preflight(
@@ -268,13 +277,24 @@ impl DeepseekHarnessSidecar {
     }
 
     pub async fn close(mut self) -> Result<()> {
-        write_frame(&mut self.process, &serde_json::json!({"op":"close"})).await?;
-        let frame = read_frame(
+        if let Err(error) = write_frame(&mut self.process, &serde_json::json!({"op":"close"})).await
+        {
+            let _ = self.process.cancel(Duration::from_secs(1)).await;
+            return Err(error);
+        }
+        let frame = match read_frame(
             &mut self.process,
             Duration::from_secs(5),
             self.config.max_line_bytes,
         )
-        .await?;
+        .await
+        {
+            Ok(frame) => frame,
+            Err(error) => {
+                let _ = self.process.cancel(Duration::from_secs(1)).await;
+                return Err(error);
+            }
+        };
         if frame.op != "closed" {
             let _ = self.process.cancel(Duration::from_secs(1)).await;
             return Err(Error::Preflight(

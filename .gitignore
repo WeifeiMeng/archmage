@@ -1,6 +1,8 @@
 .superpowers/
 .worktrees/
 /target/
+__pycache__/
+*.pyc
 apps/archmage-desktop/node_modules/
 apps/archmage-desktop/dist/
 apps/archmage-desktop/*.tsbuildinfo

@@ -390,13 +390,20 @@ impl AgentService {
         };
         let result = async {
             let mut sidecar = deepseek_harness::DeepseekHarnessSidecar::start(config).await?;
-            let outcome = sidecar
+            let outcome = match sidecar
                 .invoke(
                     "verification",
                     b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
                     &serde_json::json!({"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}),
                 )
-                .await?;
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let _ = sidecar.cancel().await;
+                    return Err(error);
+                }
+            };
             sidecar.close().await?;
             Ok::<_, Error>(outcome)
         }

@@ -8,7 +8,7 @@ use crate::{
     error::{Error, Result},
     provider::{
         codex::Sandbox,
-        executor::{self, ProviderLifecycle, ProviderSession},
+        executor::{self, ProviderLifecycle},
     },
 };
 use serde_json::{Value, json};
@@ -197,7 +197,6 @@ impl Runtime {
                 attempt_dir.join("result.json"),
                 attempt_dir.join("diagnostics"),
                 Sandbox::ReadOnly,
-                ProviderSession::None,
                 &self.config,
             );
             executor::invoke(&invocation, &prompt, move |event| match event {
@@ -211,7 +210,6 @@ impl Runtime {
                         &identity,
                     )
                 }
-                ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
             })
             .await
         };

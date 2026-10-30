@@ -29,8 +29,8 @@ node --version
 npm --version
 codex --version
 codex login status
-dsh --version
-dsh --profile headless --help
+python3 -m pip show deepseek-harness-sdk deepseek-harness-runtime-bin
+python3 -c 'import deepseek_harness; print("DeepSeek Harness SDK ready")'
 ```
 
 在 Archmage 仓库根目录一键启动：
@@ -50,7 +50,7 @@ export ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-desktop-dev"
 ./scripts/dev-desktop.sh
 ```
 
-脚本会原样传递 `ARCHMAGE_HOME`、当前 Codex 配置和 `DSH_HOME`。Archmage 不复制 DeepSeek Harness 的凭证、Provider 配置或模型选择。
+脚本会原样传递 `ARCHMAGE_HOME`、当前 Codex 配置和 `DSH_HOME`。Archmage 不复制 DeepSeek Harness 的凭证或 endpoint；Provider route 和 model 由 Agent 实例明确配置。
 
 如果需要排查 npm 或 Tauri 启动问题，可以分步执行底层命令：
 
@@ -70,7 +70,7 @@ npm run tauri dev --prefix apps/archmage-desktop
 5. 点击“验证连接”。该操作会使用当前实例的可执行文件和模型覆盖发起一次真实、只读的 Codex 请求，并展示版本、可用状态和上次验证时间。
 6. 点击侧栏“Capability 管理”，逐个选择 Designer、Coder、Tester、Reviewer，确认其“执行 Agent”指向预期实例。可在“角色补充提示词”填写该能力的工作侧重点，再分别在 Skills 和 Tools 中点击“添加”，手动填写名称与用途（例如 Designer 的 `brainstorming`、`web_search`）；不需要的条目可移除。最后点击“保存 Capability”。Runtime 内置职责与输出契约仍固定。
 
-DeepSeek Harness 实例默认从 `PATH` 查找 `dsh`，也可填写绝对路径。它直接继承启动 Archmage 时的 `DSH_HOME`，界面不提供模型覆盖；“验证连接”同样会发起一次真实只读请求并可能消耗额度。
+DeepSeek Harness 实例默认从 `PATH` 查找 `python3`，也可填写安装了 `deepseek-harness-sdk` 的 Python 绝对路径。SDK 与同版本 `deepseek-harness-runtime-bin` 必须同时可用；实例还需填写 Provider route 和 model。它继承启动 Archmage 时的凭证、endpoint 和 `DSH_HOME`，“检查 SDK”只验证安装与版本，“验证连接”会启动临时只读 sidecar 并发起一次真实请求，可能消耗额度。Archmage 通过官方 Python SDK 和自身 Cordis 配置集成，不要求修改 DeepSeek Harness 仓库。
 
 “添加 Agent 实例”允许创建多个 Codex 或 DeepSeek Harness 配置。能力绑定是全局设置，不在单个 Run 中临时覆盖；Run 启动时会冻结当时的绑定及能力配置。修改只影响之后创建的 Run。
 
@@ -80,7 +80,7 @@ Capability 修改未保存时，切换能力、离开页面或关闭窗口都会
 
 未绑定的实例可以禁用或删除；已绑定的实例需要先把相关能力切换到其他实例。新建 Run 页面会显示缺失或不可用的能力绑定，并提示尚未通过真实连接验证的实例。
 
-同一 Run 中，绑定 DeepSeek Harness 的每个 Capability 分别保有自己的 DSH 对话；该能力因反馈或消息流再次执行时恢复原对话，不会与其他能力共享。历史咨询调用使用独立临时对话，不写入主能力的会话映射。
+同一 Run 中，绑定 DeepSeek Harness 的每个 Capability 分别保有一个长生命周期 sidecar 和 DSH 对话；该能力因反馈或消息流再次执行时继续原对话，不会与其他能力共享。Designer、Reviewer 和咨询使用只读权限，Coder、Tester 使用工作区写权限，所有交互式 approval 自动拒绝。历史咨询调用使用独立临时对话，不写入主能力会话；Run 完成、失败或取消时 sidecar 会被回收。Archmage 重启后不恢复该对话，遗留 Run 按 `interrupted` 收敛。
 
 Claude、OpenClaw 和 Hermes 在当前页面只显示“尚未支持”，不会执行假探测或被绑定到能力。
 
