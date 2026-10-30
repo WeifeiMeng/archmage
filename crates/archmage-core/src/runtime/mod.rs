@@ -81,6 +81,8 @@ pub struct FrozenAgentBinding {
     pub display_name: String,
     pub provider_kind: ProviderKind,
     pub executable_path: Option<PathBuf>,
+    #[serde(default)]
+    pub provider_route: Option<String>,
     pub model: Option<String>,
 }
 
@@ -212,7 +214,7 @@ impl Runtime {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         let definition = FrozenRunDefinition {
-            version: 5,
+            version: 6,
             repository,
             checks: Vec::new(),
             agent_bindings,
@@ -417,6 +419,7 @@ impl Runtime {
                     display_name: instance.display_name,
                     provider_kind: instance.provider_kind,
                     executable_path: instance.executable_path,
+                    provider_route: instance.provider_route,
                     model: instance.model,
                 },
             );

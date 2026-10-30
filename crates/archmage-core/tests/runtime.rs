@@ -377,6 +377,7 @@ fn changing_global_binding_does_not_change_existing_run() {
             provider_kind: archmage_core::agent::ProviderKind::Codex,
             display_name: "Codex Work".into(),
             executable_path: None,
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -481,7 +482,8 @@ async fn start_run_freezes_a_deepseek_harness_executable() {
             provider_kind: ProviderKind::DeepseekHarness,
             display_name: "DSH Local".into(),
             executable_path: Some(binary.canonicalize().unwrap()),
-            model: None,
+            provider_route: Some("deepseek-official".into()),
+            model: Some("deepseek-v4-flash".into()),
             enabled: true,
         })
         .unwrap();
@@ -498,5 +500,7 @@ async fn start_run_freezes_a_deepseek_harness_executable() {
     assert!(run.agent_bindings.values().all(|binding| {
         binding.provider_kind == ProviderKind::DeepseekHarness
             && binding.executable_path.as_deref() == Some(expected_binary.as_path())
+            && binding.provider_route.as_deref() == Some("deepseek-official")
+            && binding.model.as_deref() == Some("deepseek-v4-flash")
     }));
 }

@@ -25,19 +25,6 @@ pub struct Store {
     pub(crate) db: Connection,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ProviderSessionMode {
-    Create,
-    Resume,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct ProviderSessionLease {
-    pub session_id: String,
-    pub mode: ProviderSessionMode,
-}
-
 pub(crate) enum AgentObservation<'a> {
     Discovered(&'a str),
     DiscoveryFailed,
@@ -416,7 +403,7 @@ impl Store {
 
     pub fn agent_instances(&self) -> Result<Vec<AgentInstance>> {
         let mut query = self.db.prepare(
-            "SELECT id,provider_kind,display_name,executable_path,model,enabled,
+            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,enabled,
                     connection_state,discovered_version,last_verified_at,last_error,
                     verification_thread_id
              FROM agent_instances ORDER BY created_at,id",
@@ -428,7 +415,7 @@ impl Store {
 
     pub fn agent_instance(&self, id: &str) -> Result<AgentInstance> {
         Ok(self.db.query_row(
-            "SELECT id,provider_kind,display_name,executable_path,model,enabled,
+            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,enabled,
                     connection_state,discovered_version,last_verified_at,last_error,
                     verification_thread_id
              FROM agent_instances WHERE id=?1",
@@ -457,31 +444,37 @@ impl Store {
             .map(|path| path.to_string_lossy().into_owned());
         self.db.execute(
             "INSERT INTO agent_instances(
-                id,provider_kind,display_name,executable_path,model,enabled
-             ) VALUES(?1,?2,?3,?4,?5,?6)
+                id,provider_kind,display_name,executable_path,provider_route,model,enabled
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7)
              ON CONFLICT(id) DO UPDATE SET
                 display_name=excluded.display_name,
                 executable_path=excluded.executable_path,
+                provider_route=excluded.provider_route,
                 model=excluded.model,
                 enabled=excluded.enabled,
                 connection_state=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.connection_state ELSE 'unverified' END,
                 discovered_version=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.discovered_version ELSE NULL END,
                 last_verified_at=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.last_verified_at ELSE NULL END,
                 last_error=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.last_error ELSE NULL END,
                 verification_thread_id=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
+                     AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
                     THEN agent_instances.verification_thread_id ELSE NULL END,
                 updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
@@ -490,6 +483,7 @@ impl Store {
                 input.provider_kind.as_str(),
                 input.display_name.trim(),
                 executable_path,
+                input.provider_route.as_ref().map(|value| value.trim()),
                 input.model.as_ref().map(|value| value.trim()),
                 input.enabled,
             ],
@@ -515,90 +509,6 @@ impl Store {
             Ok(())
         } else {
             Err(Error::Preflight(format!("unknown agent instance: {id}")))
-        }
-    }
-
-    pub fn begin_provider_session(
-        &mut self,
-        run_id: &str,
-        capability: &str,
-        provider_kind: crate::agent::ProviderKind,
-    ) -> Result<ProviderSessionLease> {
-        if provider_kind != crate::agent::ProviderKind::DeepseekHarness {
-            return Err(Error::Preflight(
-                "persistent provider sessions are only supported for DeepSeek Harness".into(),
-            ));
-        }
-        if !crate::agent::BUILTIN_CAPABILITIES.contains(&capability) {
-            return Err(Error::Preflight(format!(
-                "unknown capability: {capability}"
-            )));
-        }
-        let tx = self
-            .db
-            .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let current: Option<(String, String, String)> = tx
-            .query_row(
-                "SELECT provider_kind,session_id,state FROM provider_sessions
-                 WHERE run_id=?1 AND capability=?2",
-                rusqlite::params![run_id, capability],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            )
-            .optional()?;
-        let lease = match current {
-            None => {
-                let session_id = format!("archmage-{}", uuid::Uuid::new_v4());
-                tx.execute(
-                    "INSERT INTO provider_sessions(run_id,capability,provider_kind,session_id,state)
-                     VALUES(?1,?2,'deepseek_harness',?3,'reserved')",
-                    rusqlite::params![run_id, capability, session_id],
-                )?;
-                tx.execute(
-                    "UPDATE provider_sessions SET state='uncertain',
-                     updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-                     WHERE run_id=?1 AND capability=?2 AND state='reserved'",
-                    rusqlite::params![run_id, capability],
-                )?;
-                ProviderSessionLease {
-                    session_id,
-                    mode: ProviderSessionMode::Create,
-                }
-            }
-            Some((provider, session_id, state)) => {
-                if provider != provider_kind.as_str() {
-                    return Err(Error::Conflict);
-                }
-                if state != "ready" {
-                    return Err(Error::Preflight(format!(
-                        "DeepSeek Harness session for {capability} is uncertain"
-                    )));
-                }
-                ProviderSessionLease {
-                    session_id,
-                    mode: ProviderSessionMode::Resume,
-                }
-            }
-        };
-        tx.commit()?;
-        Ok(lease)
-    }
-
-    pub fn mark_provider_session_ready(
-        &mut self,
-        run_id: &str,
-        capability: &str,
-        session_id: &str,
-    ) -> Result<()> {
-        let changed = self.db.execute(
-            "UPDATE provider_sessions SET state='ready',
-             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-             WHERE run_id=?1 AND capability=?2 AND session_id=?3 AND state='uncertain'",
-            rusqlite::params![run_id, capability, session_id],
-        )?;
-        if changed == 1 {
-            Ok(())
-        } else {
-            Err(Error::Conflict)
         }
     }
 
@@ -707,14 +617,14 @@ impl Store {
         let tx = self
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let current: Option<(String, Option<String>, Option<String>, bool)> = tx
+        let current: Option<(String, Option<String>, Option<String>, Option<String>, bool)> = tx
             .query_row(
-                "SELECT provider_kind,executable_path,model,enabled FROM agent_instances WHERE id=?1",
+                "SELECT provider_kind,executable_path,provider_route,model,enabled FROM agent_instances WHERE id=?1",
                 [&expected.id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
             )
             .optional()?;
-        let Some((provider, path, model, enabled)) = current else {
+        let Some((provider, path, provider_route, model, enabled)) = current else {
             return Ok(false);
         };
         let expected_path = expected
@@ -723,6 +633,7 @@ impl Store {
             .map(|value| value.to_string_lossy().into_owned());
         if provider != expected.provider_kind.as_str()
             || path != expected_path
+            || provider_route != expected.provider_route
             || model != expected.model
             || enabled != expected.enabled
         {
@@ -791,12 +702,12 @@ impl Store {
 
 fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance> {
     let provider: String = row.get(1)?;
-    let connection: String = row.get(6)?;
+    let connection: String = row.get(7)?;
     let provider_kind = provider.parse().map_err(|error: Error| {
         rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let connection_state = connection.parse().map_err(|error: Error| {
-        rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(error))
+        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let executable_path: Option<String> = row.get(3)?;
     Ok(AgentInstance {
@@ -804,13 +715,14 @@ fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance
         provider_kind,
         display_name: row.get(2)?,
         executable_path: executable_path.map(Into::into),
-        model: row.get(4)?,
-        enabled: row.get(5)?,
+        provider_route: row.get(4)?,
+        model: row.get(5)?,
+        enabled: row.get(6)?,
         connection_state,
-        discovered_version: row.get(7)?,
-        last_verified_at: row.get(8)?,
-        last_error: row.get(9)?,
-        verification_thread_id: row.get(10)?,
+        discovered_version: row.get(8)?,
+        last_verified_at: row.get(9)?,
+        last_error: row.get(10)?,
+        verification_thread_id: row.get(11)?,
     })
 }
 fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {

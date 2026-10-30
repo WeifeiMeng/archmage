@@ -230,9 +230,7 @@ impl Runtime {
             ProviderLifecycle::Spawned(identity) => {
                 store.attach_attempt_process(attempt_id, attempt_revision, generation, &identity)
             }
-            ProviderLifecycle::ConversationPersisted { session_id } => {
-                store.mark_provider_session_ready(&run.id, kind.key(), &session_id)
-            }
+            ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
         })
         .await?;
         let bytes = serde_json::to_vec(&outcome.result)

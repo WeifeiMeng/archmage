@@ -127,7 +127,7 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE provider_sessions; DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM agent_instances WHERE id='deepseek-harness-default'; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15,16);",
+            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15,16);",
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();
@@ -136,6 +136,29 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     assert_eq!(
         upgraded.capability_bindings().unwrap()[0].agent_instance_id,
         "codex-default"
+    );
+    assert_eq!(upgraded.agent_instances().unwrap().len(), 1);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let provider_route_columns = db
+        .prepare("PRAGMA table_info(agent_instances)")
+        .unwrap()
+        .query_map([], |row| row.get::<_, String>(1))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    assert!(
+        provider_route_columns
+            .iter()
+            .any(|name| name == "provider_route")
+    );
+    assert_eq!(
+        db.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='provider_sessions'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap(),
+        0
     );
 }
 
@@ -146,18 +169,13 @@ fn fixture_store() -> (tempfile::TempDir, Store) {
 }
 
 #[test]
-fn seeds_supported_instances_and_keeps_builtin_capabilities_on_codex() {
+fn seeds_only_codex_and_keeps_builtin_capabilities_on_codex() {
     let (_temp, store) = fixture_store();
     let snapshot = store.agent_management_snapshot().unwrap();
 
-    assert_eq!(snapshot.instances.len(), 2);
+    assert_eq!(snapshot.instances.len(), 1);
     assert!(snapshot.instances.iter().any(|instance| {
         instance.id == "codex-default" && instance.provider_kind == ProviderKind::Codex
-    }));
-    assert!(snapshot.instances.iter().any(|instance| {
-        instance.id == "deepseek-harness-default"
-            && instance.provider_kind == ProviderKind::DeepseekHarness
-            && instance.model.is_none()
     }));
     assert_eq!(snapshot.bindings.len(), 4);
     assert!(
@@ -169,59 +187,33 @@ fn seeds_supported_instances_and_keeps_builtin_capabilities_on_codex() {
 }
 
 #[test]
-fn deepseek_harness_rejects_a_model_override() {
+fn deepseek_harness_requires_provider_route_and_model() {
+    let base = AgentInstanceInput {
+        id: "dsh".into(),
+        provider_kind: ProviderKind::DeepseekHarness,
+        display_name: "DeepSeek Harness".into(),
+        executable_path: None,
+        provider_route: None,
+        model: None,
+        enabled: true,
+    };
+    assert!(base.validate().is_err());
     assert!(
         AgentInstanceInput {
-            id: "dsh".into(),
-            provider_kind: ProviderKind::DeepseekHarness,
-            display_name: "DeepSeek Harness".into(),
-            executable_path: None,
-            model: Some("deepseek-v4".into()),
-            enabled: true,
+            provider_route: Some("deepseek-official".into()),
+            ..base.clone()
         }
         .validate()
         .is_err()
     );
-}
-
-#[test]
-fn provider_session_is_created_once_then_resumed() {
-    let (_temp, mut store) = fixture_store();
-    let run_id = store.create_run("goal", &["coder"]).unwrap();
-
-    let first = store
-        .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
-        .unwrap();
-    assert_eq!(
-        first.mode,
-        archmage_core::store::ProviderSessionMode::Create
-    );
-    store
-        .mark_provider_session_ready(&run_id, "coder", &first.session_id)
-        .unwrap();
-
-    let second = store
-        .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
-        .unwrap();
-    assert_eq!(
-        second.mode,
-        archmage_core::store::ProviderSessionMode::Resume
-    );
-    assert_eq!(second.session_id, first.session_id);
-}
-
-#[test]
-fn uncertain_provider_session_cannot_be_restarted() {
-    let (_temp, mut store) = fixture_store();
-    let run_id = store.create_run("goal", &["coder"]).unwrap();
-    store
-        .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
-        .unwrap();
-
     assert!(
-        store
-            .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
-            .is_err()
+        AgentInstanceInput {
+            provider_route: Some("deepseek-official".into()),
+            model: Some("deepseek-v4".into()),
+            ..base
+        }
+        .validate()
+        .is_ok()
     );
 }
 
@@ -234,13 +226,14 @@ fn stores_multiple_codex_instances_with_stable_ids() {
             provider_kind: ProviderKind::Codex,
             display_name: "Codex Work".into(),
             executable_path: Some("/opt/codex/bin/codex".into()),
+            provider_route: None,
             model: Some("gpt-5.4".into()),
             enabled: true,
         })
         .unwrap();
 
     let instances = store.agent_instances().unwrap();
-    assert_eq!(instances.len(), 3);
+    assert_eq!(instances.len(), 2);
     assert!(instances.iter().any(|instance| instance.id == "codex-work"));
 }
 
@@ -259,6 +252,7 @@ fn changing_execution_config_invalidates_verification() {
             provider_kind: ProviderKind::Codex,
             display_name: "Codex".into(),
             executable_path: Some("/opt/codex/bin/codex".into()),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -278,6 +272,7 @@ fn bound_instance_cannot_be_disabled_or_deleted() {
         provider_kind: ProviderKind::Codex,
         display_name: "Codex".into(),
         executable_path: None,
+        provider_route: None,
         model: None,
         enabled: false,
     };
@@ -343,6 +338,7 @@ fn renaming_a_failed_instance_preserves_its_failure_message() {
             provider_kind: ProviderKind::Codex,
             display_name: "Renamed".into(),
             executable_path: None,
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -377,6 +373,7 @@ async fn stale_verification_cannot_mark_a_changed_model_ready() {
             provider_kind: ProviderKind::Codex,
             display_name: "Race".into(),
             executable_path: Some(binary.clone()),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -398,6 +395,7 @@ async fn stale_verification_cannot_mark_a_changed_model_ready() {
             provider_kind: ProviderKind::Codex,
             display_name: "Race".into(),
             executable_path: Some(binary),
+            provider_route: None,
             model: Some("new-model".into()),
             enabled: true,
         })
@@ -427,6 +425,7 @@ async fn verification_failure_is_persisted_as_safe_state() {
             provider_kind: ProviderKind::Codex,
             display_name: "Broken Codex".into(),
             executable_path: Some(temp.path().join("missing-codex")),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -462,6 +461,7 @@ async fn discovery_does_not_claim_online_verification() {
             provider_kind: ProviderKind::Codex,
             display_name: "Discovery".into(),
             executable_path: Some(binary),
+            provider_route: None,
             model: None,
             enabled: true,
         })
@@ -495,6 +495,7 @@ async fn configured_model_is_used_for_real_agent_verification() {
             provider_kind: ProviderKind::Codex,
             display_name: "Model".into(),
             executable_path: Some(binary),
+            provider_route: None,
             model: Some("test-model".into()),
             enabled: true,
         })
@@ -538,7 +539,8 @@ printf '{"ok":true}\n'
             provider_kind: ProviderKind::DeepseekHarness,
             display_name: "DeepSeek Harness Local".into(),
             executable_path: Some(binary),
-            model: None,
+            provider_route: Some("deepseek-official".into()),
+            model: Some("deepseek-v4-flash".into()),
             enabled: true,
         })
         .unwrap();

@@ -96,6 +96,8 @@ pub struct AgentInstanceInput {
     pub provider_kind: ProviderKind,
     pub display_name: String,
     pub executable_path: Option<PathBuf>,
+    #[serde(default)]
+    pub provider_route: Option<String>,
     pub model: Option<String>,
     pub enabled: bool,
 }
@@ -126,10 +128,29 @@ impl AgentInstanceInput {
         {
             return Err(Error::Preflight("agent model cannot be blank".into()));
         }
-        if self.provider_kind == ProviderKind::DeepseekHarness && self.model.is_some() {
+        if self
+            .provider_route
+            .as_ref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
             return Err(Error::Preflight(
-                "DeepSeek Harness uses the model selected by its inherited DSH_HOME".into(),
+                "agent provider route cannot be blank".into(),
             ));
+        }
+        match self.provider_kind {
+            ProviderKind::Codex if self.provider_route.is_some() => {
+                return Err(Error::Preflight(
+                    "Codex does not use a provider route".into(),
+                ));
+            }
+            ProviderKind::DeepseekHarness
+                if self.provider_route.is_none() || self.model.is_none() =>
+            {
+                return Err(Error::Preflight(
+                    "DeepSeek Harness provider route and model are required".into(),
+                ));
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -142,6 +163,7 @@ pub struct AgentInstance {
     pub provider_kind: ProviderKind,
     pub display_name: String,
     pub executable_path: Option<PathBuf>,
+    pub provider_route: Option<String>,
     pub model: Option<String>,
     pub enabled: bool,
     pub connection_state: ConnectionState,

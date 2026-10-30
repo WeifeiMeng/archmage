@@ -10,7 +10,7 @@ use crate::{
         codex::Sandbox,
         executor::{self, ProviderExecution, ProviderLifecycle, ProviderSession},
     },
-    store::{AttemptOutcome, ProviderSessionMode, Store},
+    store::{AttemptOutcome, Store},
     team::TeamMode,
     workspace::{GitRepository, inspect_repository, publish_changeset, snapshot},
 };
@@ -353,9 +353,7 @@ impl Runtime {
             ProviderLifecycle::Spawned(identity) => {
                 store.attach_attempt_process(attempt_id, attempt_revision, generation, &identity)
             }
-            ProviderLifecycle::ConversationPersisted { session_id } => {
-                store.mark_provider_session_ready(run_id, kind.key(), &session_id)
-            }
+            ProviderLifecycle::ConversationPersisted { .. } => Ok(()),
         })
         .await?;
 
@@ -386,7 +384,7 @@ impl Runtime {
 }
 
 pub(super) fn main_provider_session(
-    store: &mut Store,
+    _store: &mut Store,
     run_id: &str,
     capability: &str,
     provider_kind: ProviderKind,
@@ -394,11 +392,9 @@ pub(super) fn main_provider_session(
     if provider_kind == ProviderKind::Codex {
         return Ok(ProviderSession::None);
     }
-    let lease = store.begin_provider_session(run_id, capability, provider_kind)?;
-    Ok(match lease.mode {
-        ProviderSessionMode::Create => ProviderSession::Create(lease.session_id),
-        ProviderSessionMode::Resume => ProviderSession::Resume(lease.session_id),
-    })
+    Ok(ProviderSession::Create(format!(
+        "archmage-{run_id}-{capability}"
+    )))
 }
 
 #[allow(clippy::too_many_arguments)]
