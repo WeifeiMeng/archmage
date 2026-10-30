@@ -25,6 +25,19 @@ pub struct Store {
     pub(crate) db: Connection,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderSessionMode {
+    Create,
+    Resume,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ProviderSessionLease {
+    pub session_id: String,
+    pub mode: ProviderSessionMode,
+}
+
 pub(crate) enum AgentObservation<'a> {
     Discovered(&'a str),
     DiscoveryFailed,
@@ -169,6 +182,7 @@ impl Store {
             tx.execute_batch(include_str!(
                 "../../migrations/0015_flow_terminal_states.sql"
             ))?;
+            tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -237,7 +251,11 @@ impl Store {
                 ))?;
                 version = 15;
             }
-            if version != 15 {
+            if version == 15 {
+                tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
+                version = 16;
+            }
+            if version != 16 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -497,6 +515,90 @@ impl Store {
             Ok(())
         } else {
             Err(Error::Preflight(format!("unknown agent instance: {id}")))
+        }
+    }
+
+    pub fn begin_provider_session(
+        &mut self,
+        run_id: &str,
+        capability: &str,
+        provider_kind: crate::agent::ProviderKind,
+    ) -> Result<ProviderSessionLease> {
+        if provider_kind != crate::agent::ProviderKind::DeepseekHarness {
+            return Err(Error::Preflight(
+                "persistent provider sessions are only supported for DeepSeek Harness".into(),
+            ));
+        }
+        if !crate::agent::BUILTIN_CAPABILITIES.contains(&capability) {
+            return Err(Error::Preflight(format!(
+                "unknown capability: {capability}"
+            )));
+        }
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let current: Option<(String, String, String)> = tx
+            .query_row(
+                "SELECT provider_kind,session_id,state FROM provider_sessions
+                 WHERE run_id=?1 AND capability=?2",
+                rusqlite::params![run_id, capability],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()?;
+        let lease = match current {
+            None => {
+                let session_id = format!("archmage-{}", uuid::Uuid::new_v4());
+                tx.execute(
+                    "INSERT INTO provider_sessions(run_id,capability,provider_kind,session_id,state)
+                     VALUES(?1,?2,'deepseek_harness',?3,'reserved')",
+                    rusqlite::params![run_id, capability, session_id],
+                )?;
+                tx.execute(
+                    "UPDATE provider_sessions SET state='uncertain',
+                     updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                     WHERE run_id=?1 AND capability=?2 AND state='reserved'",
+                    rusqlite::params![run_id, capability],
+                )?;
+                ProviderSessionLease {
+                    session_id,
+                    mode: ProviderSessionMode::Create,
+                }
+            }
+            Some((provider, session_id, state)) => {
+                if provider != provider_kind.as_str() {
+                    return Err(Error::Conflict);
+                }
+                if state != "ready" {
+                    return Err(Error::Preflight(format!(
+                        "DeepSeek Harness session for {capability} is uncertain"
+                    )));
+                }
+                ProviderSessionLease {
+                    session_id,
+                    mode: ProviderSessionMode::Resume,
+                }
+            }
+        };
+        tx.commit()?;
+        Ok(lease)
+    }
+
+    pub fn mark_provider_session_ready(
+        &mut self,
+        run_id: &str,
+        capability: &str,
+        session_id: &str,
+    ) -> Result<()> {
+        let changed = self.db.execute(
+            "UPDATE provider_sessions SET state='ready',
+             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE run_id=?1 AND capability=?2 AND session_id=?3 AND state='uncertain'",
+            rusqlite::params![run_id, capability, session_id],
+        )?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(Error::Conflict)
         }
     }
 

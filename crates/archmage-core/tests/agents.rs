@@ -8,7 +8,7 @@ use archmage_core::{
 #[test]
 fn capability_config_is_seeded_and_saved_with_revision_guard() {
     let (_temp, mut store) = fixture_store();
-    assert_eq!(store.schema_version().unwrap(), 15);
+    assert_eq!(store.schema_version().unwrap(), 16);
     let configs = store.capability_configurations().unwrap();
     assert_eq!(configs.len(), 4);
     assert_eq!(configs[0].key, "designer");
@@ -127,11 +127,11 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15);",
+            "DROP TABLE provider_sessions; DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM agent_instances WHERE id='deepseek-harness-default'; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15,16);",
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();
-    assert_eq!(upgraded.schema_version().unwrap(), 15);
+    assert_eq!(upgraded.schema_version().unwrap(), 16);
     assert_eq!(upgraded.capability_configurations().unwrap().len(), 4);
     assert_eq!(
         upgraded.capability_bindings().unwrap()[0].agent_instance_id,
@@ -146,19 +146,82 @@ fn fixture_store() -> (tempfile::TempDir, Store) {
 }
 
 #[test]
-fn seeds_one_codex_instance_and_binds_all_builtin_capabilities() {
+fn seeds_supported_instances_and_keeps_builtin_capabilities_on_codex() {
     let (_temp, store) = fixture_store();
     let snapshot = store.agent_management_snapshot().unwrap();
 
-    assert_eq!(snapshot.instances.len(), 1);
-    assert_eq!(snapshot.instances[0].id, "codex-default");
-    assert_eq!(snapshot.instances[0].provider_kind, ProviderKind::Codex);
+    assert_eq!(snapshot.instances.len(), 2);
+    assert!(snapshot.instances.iter().any(|instance| {
+        instance.id == "codex-default" && instance.provider_kind == ProviderKind::Codex
+    }));
+    assert!(snapshot.instances.iter().any(|instance| {
+        instance.id == "deepseek-harness-default"
+            && instance.provider_kind == ProviderKind::DeepseekHarness
+            && instance.model.is_none()
+    }));
     assert_eq!(snapshot.bindings.len(), 4);
     assert!(
         snapshot
             .bindings
             .iter()
             .all(|binding| binding.agent_instance_id == "codex-default")
+    );
+}
+
+#[test]
+fn deepseek_harness_rejects_a_model_override() {
+    assert!(
+        AgentInstanceInput {
+            id: "dsh".into(),
+            provider_kind: ProviderKind::DeepseekHarness,
+            display_name: "DeepSeek Harness".into(),
+            executable_path: None,
+            model: Some("deepseek-v4".into()),
+            enabled: true,
+        }
+        .validate()
+        .is_err()
+    );
+}
+
+#[test]
+fn provider_session_is_created_once_then_resumed() {
+    let (_temp, mut store) = fixture_store();
+    let run_id = store.create_run("goal", &["coder"]).unwrap();
+
+    let first = store
+        .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
+        .unwrap();
+    assert_eq!(
+        first.mode,
+        archmage_core::store::ProviderSessionMode::Create
+    );
+    store
+        .mark_provider_session_ready(&run_id, "coder", &first.session_id)
+        .unwrap();
+
+    let second = store
+        .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
+        .unwrap();
+    assert_eq!(
+        second.mode,
+        archmage_core::store::ProviderSessionMode::Resume
+    );
+    assert_eq!(second.session_id, first.session_id);
+}
+
+#[test]
+fn uncertain_provider_session_cannot_be_restarted() {
+    let (_temp, mut store) = fixture_store();
+    let run_id = store.create_run("goal", &["coder"]).unwrap();
+    store
+        .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
+        .unwrap();
+
+    assert!(
+        store
+            .begin_provider_session(&run_id, "coder", ProviderKind::DeepseekHarness)
+            .is_err()
     );
 }
 
@@ -177,7 +240,7 @@ fn stores_multiple_codex_instances_with_stable_ids() {
         .unwrap();
 
     let instances = store.agent_instances().unwrap();
-    assert_eq!(instances.len(), 2);
+    assert_eq!(instances.len(), 3);
     assert!(instances.iter().any(|instance| instance.id == "codex-work"));
 }
 

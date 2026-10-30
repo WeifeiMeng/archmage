@@ -12,6 +12,8 @@ pub const BUILTIN_CAPABILITIES: [&str; 4] = ["designer", "coder", "tester", "rev
 #[serde(rename_all = "lowercase")]
 pub enum ProviderKind {
     Codex,
+    #[serde(rename = "deepseek_harness")]
+    DeepseekHarness,
     Claude,
     OpenClaw,
     Hermes,
@@ -21,6 +23,7 @@ impl ProviderKind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Codex => "codex",
+            Self::DeepseekHarness => "deepseek_harness",
             Self::Claude => "claude",
             Self::OpenClaw => "openclaw",
             Self::Hermes => "hermes",
@@ -28,7 +31,7 @@ impl ProviderKind {
     }
 
     pub fn supported(self) -> bool {
-        matches!(self, Self::Codex)
+        matches!(self, Self::Codex | Self::DeepseekHarness)
     }
 }
 
@@ -44,6 +47,7 @@ impl FromStr for ProviderKind {
     fn from_str(value: &str) -> Result<Self> {
         match value {
             "codex" => Ok(Self::Codex),
+            "deepseek_harness" => Ok(Self::DeepseekHarness),
             "claude" => Ok(Self::Claude),
             "openclaw" => Ok(Self::OpenClaw),
             "hermes" => Ok(Self::Hermes),
@@ -122,6 +126,11 @@ impl AgentInstanceInput {
         {
             return Err(Error::Preflight("agent model cannot be blank".into()));
         }
+        if self.provider_kind == ProviderKind::DeepseekHarness && self.model.is_some() {
+            return Err(Error::Preflight(
+                "DeepSeek Harness uses the model selected by its inherited DSH_HOME".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -168,6 +177,7 @@ pub struct AgentManagementSnapshot {
 pub fn adapter_descriptors() -> Vec<AdapterDescriptor> {
     [
         (ProviderKind::Codex, "Codex"),
+        (ProviderKind::DeepseekHarness, "DeepSeek Harness"),
         (ProviderKind::Claude, "Claude"),
         (ProviderKind::OpenClaw, "OpenClaw"),
         (ProviderKind::Hermes, "Hermes"),
