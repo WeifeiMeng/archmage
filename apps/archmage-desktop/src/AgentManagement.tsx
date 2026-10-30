@@ -8,7 +8,6 @@ import { agentMetrics } from "./managementLayout";
 import {
   connectionLabel,
   agentInputIsComplete,
-  isSupportedProvider,
   providerLabel,
   type AgentInstance,
   type AgentInstanceInput,

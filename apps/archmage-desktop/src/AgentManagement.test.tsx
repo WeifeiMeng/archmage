@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -57,5 +58,13 @@ describe("Agent Management browser preview", () => {
     expect(html).toContain("添加 DeepSeek Harness 实例");
     expect(html).not.toContain("添加 Codex 实例");
     expect(html).not.toContain("<select");
+  });
+
+  it("uses provider section styles instead of a highlighted Hero action", () => {
+    const css = readFileSync(new URL("./agents.css", import.meta.url), "utf8");
+
+    expect(css).toContain(".agent-provider-section");
+    expect(css).toContain(".agent-provider-heading");
+    expect(css).not.toContain(".agents-view .management-hero-actions");
   });
 });
