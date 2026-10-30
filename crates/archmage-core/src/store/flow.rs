@@ -16,10 +16,19 @@ pub struct FlowDelivery {
     pub state: String,
     pub attempt_id: Option<String>,
     pub routing: Option<Value>,
+    /// Structured deliverable persisted on this delivery's own attempt.
+    ///
+    /// Projected from `attempts.output_json` of the attempt that executed this
+    /// delivery, so a feedback loop keeps one output per round instead of the
+    /// capability's latest result. `None` while the delivery has not persisted
+    /// any output yet.
+    #[serde(default)]
+    pub output: Option<Value>,
 }
 
 fn delivery(row: &rusqlite::Row<'_>) -> rusqlite::Result<FlowDelivery> {
     let routing: Option<String> = row.get(8)?;
+    let output: Option<String> = row.get(9)?;
     Ok(FlowDelivery {
         id: row.get(0)?,
         run_id: row.get(1)?,
@@ -40,10 +49,27 @@ fn delivery(row: &rusqlite::Row<'_>) -> rusqlite::Result<FlowDelivery> {
                 })
             })
             .transpose()?,
+        output: output
+            .map(|text| {
+                serde_json::from_str(&text).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        9,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })
+            })
+            .transpose()?,
     })
 }
 
-const DELIVERY_COLUMNS: &str = "id,run_id,sequence,source_attempt_id,target_key,payload_artifact_id,state,attempt_id,routing_json";
+/// Selects one delivery together with the output of the attempt that executed it.
+///
+/// The join is on `flow_deliveries.attempt_id` (never on the capability's latest
+/// attempt), which keeps every round of a feedback loop attached to its own
+/// deliverable without extra columns or backfills.
+const DELIVERY_SELECT: &str = "SELECT d.id,d.run_id,d.sequence,d.source_attempt_id,d.target_key,d.payload_artifact_id,d.state,d.attempt_id,d.routing_json,a.output_json
+     FROM flow_deliveries d LEFT JOIN attempts a ON a.id=d.attempt_id";
 
 impl Store {
     pub fn bind_flow_attempt(
@@ -102,7 +128,7 @@ impl Store {
 
     pub fn flow_deliveries(&self, run: &str) -> Result<Vec<FlowDelivery>> {
         let mut query = self.db.prepare(&format!(
-            "SELECT {DELIVERY_COLUMNS} FROM flow_deliveries WHERE run_id=?1 ORDER BY sequence"
+            "{DELIVERY_SELECT} WHERE d.run_id=?1 ORDER BY d.sequence"
         ))?;
         Ok(query
             .query_map([run], delivery)?
@@ -163,7 +189,7 @@ impl Store {
             [&id],
         )?;
         let item = tx.query_row(
-            &format!("SELECT {DELIVERY_COLUMNS} FROM flow_deliveries WHERE id=?1"),
+            &format!("{DELIVERY_SELECT} WHERE d.id=?1"),
             [&id],
             delivery,
         )?;

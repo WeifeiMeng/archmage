@@ -341,6 +341,7 @@ mod tests {
                 state: "completed".into(),
                 attempt_id: None,
                 routing: None,
+                output: None,
             })
             .collect::<Vec<_>>();
         deliveries[24].state = "queued".into();

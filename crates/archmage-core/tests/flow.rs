@@ -283,6 +283,124 @@ fn terminal_delivery_skips_pending_siblings() {
 }
 
 #[test]
+fn completed_delivery_projects_the_output_of_its_own_attempt() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    let outputs = [
+        serde_json::json!({"status":"implemented","changed_paths":["src/a.rs"]}),
+        serde_json::json!({"status":"changes_requested","issues":["缺少测试"]}),
+        serde_json::json!({"status":"fixed","notes":["补充测试"]}),
+        serde_json::json!({"status":"approved","summary_markdown":"实现已验证通过"}),
+    ];
+    for (index, (target, next, complete)) in [
+        ("coder", vec!["reviewer".into()], false),
+        ("reviewer", vec!["coder".into()], false),
+        ("coder", vec!["reviewer".into()], false),
+        ("reviewer", vec![], true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let delivery = store
+            .claim_flow_delivery(&run, generation)
+            .unwrap()
+            .unwrap();
+        assert_eq!(delivery.target, target);
+        store.prepare_flow_node(&run, target, generation).unwrap();
+        finish_test_delivery_with_output(
+            &mut store,
+            &temp,
+            &run,
+            generation,
+            &delivery,
+            &next,
+            complete,
+            &outputs[index],
+        );
+    }
+    let deliveries = store.flow_deliveries(&run).unwrap();
+    assert_eq!(deliveries.len(), 4);
+    for (delivery, output) in deliveries.iter().zip(outputs.iter()) {
+        assert_eq!(delivery.output.as_ref(), Some(output));
+    }
+    // Each round keeps its own output even though the capability ran twice.
+    assert_ne!(deliveries[0].output, deliveries[2].output);
+    assert_eq!(
+        deliveries[0].output.as_ref().unwrap()["changed_paths"][0],
+        "src/a.rs"
+    );
+    assert_eq!(
+        deliveries[1].output.as_ref().unwrap()["issues"][0],
+        "缺少测试"
+    );
+}
+
+#[test]
+fn pending_and_running_deliveries_project_no_output() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    let queued = store.flow_deliveries(&run).unwrap();
+    assert_eq!(queued[0].state, "queued");
+    assert_eq!(queued[0].output, None);
+    let delivery = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    let node = store.nodes(&run).unwrap().remove(0);
+    store.ready_node(&node.id, node.revision).unwrap();
+    let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    store
+        .bind_flow_attempt(&delivery.id, generation, &attempt.id)
+        .unwrap();
+    let running = store.flow_deliveries(&run).unwrap();
+    assert_eq!(running[0].state, "running");
+    assert_eq!(running[0].attempt_id.as_deref(), Some(attempt.id.as_str()));
+    assert_eq!(running[0].output, None);
+}
+
+#[test]
+fn existing_rows_read_back_historical_output_without_backfill() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    let delivery = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    finish_test_delivery_with_output(
+        &mut store,
+        &temp,
+        &run,
+        generation,
+        &delivery,
+        &["reviewer".into()],
+        false,
+        &serde_json::json!({"summary_markdown":"第一轮交付","notes":["读取历史"]}),
+    );
+    drop(store);
+    let reopened = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let deliveries = reopened.flow_deliveries(&run).unwrap();
+    assert_eq!(
+        deliveries[0].output.as_ref().unwrap()["summary_markdown"],
+        "第一轮交付"
+    );
+    // The queued follow-up has no attempt yet, so it projects no output.
+    assert_eq!(deliveries[1].state, "queued");
+    assert_eq!(deliveries[1].output, None);
+}
+
+#[test]
 fn feedback_cycle_reexecutes_the_same_capability_for_each_delivery() {
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
@@ -331,6 +449,29 @@ fn finish_test_delivery(
     next: &[String],
     complete: bool,
 ) {
+    finish_test_delivery_with_output(
+        store,
+        temp,
+        run,
+        generation,
+        delivery,
+        next,
+        complete,
+        &serde_json::json!({"summary":"done"}),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finish_test_delivery_with_output(
+    store: &mut Store,
+    temp: &tempfile::TempDir,
+    run: &str,
+    generation: i64,
+    delivery: &archmage_core::store::FlowDelivery,
+    next: &[String],
+    complete: bool,
+    output: &serde_json::Value,
+) {
     let node = store
         .nodes(run)
         .unwrap()
@@ -359,7 +500,7 @@ fn finish_test_delivery(
         .publish(
             store,
             &attempt.id,
-            br#"{"summary":"done"}"#,
+            output.to_string().as_bytes(),
             "application/json",
         )
         .unwrap();
@@ -370,7 +511,7 @@ fn finish_test_delivery(
             &attempt.id,
             &artifact,
             None,
-            &serde_json::json!({"summary":"done"}),
+            output,
             "thread-test",
             next,
             complete,
