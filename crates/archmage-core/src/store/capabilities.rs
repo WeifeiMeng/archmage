@@ -59,7 +59,8 @@ impl Store {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
-        if !matches!(instance, Some((ref kind, true)) if kind == "codex") {
+        if !matches!(instance, Some((ref kind, true)) if kind.parse().is_ok_and(crate::agent::ProviderKind::supported))
+        {
             return Err(Error::Preflight(
                 "capability requires an enabled supported agent instance".into(),
             ));

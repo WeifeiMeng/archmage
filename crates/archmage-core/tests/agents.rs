@@ -49,6 +49,41 @@ fn capability_config_is_seeded_and_saved_with_revision_guard() {
 }
 
 #[test]
+fn capability_configuration_can_bind_to_deepseek_harness() {
+    let (_temp, mut store) = fixture_store();
+    store
+        .save_agent_instance(&AgentInstanceInput {
+            id: "dsh-work".into(),
+            provider_kind: ProviderKind::DeepseekHarness,
+            display_name: "DeepSeek Harness".into(),
+            executable_path: Some("/opt/dsh/bin/python".into()),
+            provider_route: Some("deepseek-official".into()),
+            model: Some("deepseek-v4-flash".into()),
+            enabled: true,
+        })
+        .unwrap();
+    let current = store.capability_configurations().unwrap().remove(0);
+
+    store
+        .save_capability_configuration(&CapabilityConfigurationInput {
+            key: current.key,
+            display_name: current.display_name,
+            description: current.description,
+            extra_instructions: current.extra_instructions,
+            skills: current.skills,
+            tools: current.tools,
+            agent_instance_id: "dsh-work".into(),
+            revision: current.revision,
+        })
+        .unwrap();
+
+    assert_eq!(
+        store.capability_configurations().unwrap()[0].agent_instance_id,
+        "dsh-work"
+    );
+}
+
+#[test]
 fn capability_guidance_rejects_duplicate_names_and_blank_purposes() {
     let (_temp, mut store) = fixture_store();
     let current = store.capability_configurations().unwrap().remove(0);
