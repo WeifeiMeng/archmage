@@ -20,15 +20,12 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
   const [snapshot, setSnapshot] = useState<AgentManagementSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [addingProvider, setAddingProvider] = useState<SupportedProvider | null>(null);
 
   useEffect(() => {
     if (!isTauri()) return;
     api.getAgentManagement().then(setSnapshot).catch((reason) => { setLoadError(String(reason)); onError(String(reason)); });
   }, [onError]);
-
-  const supportedInstances = snapshot?.instances.filter((item) => isSupportedProvider(item.providerKind)) ?? [];
-  const boundIds = new Set(snapshot?.bindings.map((item) => item.agentInstanceId) ?? []);
 
   async function run(id: string, action: () => Promise<AgentManagementSnapshot>): Promise<boolean> {
     setBusy(id);
@@ -44,7 +41,7 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
   }
 
   if (!isTauri()) return <section className="agents-view">
-    <ManagementHero eyebrow="LOCAL AGENT CONNECTIONS" title="Agent 管理" description="管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。" />
+    <ManagementHero title="Agent 管理" description="管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。" />
     <div className="agent-preview-note">当前是浏览器预览。请在 Tauri 桌面窗口查看和验证真实 Agent 连接。</div>
   </section>;
 
@@ -53,21 +50,61 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
     return <div className="loading"><LoaderCircle className="spin" />正在读取本地 Agent…</div>;
   }
 
-  const metrics = agentMetrics(snapshot);
+  return <AgentManagementContent
+    snapshot={snapshot}
+    busy={busy}
+    addingProvider={addingProvider}
+    onToggleAdding={(provider) => setAddingProvider((current) => current === provider ? null : provider)}
+    onRun={run}
+    onOpenCapabilities={onOpenCapabilities}
+  />;
+}
 
+type SupportedProvider = Extract<ProviderKind, "codex" | "deepseek_harness">;
+
+const providerSections: Array<{ kind: SupportedProvider; description: string; addLabel: string }> = [
+  { kind: "codex", description: "Codex CLI 连接", addLabel: "添加 Codex" },
+  { kind: "deepseek_harness", description: "官方 Python SDK 连接", addLabel: "添加 DeepSeek Harness" },
+];
+
+type AgentManagementContentProps = {
+  snapshot: AgentManagementSnapshot;
+  busy: string | null;
+  addingProvider: SupportedProvider | null;
+  onToggleAdding: (provider: SupportedProvider) => void;
+  onRun: (id: string, action: () => Promise<AgentManagementSnapshot>) => Promise<boolean>;
+  onOpenCapabilities: () => void;
+};
+
+export function AgentManagementContent({ snapshot, busy, addingProvider, onToggleAdding, onRun, onOpenCapabilities }: AgentManagementContentProps) {
+  const metrics = agentMetrics(snapshot);
+  const boundIds = new Set(snapshot.bindings.map((item) => item.agentInstanceId));
   return <section className="agents-view">
     <ManagementHero
-      eyebrow="LOCAL AGENT CONNECTIONS"
       title="Agent 管理"
       description="管理真实的本地连接并验证可用性；每种能力使用哪个实例，请前往 Capability 管理配置。"
-      actions={<button className="secondary-action" onClick={() => setAdding((value) => !value)}><Plus size={16} />{adding ? "收起新实例" : "添加 Agent 实例"}</button>}
       summary={metrics.map((metric) => <PageMetric key={metric.label} {...metric} />)}
     />
 
-    <div className="agents-section-heading"><div><h2>本地连接</h2><p>CLI 可发现不等于账号已连通；使用“验证连接”发起一次真实只读请求。</p></div></div>
-    <div className="agent-grid">
-      {supportedInstances.map((instance) => <AgentCard key={instance.id} instance={instance} bound={boundIds.has(instance.id)} busy={busy === instance.id} onSave={(input) => run(instance.id, () => api.saveAgentInstance(input))} onDiscover={() => run(instance.id, () => api.discoverAgentInstance(instance.id))} onVerify={() => run(instance.id, () => api.verifyAgentInstance(instance.id))} onDelete={async () => { if (await confirm(`删除 ${instance.displayName}？`, { title: "删除 Agent 实例", kind: "warning" })) await run(instance.id, () => api.deleteAgentInstance(instance.id)); }} />)}
-      {adding && <NewAgentCard busy={busy === "new"} onCancel={() => setAdding(false)} onSave={async (input) => { if (await run("new", () => api.saveAgentInstance(input))) setAdding(false); }} />}
+    <div className="agent-provider-sections">
+      {providerSections.map((section) => {
+        const instances = snapshot.instances.filter((instance) => instance.providerKind === section.kind);
+        const isAdding = addingProvider === section.kind;
+        return <section className="agent-provider-section" key={section.kind}>
+          <div className="agent-provider-heading">
+            <div><h2>{providerLabel(section.kind)}</h2><p>{section.description}</p></div>
+            <button className="secondary-action" onClick={() => onToggleAdding(section.kind)}><Plus size={16} />{isAdding ? "收起" : section.addLabel}</button>
+          </div>
+          <div className="agent-grid">
+            {instances.map((instance) => <AgentCard key={instance.id} instance={instance} bound={boundIds.has(instance.id)} busy={busy === instance.id} onSave={(input) => onRun(instance.id, () => api.saveAgentInstance(input))} onDiscover={() => onRun(instance.id, () => api.discoverAgentInstance(instance.id))} onVerify={() => onRun(instance.id, () => api.verifyAgentInstance(instance.id))} onDelete={async () => { if (await confirm(`删除 ${instance.displayName}？`, { title: "删除 Agent 实例", kind: "warning" })) await onRun(instance.id, () => api.deleteAgentInstance(instance.id)); }} />)}
+            {instances.length === 0 && !isAdding && <div className="agent-provider-empty">尚未配置 {providerLabel(section.kind)} 实例。</div>}
+            {isAdding && <NewAgentCard provider={section.kind} busy={busy === "new"} onCancel={() => onToggleAdding(section.kind)} onSave={async (input) => { if (await onRun("new", () => api.saveAgentInstance(input))) onToggleAdding(section.kind); }} />}
+          </div>
+        </section>;
+      })}
+    </div>
+
+    <div className="agent-grid agent-unsupported-grid">
       {snapshot.adapters.filter((adapter) => !adapter.supported).map((adapter) => <article className="agent-card unsupported" key={adapter.kind}><div className="agent-card-top"><span className="agent-logo"><Unplug size={19} /></span><div><h3>{adapter.displayName}</h3><span>Provider Adapter</span></div><span className="status-chip unsupported">尚未支持</span></div><p>Adapter 类型已保留，但当前版本不会创建连接、执行探测或承载能力。</p></article>)}
     </div>
 
@@ -102,8 +139,7 @@ function AgentCard({ instance, bound, busy, onSave, onDiscover, onVerify, onDele
   </article>;
 }
 
-function NewAgentCard({ busy, onCancel, onSave }: { busy: boolean; onCancel: () => void; onSave: (input: AgentInstanceInput) => Promise<void> }) {
-  const [provider, setProvider] = useState<Extract<ProviderKind, "codex" | "deepseek_harness">>("codex");
+function NewAgentCard({ provider, busy, onCancel, onSave }: { provider: SupportedProvider; busy: boolean; onCancel: () => void; onSave: (input: AgentInstanceInput) => Promise<void> }) {
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
@@ -111,5 +147,5 @@ function NewAgentCard({ busy, onCancel, onSave }: { busy: boolean; onCancel: () 
   const [model, setModel] = useState("");
   const isDsh = provider === "deepseek_harness";
   const complete = agentInputIsComplete({ providerKind: provider, providerRoute: isDsh ? providerRoute : null, model: model || null });
-  return <article className="agent-card supported new-agent"><div className="agent-card-top"><span className="agent-logo"><Plus size={19} /></span><div><h3>新 Agent 实例</h3><span>本地 Provider</span></div></div><div className="agent-fields"><label>Provider<select value={provider} onChange={(event) => setProvider(event.target.value as typeof provider)}><option value="codex">Codex</option><option value="deepseek_harness">DeepSeek Harness</option></select></label><label>实例 ID<input value={id} onChange={(event) => setId(event.target.value)} placeholder={provider === "codex" ? "例如 codex-work" : "例如 dsh-work"} /></label><label>实例名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder={providerLabel(provider)} /></label><label>{isDsh ? "Python 路径" : "Codex CLI 路径"}<input value={path} onChange={(event) => setPath(event.target.value)} placeholder={isDsh ? "留空则从 PATH 发现 python3" : "留空则从 PATH 自动发现"} /></label>{isDsh && <label>Provider route<input value={providerRoute} onChange={(event) => setProviderRoute(event.target.value)} placeholder="例如 deepseek-official" /></label>}<label>{isDsh ? "Model" : "模型覆盖"}<input value={model} onChange={(event) => setModel(event.target.value)} placeholder={isDsh ? "例如 deepseek-v4-flash" : "留空则使用 Codex 默认模型"} /></label>{isDsh && <p className="agent-provider-note">凭证、endpoint 与 DSH_HOME 继承 Archmage 启动环境。</p>}</div><div className="agent-actions"><button onClick={onCancel}>取消</button><button className="verify" disabled={busy || !id.trim() || !name.trim() || !complete} onClick={() => onSave({ id: id.trim(), providerKind: provider, displayName: name.trim(), executablePath: path.trim() || null, providerRoute: isDsh ? providerRoute.trim() || null : null, model: model.trim() || null, enabled: true })}>{busy ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />}创建实例</button></div></article>;
+  return <article className="agent-card supported new-agent"><div className="agent-card-top"><span className="agent-logo"><Plus size={19} /></span><div><h3>添加 {providerLabel(provider)} 实例</h3><span>本地 Provider</span></div></div><div className="agent-fields"><label>实例 ID<input value={id} onChange={(event) => setId(event.target.value)} placeholder={provider === "codex" ? "例如 codex-work" : "例如 dsh-work"} /></label><label>实例名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder={providerLabel(provider)} /></label><label>{isDsh ? "Python 路径" : "Codex CLI 路径"}<input value={path} onChange={(event) => setPath(event.target.value)} placeholder={isDsh ? "留空则从 PATH 发现 python3" : "留空则从 PATH 自动发现"} /></label>{isDsh && <label>Provider route<input value={providerRoute} onChange={(event) => setProviderRoute(event.target.value)} placeholder="例如 deepseek-official" /></label>}<label>{isDsh ? "Model" : "模型覆盖"}<input value={model} onChange={(event) => setModel(event.target.value)} placeholder={isDsh ? "例如 deepseek-v4-flash" : "留空则使用 Codex 默认模型"} /></label>{isDsh && <p className="agent-provider-note">凭证、endpoint 与 DSH_HOME 继承 Archmage 启动环境。</p>}</div><div className="agent-actions"><button onClick={onCancel}>取消</button><button className="verify" disabled={busy || !id.trim() || !name.trim() || !complete} onClick={() => onSave({ id: id.trim(), providerKind: provider, displayName: name.trim(), executablePath: path.trim() || null, providerRoute: isDsh ? providerRoute.trim() || null : null, model: model.trim() || null, enabled: true })}>{busy ? <LoaderCircle className="spin" size={15} /> : <Plus size={15} />}创建实例</button></div></article>;
 }
