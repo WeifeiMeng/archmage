@@ -261,7 +261,7 @@ impl Runtime {
                             binding.agent_instance_id
                         ))
                     })?;
-                    binding.executable_path = Some(tools.dsh_binary);
+                    binding.executable_path = Some(tools.python_binary);
                 }
                 kind => {
                     return Err(Error::Preflight(format!(

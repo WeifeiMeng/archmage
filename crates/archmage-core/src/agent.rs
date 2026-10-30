@@ -265,7 +265,7 @@ impl AgentService {
             ProviderKind::DeepseekHarness => {
                 deepseek_harness::inspect_at(instance.executable_path.as_deref())
                     .await
-                    .map(|tools| tools.dsh_version)
+                    .map(|tools| deepseek_harness::python_version_label(&tools))
             }
             kind => {
                 return Err(Error::Preflight(format!(
@@ -360,28 +360,46 @@ impl AgentService {
             .prefix("probe-")
             .tempdir_in(&root)?;
         let session_id = format!("archmage-probe-{}", uuid::Uuid::new_v4());
-        let schema = r#"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}"#;
-        let invocation = deepseek_harness::DeepseekHarnessInvocation::new(
-            probe.path().to_path_buf(),
-            probe.path().join("diagnostics"),
-            codex::Sandbox::ReadOnly,
-            deepseek_harness::HarnessSession::Create(session_id.clone()),
-        );
-        match deepseek_harness::invoke_with_identity(
-            &tools,
-            &invocation,
-            b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
-            schema,
-            |_| Ok(()),
-            || Ok(()),
-        )
-        .await
-        {
+        let config = deepseek_harness::SidecarConfig {
+            python_binary: tools.python_binary.clone(),
+            data_root: self.data_root.clone(),
+            repository: probe.path().to_path_buf(),
+            provider_route: instance.provider_route.clone().ok_or_else(|| {
+                Error::Preflight("DeepSeek Harness provider route is required".into())
+            })?,
+            model: instance
+                .model
+                .clone()
+                .ok_or_else(|| Error::Preflight("DeepSeek Harness model is required".into()))?,
+            session_id: session_id.clone(),
+            permission_mode: deepseek_harness::PermissionMode::ReadOnly,
+            session_root: probe.path().join("sessions"),
+            diagnostics_dir: probe.path().join("diagnostics"),
+            deadline: std::time::Duration::from_secs(60),
+            max_line_bytes: 1024 * 1024,
+            max_stream_bytes: 4 * 1024 * 1024,
+            max_result_bytes: 1024 * 1024,
+            environment: std::collections::BTreeMap::new(),
+        };
+        let result = async {
+            let mut sidecar = deepseek_harness::DeepseekHarnessSidecar::start(config).await?;
+            let outcome = sidecar
+                .invoke(
+                    "verification",
+                    b"Return the JSON object {\"ok\":true}. Do not edit files or run commands.",
+                    &serde_json::json!({"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}),
+                )
+                .await?;
+            sidecar.close().await?;
+            Ok::<_, Error>(outcome)
+        }
+        .await;
+        match result {
             Ok(outcome) if outcome.result["ok"] == true => {
                 self.store()?.record_agent_observation_if_current(
                     instance,
                     AgentObservation::Ready {
-                        version: &tools.dsh_version,
+                        version: &deepseek_harness::python_version_label(&tools),
                         thread_id: &session_id,
                     },
                 )?;

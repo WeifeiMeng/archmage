@@ -2,7 +2,7 @@ use crate::{
     agent::ProviderKind,
     error::{Error, Result},
     process::ProcessIdentity,
-    provider::{codex, deepseek_harness},
+    provider::codex,
 };
 use std::{path::PathBuf, sync::Mutex, time::Duration};
 
@@ -74,56 +74,9 @@ pub async fn invoke(
                 result: outcome.result,
             })
         }
-        ProviderKind::DeepseekHarness => {
-            let tools = deepseek_harness::inspect_at(execution.executable_path.as_deref()).await?;
-            let session = match &execution.session {
-                ProviderSession::None => {
-                    return Err(Error::Preflight(
-                        "DeepSeek Harness session ID is required".into(),
-                    ));
-                }
-                ProviderSession::Create(id) => deepseek_harness::HarnessSession::Create(id.clone()),
-                ProviderSession::Resume(id) => deepseek_harness::HarnessSession::Resume(id.clone()),
-            };
-            let session_id = session
-                .id()
-                .ok_or_else(|| Error::Preflight("DeepSeek Harness session ID is required".into()))?
-                .to_owned();
-            let mut invocation = deepseek_harness::DeepseekHarnessInvocation::new(
-                execution.repository.clone(),
-                execution.diagnostics_dir.clone(),
-                execution.sandbox,
-                session,
-            );
-            invocation.deadline = execution.deadline;
-            invocation.max_stream_bytes = execution.max_stream_bytes;
-            invocation.max_result_bytes = execution.max_result_bytes;
-            let schema = std::fs::read_to_string(&execution.schema_path)?;
-            let persisted_id = session_id.clone();
-            let outcome = deepseek_harness::invoke_with_identity(
-                &tools,
-                &invocation,
-                prompt,
-                &schema,
-                |identity| {
-                    (observer.lock().expect("provider observer lock"))(ProviderLifecycle::Spawned(
-                        identity.clone(),
-                    ))
-                },
-                || {
-                    (observer.lock().expect("provider observer lock"))(
-                        ProviderLifecycle::ConversationPersisted {
-                            session_id: persisted_id,
-                        },
-                    )
-                },
-            )
-            .await?;
-            Ok(ProviderOutcome {
-                conversation_id: outcome.session_id.unwrap_or(session_id),
-                result: outcome.result,
-            })
-        }
+        ProviderKind::DeepseekHarness => Err(Error::Preflight(
+            "DeepSeek Harness execution requires the Runtime sidecar pool".into(),
+        )),
         kind => Err(Error::Preflight(format!(
             "{kind} provider is not supported yet"
         ))),

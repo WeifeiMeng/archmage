@@ -1,121 +1,82 @@
-use archmage_core::provider::{
-    codex::Sandbox,
-    deepseek_harness::{
-        self, DeepseekHarnessInvocation, HarnessSession, parse_result, render_task, validate_help,
-    },
+use archmage_core::{
+    process::identity_is_alive,
+    provider::deepseek_harness::{DeepseekHarnessSidecar, PermissionMode, SidecarConfig},
 };
+use serde_json::json;
+use std::{collections::BTreeMap, path::Path, time::Duration};
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
-#[test]
-fn headless_help_requires_explicit_create_and_resume_options() {
-    assert!(validate_help("--session-id --resume-session-id").is_ok());
-    assert!(validate_help("--session-id").is_err());
+fn config(root: &Path) -> SidecarConfig {
+    let mut environment = BTreeMap::new();
+    environment.insert(
+        "PYTHONPATH".into(),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/deepseek_harness_sdk")
+            .into_os_string(),
+    );
+    environment.insert(
+        "FAKE_DSH_LOG".into(),
+        root.join("sdk.jsonl").into_os_string(),
+    );
+    environment.insert("PYTHONDONTWRITEBYTECODE".into(), "1".into());
+    SidecarConfig {
+        python_binary: "python3".into(),
+        data_root: root.join("data"),
+        repository: root.to_path_buf(),
+        provider_route: "deepseek-official".into(),
+        model: "deepseek-v4-flash".into(),
+        session_id: "archmage-sidecar-test".into(),
+        permission_mode: PermissionMode::WorkspaceWrite,
+        session_root: root.join("sessions"),
+        diagnostics_dir: root.join("diagnostics"),
+        deadline: Duration::from_secs(10),
+        max_line_bytes: 4096,
+        max_stream_bytes: 64 * 1024,
+        max_result_bytes: 4096,
+        environment,
+    }
 }
 
-#[test]
-fn invocation_builds_explicit_create_and_resume_argv() {
-    let temp = tempfile::tempdir().unwrap();
-    let create = DeepseekHarnessInvocation::new(
-        temp.path().to_path_buf(),
-        temp.path().join("create-diagnostics"),
-        Sandbox::WorkspaceWrite,
-        HarnessSession::Create("session-a".into()),
-    );
-    let resume = DeepseekHarnessInvocation::new(
-        temp.path().to_path_buf(),
-        temp.path().join("resume-diagnostics"),
-        Sandbox::ReadOnly,
-        HarnessSession::Resume("session-a".into()),
-    );
-    let strings = |invocation: &DeepseekHarnessInvocation| {
-        invocation
-            .argv("task")
-            .into_iter()
-            .map(|part| part.to_string_lossy().into_owned())
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(
-        strings(&create),
-        ["--profile", "headless", "--session-id", "session-a", "task"]
-    );
-    assert_eq!(
-        strings(&resume),
-        [
-            "--profile",
-            "headless",
-            "--resume-session-id",
-            "session-a",
-            "task"
-        ]
-    );
-}
-
-#[test]
-fn task_contains_context_schema_and_strict_output_instruction() {
-    let task = render_task(
-        br#"{"goal":"change it"}"#,
-        r#"{"type":"object","required":["status"]}"#,
-    )
-    .unwrap();
-    assert!(task.contains(r#"{"goal":"change it"}"#));
-    assert!(task.contains(r#""required":["status"]"#));
-    assert!(task.contains("single JSON object"));
-    assert!(task.contains("Do not use Markdown"));
-}
-
-#[test]
-fn result_parser_rejects_prose_wrapped_json() {
-    assert_eq!(parse_result(b"{\"ok\":true}\n", 1024).unwrap()["ok"], true);
-    assert!(parse_result(br#"result: {"ok":true}"#, 1024).is_err());
-    assert!(parse_result(b"{}", 1).is_err());
-}
-
-#[cfg(unix)]
 #[tokio::test]
-async fn discovery_and_invocation_use_the_explicit_dsh_binary() {
+async fn sidecar_reuses_one_process_and_strictly_parses_results() {
     let temp = tempfile::tempdir().unwrap();
-    let binary = temp.path().join("custom-dsh");
-    std::fs::write(
-        &binary,
-        r#"#!/bin/sh
-if [ "$1" = "--version" ]; then echo 'dsh 0.1.0'; exit 0; fi
-if [ "$1" = "--profile" ] && [ "$3" = "--help" ]; then echo '--session-id --resume-session-id'; exit 0; fi
-printf '%s' "$DSH_PERMISSION_MODE" > permission.txt
-printf '{"ok":true}\n'
-"#,
-    )
-    .unwrap();
-    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let tools = deepseek_harness::inspect_at(Some(&binary)).await.unwrap();
-    assert_eq!(tools.dsh_version, "dsh 0.1.0");
+    let mut sidecar = DeepseekHarnessSidecar::start(config(temp.path()))
+        .await
+        .unwrap();
+    let identity = sidecar.identity().clone();
+    let first = sidecar
+        .invoke("first", b"first task", &json!({"type":"object"}))
+        .await
+        .unwrap();
+    let second = sidecar
+        .invoke("second", b"second task", &json!({"type":"object"}))
+        .await
+        .unwrap();
+    assert_eq!(first.conversation_id, "archmage-sidecar-test");
+    assert_eq!(second.conversation_id, "archmage-sidecar-test");
+    assert_eq!(first.result, json!({"ok": true}));
+    assert!(identity_is_alive(&identity));
+    sidecar.close().await.unwrap();
+    assert!(!identity_is_alive(&identity));
+}
 
-    let invocation = DeepseekHarnessInvocation::new(
-        temp.path().to_path_buf(),
-        temp.path().join("diagnostics"),
-        Sandbox::ReadOnly,
-        HarnessSession::Create("session-a".into()),
-    );
-    let mut persisted = false;
-    let outcome = deepseek_harness::invoke_with_identity(
-        &tools,
-        &invocation,
-        b"context",
-        r#"{"type":"object"}"#,
-        |_| Ok(()),
-        || {
-            persisted = true;
-            Ok(())
-        },
-    )
-    .await
-    .unwrap();
-    assert!(persisted);
-    assert_eq!(outcome.session_id.as_deref(), Some("session-a"));
-    assert_eq!(outcome.result["ok"], true);
-    assert_eq!(
-        std::fs::read_to_string(temp.path().join("permission.txt")).unwrap(),
-        "read-only"
-    );
+#[tokio::test]
+async fn sidecar_poisoning_is_sticky_after_bridge_failure() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut config = config(temp.path());
+    config
+        .environment
+        .insert("FAKE_DSH_MODE".into(), "error".into());
+    let mut sidecar = DeepseekHarnessSidecar::start(config).await.unwrap();
+    let first = sidecar
+        .invoke("first", b"fail", &json!({"type":"object"}))
+        .await
+        .unwrap_err()
+        .to_string();
+    let second = sidecar
+        .invoke("second", b"never sent", &json!({"type":"object"}))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert_eq!(second, first);
+    sidecar.cancel().await.unwrap();
 }
