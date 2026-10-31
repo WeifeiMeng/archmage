@@ -23,7 +23,7 @@ export function SettingsShell({ activeView, onNavigate, onBack, children }: Sett
   return <section className="settings-shell">
     <header className="settings-shell-header">
       <button type="button" className="settings-back" onClick={onBack}><ArrowLeft size={17} />返回主界面</button>
-      <div><span>ARCHMAGE</span><h1>设置</h1></div>
+      <div><span>ARCHMAGE</span><strong className="settings-shell-title">设置</strong></div>
     </header>
     <div className="settings-shell-body">
       <nav className="settings-sections" aria-label="设置分类">

@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SettingsShell } from "./SettingsShell";
+import { readFileSync } from "node:fs";
+
+const settingsStyles = readFileSync(new URL("./settings.css", import.meta.url), "utf8");
 
 describe("SettingsShell", () => {
   it("renders a full-screen settings navigator around the active management page", () => {
@@ -17,5 +20,7 @@ describe("SettingsShell", () => {
     expect(html).toContain("团队管理");
     expect(html).toContain('aria-current="page"');
     expect(html).toContain("Agent content");
+    expect(html).not.toContain("<h1");
+    expect(settingsStyles).toContain("@media (max-width: 960px)");
   });
 });
