@@ -17,17 +17,17 @@
 - Create: `apps/archmage-desktop/src/SettingsShell.tsx`
 - Modify: `apps/archmage-desktop/src/settings.css`
 
-- [ ] **Step 1: Write the failing shell test**
+- [x] **Step 1: Write the failing shell test**
 
 Render `SettingsShell` with `activeView="agents"` and assert that it contains “返回主界面”, all four category labels, an active navigation state, and its child content.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- SettingsShell.test.tsx`
 
 Expected: FAIL because `SettingsShell` does not exist.
 
-- [ ] **Step 3: Implement the minimal Settings shell**
+- [x] **Step 3: Implement the minimal Settings shell**
 
 Create a component with this public shape:
 
@@ -42,7 +42,7 @@ type SettingsShellProps = {
 
 Render a top bar with a back button, a categorized internal navigation rail, and a flexible content area. Add responsive CSS that collapses the rail into a horizontal category bar on narrow windows.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `npm test -- SettingsShell.test.tsx`
 
@@ -53,19 +53,18 @@ Expected: PASS.
 **Files:**
 - Modify: `apps/archmage-desktop/src/sidebarNavigation.test.ts`
 - Modify: `apps/archmage-desktop/src/App.tsx`
-- Modify: `apps/archmage-desktop/src/styles.css`
 
-- [ ] **Step 1: Write failing navigation assertions**
+- [x] **Step 1: Write failing navigation assertions**
 
 Update `sidebarNavigation.test.ts` to assert that `App.tsx` no longer contains the three management buttons in the main sidebar and that it uses `SettingsShell` for non-Run views.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- sidebarNavigation.test.ts`
 
 Expected: FAIL while the old main-sidebar buttons remain.
 
-- [ ] **Step 3: Implement Settings-space routing**
+- [x] **Step 3: Implement Settings-space routing**
 
 In `App.tsx`:
 
@@ -76,9 +75,9 @@ In `App.tsx`:
 - Replace direct `setView("capabilities")` and `setView("teams")` management links with `navigate(...)`.
 - Keep the close-window dirty refs and existing confirmation messages unchanged.
 
-Add full-width Settings workspace styles without changing existing Run layouts.
+Keep the existing Run workspace layout unchanged; the standalone `SettingsShell` supplies its own full-width layout.
 
-- [ ] **Step 4: Run navigation and dirty-guard tests**
+- [x] **Step 4: Run navigation and dirty-guard tests**
 
 Run: `npm test -- sidebarNavigation.test.ts model.test.ts teamGraph.test.ts`
 
@@ -89,24 +88,24 @@ Expected: PASS.
 **Files:**
 - Modify only if verification exposes a defect in files already listed above.
 
-- [ ] **Step 1: Run the desktop test suite**
+- [x] **Step 1: Run the desktop test suite**
 
 Run: `npm test`
 
 Expected: all tests PASS.
 
-- [ ] **Step 2: Build the desktop frontend**
+- [x] **Step 2: Build the desktop frontend**
 
 Run: `npm run build`
 
 Expected: TypeScript and Vite build complete successfully.
 
-- [ ] **Step 3: Review the final diff**
+- [x] **Step 3: Review the final diff**
 
 Run: `git diff --check && git status --short`
 
 Expected: no whitespace errors; only the planned files plus the user's pre-existing untracked files are present.
 
-- [ ] **Step 4: Commit the implementation**
+- [x] **Step 4: Commit the implementation**
 
 Commit message: `feat: move management pages into settings`

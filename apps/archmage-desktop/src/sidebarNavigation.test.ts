@@ -6,12 +6,13 @@ const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const settingsStyles = readFileSync(new URL("./settings.css", import.meta.url), "utf8");
 
 describe("sidebar brand and navigation", () => {
-  it("uses the approved Chinese labels and a distinct team icon", () => {
+  it("keeps management destinations out of the main sidebar", () => {
     expect(appSource).toContain("智能体工作台");
     expect(appSource).toContain("新建任务");
-    expect(appSource).toContain("智能体管理");
-    expect(appSource).toContain("能力管理");
-    expect(appSource).toContain("<UsersRound size={17} />团队管理");
+    expect(appSource).not.toContain("<Bot size={17} />智能体管理");
+    expect(appSource).not.toContain("<Share2 size={17} />能力管理");
+    expect(appSource).not.toContain("<UsersRound size={17} />团队管理");
+    expect(appSource).toContain("<SettingsShell");
   });
 
   it("uses the approved balanced brand size", () => {

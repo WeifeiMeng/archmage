@@ -3,7 +3,6 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
 import {
-  Bot,
   Check,
   ChevronRight,
   Circle,
@@ -14,10 +13,8 @@ import {
   Play,
   Plus,
   Settings as SettingsIcon,
-  Share2,
   ShieldCheck,
   TestTube2,
-  UsersRound,
   WandSparkles,
 } from "lucide-react";
 import { api } from "./api";
@@ -25,6 +22,7 @@ import { AgentManagement } from "./AgentManagement";
 import { CapabilityManagement } from "./CapabilityManagement";
 import { TeamManagement } from "./TeamManagement";
 import { SettingsView } from "./SettingsView";
+import { SettingsShell } from "./SettingsShell";
 import { RunTeamPreview } from "./RunTeamPreview";
 import { RunHeaderActions } from "./RunHeaderActions";
 import { FlowDeliverySwimlane } from "./FlowDeliverySwimlane";
@@ -270,13 +268,11 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
   }
 
   return (
-    <div className="app-shell">
+    <div className={view === "runs" ? "app-shell" : "settings-app-shell"}>
+      {view === "runs" ? <>
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><img src="/archmage-icon.png" alt="" /></div><div><strong>Archmage</strong><span>智能体工作台</span></div></div>
         <button className={`new-run ${view === "runs" && selectedId === null ? "active" : ""}`} onClick={() => navigate("runs", null)}><Plus size={17} />新建任务</button>
-        <button className={`new-run ${view === "agents" ? "active" : ""}`} onClick={() => navigate("agents")}><Bot size={17} />智能体管理</button>
-        <button className={`new-run ${view === "capabilities" ? "active" : ""}`} onClick={() => navigate("capabilities")}><Share2 size={17} />能力管理</button>
-        <button className={`new-run ${view === "teams" ? "active" : ""}`} onClick={() => navigate("teams")}><UsersRound size={17} />团队管理</button>
         <div className="section-label">最近运行</div>
         <nav className="run-list" aria-label="最近运行">
           {runs.map((run) => (
@@ -289,14 +285,14 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
           {runs.length === 0 && <p className="empty-copy">还没有 Run。先从右侧创建第一个真实协作流程。</p>}
         </nav>
         <div className="sidebar-bottom">
-          <button className={`new-run settings-nav ${view === "settings" ? "active" : ""}`} onClick={() => navigate("settings")}><SettingsIcon size={17} />设置</button>
+          <button className="new-run settings-nav" onClick={() => navigate("settings")}><SettingsIcon size={17} />设置</button>
           <div className="sidebar-foot"><span className="live-dot" />本地 Runtime</div>
         </div>
       </aside>
 
       <main className="workspace">
         {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
-        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => setView("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : view === "settings" ? <SettingsView theme={theme} onThemeChange={changeTheme} /> : !selectedId ? (
+        {!selectedId ? (
           <section className="new-run-view">
             <ManagementHero eyebrow="TEAM RUN" title="把目标交给团队" description="定义任务、选择团队，并在启动前确认执行环境。" summary={<PageMetric {...runtimeStatus} />} />
             <div className="new-run-grid">
@@ -313,9 +309,9 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
                 <select id="run-team" className="run-team-select" value={selectedTeam?.id ?? ""} disabled={teamLoadState !== "ready"} onChange={(event) => setTeamId(event.target.value)}><option value="" disabled>{environment === "preview" ? "请在桌面窗口选择团队" : teamLoadState === "loading" ? "正在读取团队…" : teamLoadState === "failed" ? "团队读取失败" : "请选择团队"}</option>{teamLoadState === "ready" && teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
                 {selectedTeam && <RunTeamPreview team={selectedTeam} />}
                 <div className="new-run-issues">
-                  {teamLoadState === "ready" && teams.length === 0 && <div className="run-form-issue" role="status"><span>还没有可执行的团队。</span><button type="button" onClick={() => setView("teams")}>前往团队管理</button></div>}
+                  {teamLoadState === "ready" && teams.length === 0 && <div className="run-form-issue" role="status"><span>还没有可执行的团队。</span><button type="button" onClick={() => void navigate("teams")}>前往团队管理</button></div>}
                   {teamLoadState === "failed" && <div className="run-form-issue" role="status"><span>团队列表读取失败，暂时无法启动 Run。</span><button type="button" onClick={() => void loadTeams()}>重新读取</button></div>}
-                  {bindingIssues.length > 0 && <div className="run-form-issue" role="status"><span>所选团队有能力尚不可用：{bindingIssues.join("；")}</span><button type="button" onClick={() => setView("capabilities")}>配置 Capability</button></div>}
+                  {bindingIssues.length > 0 && <div className="run-form-issue" role="status"><span>所选团队有能力尚不可用：{bindingIssues.join("；")}</span><button type="button" onClick={() => void navigate("capabilities")}>配置 Capability</button></div>}
                   {environment === "failed" && <div className="run-form-issue" role="status"><span>本地 Runtime 检查未通过，请处理顶部错误后重试。</span><button type="button" onClick={checkEnvironment}>重新检查</button></div>}
                   {environment === "preview" && <div className="run-form-issue" role="status"><span>浏览器只提供界面预览；请在桌面窗口启动 Run。</span></div>}
                 </div>
@@ -328,6 +324,10 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
           <RunWorkbench snapshot={snapshot} timeline={timeline} onRefresh={() => refreshRun(snapshot.id)} onCancel={() => api.cancelRun(snapshot.id).then(() => refreshRun(snapshot.id)).catch((reason) => setError(String(reason)))} onReveal={() => api.revealWorkspace(snapshot.id).catch((reason) => setError(String(reason)))} />
         ) : <div className="loading"><LoaderCircle className="spin" />正在读取 Run…</div>}
       </main>
+      </> : <SettingsShell activeView={view} onNavigate={(nextView) => void navigate(nextView)} onBack={() => void navigate("runs", null)}>
+        {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError(null)}>关闭</button></div>}
+        {view === "agents" ? <AgentManagement onError={setError} onOpenCapabilities={() => void navigate("capabilities")} /> : view === "capabilities" ? <CapabilityManagement onError={setError} onDirtyChange={setCapabilityDirty} /> : view === "teams" ? <TeamManagement onError={setError} onDirtyChange={setTeamDirty} /> : <SettingsView theme={theme} onThemeChange={changeTheme} />}
+      </SettingsShell>}
     </div>
   );
 }
