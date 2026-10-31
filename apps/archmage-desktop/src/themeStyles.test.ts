@@ -27,4 +27,8 @@ describe("application theme styles", () => {
     expect(readCss("newRun.css")).toMatch(/\.run-team-select\s*\{[^}]*background:\s*var\(--input-bg\)/s);
     expect(readCss("runTeam.css")).toMatch(/\.run-team-preview\s*\{[^}]*background:\s*var\(--surface-2\)/s);
   });
+
+  it("aligns the new Run hero with the full form grid", () => {
+    expect(readCss("newRun.css")).toMatch(/\.new-run-view\s*>\s*\.management-hero\s*\{[^}]*max-width:\s*none[^}]*margin-bottom:\s*0/s);
+  });
 });
