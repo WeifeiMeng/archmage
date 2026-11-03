@@ -1,41 +1,43 @@
-# Archmage Documentation
+简体中文 | [English](../en/README.md)
 
-This directory is the maintained source of truth for product scope, concepts, architecture, delivery stages, decisions, and operating procedures. The original [product brief](../target.md) is preserved as an input, not treated as an executable specification.
+# Archmage 文档
 
-## Recommended reading order
+本目录是产品范围、概念、架构、交付阶段、决策和操作流程的持续维护事实来源。原始[产品说明](../../target.md)作为输入保留，但不视为可执行规格。
 
-Latest development increment: [Desktop runtime vertical slice](superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md).
+## 推荐阅读顺序
 
-Team composition update: [Selectable Capabilities and relationships](superpowers/specs/2026-10-14-selectable-team-capabilities-design.md). Users create their own teams; the application does not pre-create a Coder → Reviewer combination.
+最新开发增量：[桌面 Runtime 垂直切片](superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md)。
 
-Current Team increment: [Message-flow Teams](superpowers/specs/2026-10-14-message-flow-teams-design.md) adds Agent-selected deliverable routes, feedback cycles, and an explicit terminal signal for new Teams. The [implementation plan](superpowers/plans/2026-10-14-message-flow-teams.md) tracks its development. Existing Teams retain consultation semantics.
+Team 组成更新：[可选择的 Capability 与关系](superpowers/specs/2026-10-14-selectable-team-capabilities-design.md)。用户自行创建 Team；应用不会预先创建 Coder → Reviewer 组合。
 
-**Want to run the current code?** Use the [CLI command reference (中文)](cli-reference.md) or [desktop client guide (中文)](runbooks/desktop-s0.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
+当前 Team 增量：[消息流 Team](superpowers/specs/2026-10-14-message-flow-teams-design.md)为新 Team 增加由 Agent 选择的交付路由、反馈循环和显式终止信号。[实施计划](superpowers/plans/2026-10-14-message-flow-teams.md)记录其开发过程。已有 Team 保留咨询语义。
 
-1. [CLI command reference](cli-reference.md)
-2. [Desktop client guide](runbooks/desktop-s0.md)
-3. [Product vision](product/vision.md)
-4. [MVP definition](product/mvp-definition.md)
-5. [Glossary](concepts/glossary.md)
-6. [Collaboration model](concepts/collaboration-model.md)
-7. [Architecture overview](architecture/overview.md)
-8. [Delivery roadmap](roadmap/README.md)
-9. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
-10. [Desktop runtime implementation plan](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
+**想运行当前代码？** 请阅读 [CLI 命令手册](cli-reference.md)或[桌面客户端使用手册](runbooks/desktop-s0.md)。[当前版本指南](guide.md)还包含贡献者测试和架构细节。
 
-## Documentation layers
+1. [CLI 命令手册](cli-reference.md)
+2. [桌面客户端使用手册](runbooks/desktop-s0.md)
+3. [产品愿景](product/vision.md)
+4. [MVP 定义](product/mvp-definition.md)
+5. [术语表](concepts/glossary.md)
+6. [协作模型](concepts/collaboration-model.md)
+7. [架构概览](architecture/overview.md)
+8. [交付路线图](roadmap/README.md)
+9. [S0：真实 Codex 垂直切片](roadmap/stages/s0-real-codex-slice.md)
+10. [桌面 Runtime 实施计划](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
 
-| Layer | Purpose | Change policy |
+## 文档层级
+
+| 层级 | 用途 | 变更策略 |
 |---|---|---|
-| `product/` | Why the product exists and what counts as success | Update when product scope changes |
-| `concepts/` | Stable vocabulary and collaboration semantics | Update before introducing conflicting terms |
-| `architecture/` | Current system boundaries and invariants | Keep synchronized with approved designs and code |
-| `roadmap/` | Delivery order, scope, dependencies, and exit criteria | Update when sequencing changes |
-| `adr/` | Durable records of consequential decisions | Add a new ADR to supersede an old decision |
-| `runbooks/` | Repeatable setup, diagnosis, and acceptance procedures | Verify against the live CLI before releases |
-| `superpowers/specs/` | Approved stage or feature designs | Review before an implementation plan is written |
-| `superpowers/plans/` | File-level implementation plans | Create only after the corresponding spec is approved |
+| `product/` | 产品存在的原因与成功标准 | 产品范围变化时更新 |
+| `concepts/` | 稳定词汇与协作语义 | 引入冲突术语前更新 |
+| `architecture/` | 当前系统边界与不变量 | 与已批准设计和代码保持同步 |
+| `roadmap/` | 交付顺序、范围、依赖和退出条件 | 排期变化时更新 |
+| `adr/` | 重要决策的持久记录 | 使用新 ADR 取代旧决策 |
+| `runbooks/` | 可重复的配置、诊断与验收流程 | 发布前使用真实 CLI 验证 |
+| `superpowers/specs/` | 已批准的阶段或功能设计 | 编写实施计划前评审 |
+| `superpowers/plans/` | 文件级实施计划 | 仅在对应规格批准后创建 |
 
-## Document status
+## 文档状态
 
-Documents use explicit status language in their opening section where it matters. `Approved` means the design decision is accepted; it does not claim that the software is implemented. Roadmap stages distinguish planned scope from completed scope.
+必要时，文档会在开头明确标注状态。`Approved` 表示设计决策已获接受，并不代表软件已经实现。Roadmap 阶段会区分计划范围与已完成范围。

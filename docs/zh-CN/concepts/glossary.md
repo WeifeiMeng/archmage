@@ -1,57 +1,59 @@
-# Glossary
+简体中文 | [English](../../en/concepts/glossary.md)
+
+# 术语表
 
 ## Provider
 
-A physical execution backend that can start and control agent sessions. Codex CLI is the only S0 provider.
+能够启动并控制 Agent 会话的物理执行后端。Codex CLI 是 S0 唯一的 Provider。
 
 ## Capability
 
-A versioned definition of professional work. It declares instructions, required context, output contract, permissions, and default execution configuration.
+带版本的专业工作定义。它声明指令、所需上下文、输出契约、权限与默认执行配置。
 
 ## Capability Agent
 
-A logical collaboration role formed by binding a Capability to a Provider. Designer, Coder, Tester, and Reviewer are separate Capability Agents even when they share the same Codex CLI installation.
+将 Capability 绑定到 Provider 后形成的逻辑协作角色。即使共享同一个 Codex CLI 安装，Designer、Coder、Tester 与 Reviewer 仍是独立的 Capability Agent。
 
 ## Workflow Definition
 
-A versioned graph of nodes, dependencies, context bindings, conditions, retry policy, and loop limits. S0 ships one built-in, fixed definition; S1 externalizes definitions.
+由节点、依赖、上下文绑定、条件、重试策略和循环上限构成的带版本图。S0 内置一个固定定义；S1 会将定义外部化。
 
 ## Workflow Run
 
-An execution snapshot of a Workflow Definition, user input, baseline commit, configuration, and workspace reference.
+Workflow Definition、用户输入、基线 commit、配置与工作区引用的一次执行快照。
 
 ## Node Run
 
-The runtime state of one workflow node. A Node Run can have multiple attempts across failure and resume.
+一个 Workflow 节点的 Runtime 状态。Node Run 可以在失败和恢复过程中拥有多个 Attempt。
 
 ## Agent Run
 
-One concrete provider invocation for a Node Run attempt. In S0 this is one `codex exec` process and its JSONL event stream.
+Node Run 的某个 Attempt 所对应的一次具体 Provider 调用。在 S0 中，它是一个 `codex exec` 进程及其 JSONL 事件流。
 
 ## Context Reference
 
-A typed declaration of where a node input comes from, such as workflow input, a prior node artifact, or a workspace snapshot.
+声明节点输入来源的类型化定义，例如 Workflow 输入、先前节点的 Artifact 或工作区快照。
 
 ## Context Snapshot
 
-The immutable, content-addressed input view actually supplied to one Node Run attempt. It records values, source references, hashes, and rendering metadata.
+实际提供给某个 Node Run Attempt 的不可变、内容寻址输入视图。它记录值、来源引用、hash 与渲染元数据。
 
 ## Artifact
 
-A durable output such as Markdown, validated JSON, a Git diff, command evidence, or an event log. Artifact content lives on the filesystem; searchable metadata lives in SQLite.
+持久输出，例如 Markdown、已校验 JSON、Git diff、命令证据或事件日志。Artifact 内容保存在文件系统中，可搜索元数据保存在 SQLite 中。
 
 ## Handoff
 
-The explicit transfer of selected artifacts and Context References from one Capability Agent to another. A Handoff is not a shared chat history.
+将选定 Artifact 与 Context Reference 从一个 Capability Agent 显式传递给另一个 Capability Agent。Handoff 不是共享聊天历史。
 
 ## Workspace
 
-The isolated Git worktree and branch assigned to one Workflow Run.
+分配给一个 Workflow Run 的隔离 Git worktree 与 branch。
 
 ## Event
 
-An ordered, immutable fact emitted by the runtime, such as `node.started`, `artifact.created`, or `node.failed`.
+Runtime 发出的有序、不可变事实，例如 `node.started`、`artifact.created` 或 `node.failed`。
 
 ## Provider session
 
-A provider-specific conversation or execution identity. S0 starts a fresh Codex session for each node and records its thread ID for observability only.
+Provider 特定的对话或执行标识。S0 为每个节点启动一个新的 Codex 会话，其 thread ID 只用于可观测性记录。

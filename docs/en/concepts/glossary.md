@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/concepts/glossary.md) | English
+
 # Glossary
 
 ## Provider

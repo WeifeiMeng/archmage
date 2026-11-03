@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/product/mvp-definition.md) | English
+
 # MVP Definition
 
 ## Outcome

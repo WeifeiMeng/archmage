@@ -1,3 +1,5 @@
+简体中文 | [English](../en/guide-online-doctor.md)
+
 # 在线 Doctor：2026-09-17 更新
 
 本次更新位于 `codex/s0-runtime-fencing` Worktree，尚未自动合入 main。主目录仍是上一版。

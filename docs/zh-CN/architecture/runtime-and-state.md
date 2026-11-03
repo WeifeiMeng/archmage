@@ -1,16 +1,18 @@
-# Runtime and State
+简体中文 | [English](../../en/architecture/runtime-and-state.md)
 
-## Definition and execution separation
+# Runtime 与状态
 
-A Workflow Definition describes nodes and dependencies. A Workflow Run snapshots the definition version, inputs, baseline commit, provider binding, and execution policy. Editing a later definition never changes an existing run.
+## 定义与执行分离
 
-A Node definition names one Capability and its Context bindings. A Node Run records execution state. Every retry or resume creates a new attempt; attempts are never overwritten.
+Workflow Definition 描述节点与依赖。Workflow Run 会快照定义版本、输入、基线 commit、Provider 绑定与执行策略。之后编辑定义不会改变已有 Run。
 
-Capability bindings are global configuration but are resolved to concrete Agent instance IDs and frozen into every new Run. An Agent instance stores a Provider kind plus its executable/model configuration. Changing a global binding never rewrites active or historical Run definitions.
+Node 定义指定一个 Capability 及其 Context 绑定，Node Run 记录执行状态。每次重试或恢复都会创建新 Attempt；Attempt 永不覆盖。
 
-The built-in Tester receives a testing task rather than a predeclared command list. Its bound Agent selects relevant commands inside the Run worktree and returns structured command outcomes and limitations. Runtime keeps the older CheckRunner ledger available as lower-level infrastructure, but it is not part of the built-in goal-driven workflow.
+Capability 绑定属于全局配置，但创建新 Run 时会解析为具体 Agent instance ID 并冻结。Agent instance 保存 Provider 类型以及 executable/model 配置。改变全局绑定不会重写活跃或历史 Run 定义。
 
-## Node states
+内置 Tester 接收测试任务，而不是预先声明的命令列表。绑定的 Agent 在 Run worktree 中选择相关命令，并返回结构化命令结果与限制。Runtime 继续保留旧 CheckRunner ledger 作为底层基础设施，但内置目标驱动 Workflow 不使用它。
+
+## 节点状态
 
 ```text
 pending → ready → running → succeeded
@@ -19,45 +21,45 @@ pending → ready → running → succeeded
                      └────→ cancelled
 ```
 
-`succeeded` requires all of the following:
+`succeeded` 必须同时满足：
 
-- The provider process completed successfully.
-- The final output parsed as JSON.
-- JSON Schema validation passed.
-- Capability-specific invariants passed.
-- Required artifacts were durably registered.
+- Provider 进程成功完成。
+- 最终输出可解析为 JSON。
+- JSON Schema 校验通过。
+- Capability 特定不变量通过。
+- 必需 Artifact 已持久注册。
 
 ## Scheduler
 
-The scheduler derives a Ready Set from persisted state. A node becomes ready only when all required predecessors have succeeded and its Context References can resolve.
+Scheduler 从持久状态推导 Ready Set。只有所有必需前驱均已成功且 Context Reference 可以解析时，节点才会 ready。
 
-The Run does not have a global single-node restriction. Dispatch is limited by:
+Run 不存在全局单节点限制。分派受以下因素限制：
 
 - `run.max_parallelism`
-- dependency readiness
-- provider capacity
-- workspace access compatibility
+- 依赖就绪状态
+- Provider 容量
+- 工作区访问兼容性
 
-Workspace access compatibility is:
+工作区访问兼容性：
 
-| Running access | Candidate `none` | Candidate `read` | Candidate `write` |
+| 当前访问 | 候选 `none` | 候选 `read` | 候选 `write` |
 |---|---:|---:|---:|
-| `none` | allow | allow | allow |
-| `read` | allow | allow | wait |
-| `write` | allow | wait | wait |
+| `none` | 允许 | 允许 | 允许 |
+| `read` | 允许 | 允许 | 等待 |
+| `write` | 允许 | 等待 | 等待 |
 
-The S0 workflow is linear because of its data dependencies, but the scheduler and lease model are not hard-coded to serial execution.
+S0 Workflow 因数据依赖呈线性，但 Scheduler 与 lease 模型并未硬编码为串行执行。
 
-## Atomic transitions
+## 原子状态转换
 
-Every state transition and its corresponding Event are committed in one SQLite transaction. Consumers must reconstruct runtime state from persisted entities, not from in-memory events alone.
+每次状态转换及其对应 Event 都在同一个 SQLite 事务中提交。消费者必须从持久化实体重建 Runtime 状态，不能只依赖内存 Event。
 
-## Recovery
+## 恢复
 
-At startup, the runtime scans persisted `running` attempts. If the recorded process cannot be confirmed as an owned live process, the attempt becomes `interrupted` and an event records the recovery decision.
+Runtime 启动时扫描持久化的 `running` Attempt。如果记录的进程无法确认是受控的存活进程，该 Attempt 会变为 `interrupted`，同时由 Event 记录恢复决策。
 
-`archmage resume <run-id>` rebuilds the Ready Set from persisted state. It preserves successful nodes, ignores incomplete artifacts, and creates a new attempt for interrupted or retryable failed nodes. S0 recovery is explicit; there is no daemon that resumes work automatically.
+`archmage resume <run-id>` 根据持久状态重建 Ready Set。它保留成功节点、忽略不完整 Artifact，并为 interrupted 或可重试的失败节点创建新 Attempt。S0 恢复是显式操作；不存在自动恢复工作的 daemon。
 
-## Cancellation
+## 取消
 
-Cancellation targets the owned provider process group, waits for a bounded grace period, then forces termination if necessary. The runtime records the signal path and marks the attempt and downstream run state consistently. A cancelled attempt cannot publish a successful result after cancellation wins the state transition.
+取消操作针对受控 Provider process group，等待有界宽限期，必要时强制终止。Runtime 记录 signal 路径，并一致地标记 Attempt 与下游 Run 状态。一旦取消赢得状态转换，已取消 Attempt 就不能再发布成功结果。

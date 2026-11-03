@@ -1,20 +1,22 @@
-# 当前版本使用指南
+[简体中文](../zh-CN/guide.md) | English
 
-更新日期：2026-10-14。本文描述当前源码的真实入口；日常参数以 [CLI 命令手册](cli-reference.md) 为准，图形界面以 [桌面客户端使用手册](runbooks/desktop-s0.md) 为准。
+# Current Version Guide
 
-## 当前能力
+Updated: 2026-10-14. This guide describes the real entry points in the current source. Use the [CLI command reference](cli-reference.md) for daily CLI arguments and the [desktop client guide](runbooks/desktop-s0.md) for graphical operation.
 
-Archmage 已具备一条可运行的纵向主链：连接本机真实 Codex CLI，在每个 Run 的隔离 Git worktree 中依次调度 Designer、Coder、Tester、Reviewer 四种逻辑能力，并持久化 Run、Node、Attempt、Artifact、Handoff、ChangeSet、Agent 绑定快照和事件。
+## Current capabilities
 
-可用入口：
+Archmage has a runnable vertical chain: it connects to a real local Codex CLI, schedules the logical Designer, Coder, Tester, and Reviewer capabilities in sequence inside an isolated Git worktree for each Run, and persists Run, Node, Attempt, Artifact, Handoff, ChangeSet, Agent-binding snapshots, and events.
 
-- CLI：`doctor`、`run`、`status`、`logs`、`cancel`；
-- Tauri 桌面客户端：管理本地 Agent、配置单个 Capability、在画布中绘制消息流团队、选择团队新建 Run、查看交付消息或历史咨询进度、打开工作区、取消 Run；
-- 进程恢复：启动时清理失去 Run owner 的遗留 Codex 主任务/咨询进程，并把孤儿 Run 收敛为 `interrupted`。
+Available entry points:
 
-暂未提供：`resume`、`logs --follow`、后台 daemon、任意工作流编排。
+- CLI: `doctor`, `run`, `status`, `logs`, and `cancel`;
+- Tauri desktop client: manage local Agents, configure each Capability, draw message-flow Teams on a canvas, choose a Team for a new Run, inspect delivery messages or legacy consultation progress, open the workspace, and cancel Runs;
+- process recovery: on startup, terminate abandoned Codex main-task/consultation processes that have lost their Run owner and converge orphaned Runs to `interrupted`.
 
-## 1. 准备环境
+Not yet available: `resume`, `logs --follow`, a background daemon, or arbitrary workflow orchestration.
+
+## 1. Prepare the environment
 
 ```bash
 cd /Users/mengweifei/Desktop/code/github/archmage
@@ -27,17 +29,17 @@ codex --version
 codex login status
 ```
 
-Archmage 使用当前 `PATH` 中的 Git/Codex 和当前 Codex 登录、模型配置，不会静默切换账号或模型。
+Archmage uses Git/Codex from the current `PATH` and the current Codex login and model configuration. It does not silently switch accounts or models.
 
-如需隔离开发数据：
+To isolate development data:
 
 ```bash
 export ARCHMAGE_HOME="$HOME/Library/Application Support/archmage-dev"
 ```
 
-CLI 与桌面端必须使用相同的 `ARCHMAGE_HOME`，才能看到同一批 Run。
+The CLI and desktop must use the same `ARCHMAGE_HOME` to see the same Runs.
 
-## 2. 安装并运行 CLI
+## 2. Install and run the CLI
 
 ```bash
 cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
@@ -46,15 +48,15 @@ archmage doctor --offline
 archmage doctor
 ```
 
-执行真实四能力流程：
+Run the real four-capability flow:
 
 ```bash
 archmage run \
   --repo /absolute/path/to/repository \
-  --goal "实现一个可验证的小功能"
+  --goal "Implement a small, verifiable feature"
 ```
 
-查询和取消：
+Inspect and cancel:
 
 ```bash
 archmage status <run-id> --json
@@ -62,34 +64,33 @@ archmage logs <run-id>
 archmage cancel <run-id>
 ```
 
-`run` 会等待终态；`logs` 读取持久化事件但暂不支持 `--follow`；`resume` 暂未实现。
-当前 CLI 的 `run` 未提供 `--team` 参数，会使用默认团队；要选择自建团队，请在桌面客户端的新建 Run 页面操作。
+`run` waits for a terminal state. `logs` reads persisted events but does not support `--follow`; `resume` is not implemented. The current CLI `run` has no `--team` option and uses the default Team. Select a custom Team from the desktop New Run page.
 
-## 3. 启动桌面客户端
+## 3. Start the desktop client
 
 ```bash
 ./scripts/dev-desktop.sh
 ```
 
-第一次使用时先进入“Agent 管理”，检查本地 Codex CLI，再点击“验证连接”执行真实只读请求。然后在“Capability 管理”确认四个独立能力各自绑定的 Agent，并可填写角色补充提示词、手动添加 Skill/Tool 名称与用途；在“团队管理”创建消息流团队、选择能力并在画布上连线，最后回到“新建 Run”选择团队、Git 仓库并填写目标。Skill/Tool 配置只作为给真实 Agent 的提示词指引，不验证它们是否安装，也不限制可调用范围。详细操作和关闭语义见 [桌面客户端使用手册](runbooks/desktop-s0.md)。
+On first use, open Agent Management, inspect the local Codex CLI, and click Verify Connection to make a real read-only request. In Capability Management, confirm the Agent bound to each of the four capabilities; optionally add role-specific instructions and manual Skill/Tool names and purposes. In Team Management, create a message-flow Team, select capabilities, and connect them on the canvas. Finally, return to New Run, select the Team and Git repository, and enter the goal. Skill/Tool configuration is advisory prompt guidance: it neither verifies installation nor restricts callable scope. See the [desktop client guide](runbooks/desktop-s0.md) for detailed operation and shutdown behavior.
 
-## 4. Runtime 的关键语义
+## 4. Key Runtime semantics
 
-- 一个 Run 包含团队中选择的多个 Node；当前有四种内置能力可供选择；
-- 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
-- Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；Runtime 内置职责及输出契约固定，角色补充提示词和 Skill/Tool 指引可配置；
-- 新建团队使用消息流模式：至少选择两个能力，显式选择入口及可发出完成信号的能力，并在画布上连接有向边；允许 Coder → Reviewer → Coder 这样的反馈环。每次交付触发目标能力的一次真实 Codex 执行；Agent 通过结构化结果选择一个或多个已连接的下游，终止节点可选择完成。执行串行，循环最多 24 次，待处理消息会在终止时标记为跳过；
-- 默认团队和既有团队仍使用历史咨询模式：边触发只读咨询、下游认可门禁和最多三轮修改。旧团队可以显式复制为消息流团队，原团队不会被改变；
-- Run 启动时冻结所选团队、能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
-- 每个节点有独立 Codex thread/result 与显式 Context/Handoff；
-- Tester 直接获得测试任务、工作区和上游产物，由绑定的真实 Codex 自主选择测试方式与命令；
-- 所有状态转换与事件写入 SQLite；
-- 每个 Run 使用独立 Git worktree，用户仓库 checkout 不作为执行工作区；
-- 没有 daemon：客户端或 CLI 退出后不会继续调度新节点。
+- A Run contains the Nodes selected by its Team; four built-in capability types are currently available.
+- Multiple capabilities do not require multiple long-lived Agent instances. The system supports several Codex instances and initially creates `codex-default`.
+- Agents are bound globally by capability in Capability Management; there is no per-Run override. Runtime-owned roles and output contracts remain fixed, while supplemental prompts and Skill/Tool guidance are configurable.
+- New Teams use message-flow mode: select at least two capabilities, explicitly choose entry and terminal-signal capabilities, and connect directed edges on the canvas. Feedback cycles such as Coder → Reviewer → Coder are allowed. Every delivery triggers one execution of the target capability's bound real Agent. Structured output selects one or more connected recipients, while the terminal capability may choose completion. Execution is serialized, cycles are limited to 24 steps, and pending deliveries become skipped at termination.
+- The default and existing Teams retain legacy consultation mode: edges trigger read-only consultation, downstream approval gates, and up to three revision rounds. An old Team can be copied explicitly into a message-flow Team without changing the original.
+- Run creation freezes the selected Team, Capability configuration, and concrete Agent bindings. Later global changes do not alter historical Runs.
+- Each Node has an independent provider result plus explicit Context/Handoff.
+- Tester receives the testing task, workspace, and upstream artifacts directly; its bound real Agent chooses test methods and commands.
+- Every state transition and event is written to SQLite.
+- Every Run uses an isolated Git worktree; the user's repository checkout is not the execution workspace.
+- There is no daemon: after the client or CLI exits, no new node is scheduled.
 
-## 5. 开发验证
+## 5. Development verification
 
-不调用模型的常规检查：
+Routine checks that do not call a model:
 
 ```bash
 cargo fmt --all --check
@@ -101,35 +102,35 @@ cargo check -p archmage-desktop
 git diff --check
 ```
 
-需要真实 Codex 的测试默认标记为 ignored，普通 `cargo test` 不会消耗模型额度。在线环境探针：
+Tests that require real Codex are ignored by default, so normal `cargo test` does not consume model quota. Online environment probe:
 
 ```bash
 cargo test -p archmage-core --test codex_live real_readonly_probe \
   -- --ignored --nocapture
 ```
 
-Runtime 主链的最终验收应使用一个临时 Git fixture 和真实 Codex，确认四个节点都进入成功终态、Tester 记录实际选择的命令，并由 Reviewer 给出 outcome。
+Final acceptance of the main Runtime chain should use a temporary Git fixture and real Codex, verify that all four nodes reach a successful terminal state, that Tester records commands it actually selected, and that Reviewer produces the outcome.
 
-## 6. 数据与诊断
+## 6. Data and diagnostics
 
-`archmage doctor --offline` 输出的 `config.data_root` 是实际数据目录。主要内容包括：
+`config.data_root` in `archmage doctor --offline` is the actual data directory. Its main contents are:
 
-- `archmage.db`：schema v15 的执行账本、Agent 实例、能力配置、团队、交付消息、咨询与事件；
-- Run worktree 与 Artifact；
-- Codex JSONL、stderr 和 metadata 诊断。
+- `archmage.db`: the schema-v15 execution ledger, Agent instances, Capability configurations, Teams, delivery messages, consultations, and events;
+- Run worktrees and Artifacts;
+- Codex JSONL, stderr, and metadata diagnostics.
 
-诊断可能包含本机路径、目标代码或模型上下文，不要未经脱敏就上传或提交 Git。不要手工修改 SQLite；Runtime 依赖 revision、事务、外键和事件顺序维持状态一致性。
+Diagnostics may contain local paths, target code, or model context. Do not upload or commit them without sanitization. Do not edit SQLite manually; Runtime relies on revisions, transactions, foreign keys, and event order to preserve state consistency.
 
-## 常见问题
+## Troubleshooting
 
-### CLI 查不到桌面端创建的 Run
+### The CLI cannot find a Run created by the desktop
 
-检查两边的 `ARCHMAGE_HOME` 是否一致。未显式设置时，两者都使用系统应用数据目录。
+Confirm both processes use the same `ARCHMAGE_HOME`. When it is unset, both use the operating-system application data directory.
 
-### 离线 Doctor 成功，在线 Doctor 失败
+### Offline Doctor succeeds but online Doctor fails
 
-离线检查不验证登录、网络、额度或模型服务。查看错误给出的 diagnostics 路径，并在分享前脱敏。
+Offline checks do not verify login, network, quota, or model service. Inspect the diagnostics path in the error and sanitize files before sharing.
 
-### 关闭客户端后 Run 会继续吗
+### Does a Run continue after the client closes?
 
-不会。正常关闭时客户端会提示并取消当前会话启动的活跃 Run；异常退出留下的孤儿 Run 会在下次启动时被标记为 `interrupted`，存活的 Codex 主任务或咨询进程会先被终止。当前需要重新创建 Run，等待后续实现 `resume`。
+No. On normal close, the client asks to cancel active Runs started in that session. An orphaned Run from an abnormal exit becomes `interrupted` on the next startup, after active Codex main-task or consultation processes are terminated. Recreate the Run until `resume` is implemented.

@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/architecture/workspace-and-git.md) | English
+
 # Workspace and Git
 
 ## Run baseline

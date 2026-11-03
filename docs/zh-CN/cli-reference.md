@@ -1,3 +1,5 @@
+简体中文 | [English](../en/cli-reference.md)
+
 # Archmage CLI 命令手册
 
 更新日期：2026-09-28。本手册描述当前代码的真实行为。

@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/architecture/persistence-and-events.md) | English
+
 # Persistence and Events
 
 ## Storage split

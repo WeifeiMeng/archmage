@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/runbooks/codex-provider.md) | English
+
 # Codex Provider Runbook
 
 ## Purpose

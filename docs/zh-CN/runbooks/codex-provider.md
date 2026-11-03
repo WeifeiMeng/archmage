@@ -1,55 +1,57 @@
-# Codex Provider Runbook
+简体中文 | [English](../../en/runbooks/codex-provider.md)
 
-## Purpose
+# Codex Provider 操作手册
 
-This runbook defines S0 preflight and diagnostic expectations for the real local Codex CLI provider. It is a design-time contract until the `archmage doctor` command is implemented.
+## 目的
 
-## Supported invocation surface
+本手册定义 S0 真实本地 Codex CLI Provider 的 preflight 与诊断预期。在 `archmage doctor` 实现之前，它是一份设计阶段契约。
 
-S0 depends on Codex non-interactive mode and verifies the live CLI rather than assuming a fixed installation path:
+## 支持的调用接口
+
+S0 依赖 Codex 非交互模式，并验证实际 CLI，而不是假定固定安装路径：
 
 ```bash
 codex --version
 codex exec --help
 ```
 
-The required flags are `--cd`, `--sandbox`, `--json`, `--output-schema`, and `--output-last-message`. See the official [Codex non-interactive mode documentation](https://learn.chatgpt.com/docs/non-interactive-mode).
+必需 flag 为 `--cd`、`--sandbox`、`--json`、`--output-schema` 与 `--output-last-message`。参见官方 [Codex 非交互模式文档](https://learn.chatgpt.com/docs/non-interactive-mode)。
 
-## Preflight checks
+## Preflight 检查
 
-`archmage doctor` must report:
+`archmage doctor` 必须报告：
 
-1. Resolved Codex executable path and version.
-2. Availability of every required `codex exec` flag.
-3. Git executable and version.
-4. Archmage data-root path and writeability.
-5. SQLite database open and migration status.
-6. Authentication usability through a bounded, non-code-changing Codex probe.
+1. 解析后的 Codex executable 路径与版本。
+2. 每个必需 `codex exec` flag 是否可用。
+3. Git executable 与版本。
+4. Archmage 数据根目录路径及可写性。
+5. SQLite 数据库打开与迁移状态。
+6. 通过有界、不修改代码的 Codex probe 判断认证是否可用。
 
-The probe must not print or persist credential material. A failed probe reports a typed provider error and the sanitized stderr needed for diagnosis.
+Probe 不得输出或持久化凭证材料。Probe 失败时应报告类型化 Provider 错误以及诊断所需的脱敏 stderr。
 
-## Invocation policy
+## 调用策略
 
-- Pass the complete prompt through stdin using the `-` sentinel.
-- Set the worktree explicitly with `--cd`.
-- Select `read-only` or `workspace-write` from the Capability permission.
-- Enable `--json` and persist stdout as JSONL.
-- Pass the versioned Capability schema with `--output-schema`.
-- Write the final response to an attempt-owned path with `--output-last-message`.
-- Never use `danger-full-access` in S0.
-- Do not use `codex exec resume` for normal Handoffs or Archmage recovery.
+- 使用 `-` sentinel 通过 stdin 传入完整 prompt。
+- 用 `--cd` 显式设置 worktree。
+- 根据 Capability 权限选择 `read-only` 或 `workspace-write`。
+- 启用 `--json` 并将 stdout 持久化为 JSONL。
+- 使用 `--output-schema` 传入带版本的 Capability Schema。
+- 使用 `--output-last-message` 将最终响应写入 Attempt 所属路径。
+- S0 绝不使用 `danger-full-access`。
+- 正常 Handoff 或 Archmage 恢复不使用 `codex exec resume`。
 
-## Diagnostic classification
+## 诊断分类
 
-| Symptom | Archmage classification | Operator action |
+| 症状 | Archmage 分类 | 操作员行动 |
 |---|---|---|
-| Executable missing | `preflight_failed` | Install Codex CLI and retry `doctor` |
-| Required flag missing | `preflight_failed` | Upgrade the local Codex CLI |
-| Login or entitlement failure | `auth_failed` | Authenticate with Codex and rerun the bounded probe |
-| Non-zero node exit | `cli_failed` | Inspect attempt stderr and JSONL events |
-| No valid final JSON | `contract_invalid` | Inspect raw final message, schema, and prompt version |
-| Runtime killed mid-run | `interrupted` after reconciliation | Run `archmage resume <run-id>` |
+| 找不到 executable | `preflight_failed` | 安装 Codex CLI 并重试 `doctor` |
+| 缺少必需 flag | `preflight_failed` | 升级本地 Codex CLI |
+| 登录或 entitlement 失败 | `auth_failed` | 完成 Codex 认证并重新运行有界 probe |
+| 节点非零退出 | `cli_failed` | 检查 Attempt stderr 与 JSONL Event |
+| 没有有效最终 JSON | `contract_invalid` | 检查原始最终消息、Schema 和 prompt 版本 |
+| Runtime 在运行中被终止 | 对账后为 `interrupted` | 运行 `archmage resume <run-id>` |
 
-## Version evidence
+## 版本证据
 
-Every Agent Run records the Codex CLI version. Acceptance reports include the version so protocol regressions can be reproduced.
+每个 Agent Run 都记录 Codex CLI 版本。验收报告包含该版本，以便复现协议回归。

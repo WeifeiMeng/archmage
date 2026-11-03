@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/architecture/runtime-and-state.md) | English
+
 # Runtime and State
 
 ## Definition and execution separation

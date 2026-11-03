@@ -1,6 +1,8 @@
+[简体中文](../zh-CN/README.md) | English
+
 # Archmage Documentation
 
-This directory is the maintained source of truth for product scope, concepts, architecture, delivery stages, decisions, and operating procedures. The original [product brief](../target.md) is preserved as an input, not treated as an executable specification.
+This directory is the maintained source of truth for product scope, concepts, architecture, delivery stages, decisions, and operating procedures. The original [product brief](../../target.md) is preserved as an input, not treated as an executable specification.
 
 ## Recommended reading order
 
@@ -10,7 +12,7 @@ Team composition update: [Selectable Capabilities and relationships](superpowers
 
 Current Team increment: [Message-flow Teams](superpowers/specs/2026-10-14-message-flow-teams-design.md) adds Agent-selected deliverable routes, feedback cycles, and an explicit terminal signal for new Teams. The [implementation plan](superpowers/plans/2026-10-14-message-flow-teams.md) tracks its development. Existing Teams retain consultation semantics.
 
-**Want to run the current code?** Use the [CLI command reference (中文)](cli-reference.md) or [desktop client guide (中文)](runbooks/desktop-s0.md). The [current-version guide (中文)](guide.md) adds contributor tests and architecture details.
+**Want to run the current code?** Use the [CLI command reference](cli-reference.md) or [desktop client guide](runbooks/desktop-s0.md). The [current-version guide](guide.md) adds contributor tests and architecture details.
 
 1. [CLI command reference](cli-reference.md)
 2. [Desktop client guide](runbooks/desktop-s0.md)

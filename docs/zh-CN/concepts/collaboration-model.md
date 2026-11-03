@@ -1,8 +1,10 @@
-# Collaboration Model
+简体中文 | [English](../../en/concepts/collaboration-model.md)
 
-## Logical agents over provider instances
+# 协作模型
 
-Archmage models collaboration through distinct capabilities rather than requiring multiple vendor products or persistent agent processes.
+## Provider 实例之上的逻辑 Agent
+
+Archmage 通过彼此独立的 Capability 建模协作，而不要求使用多个供应商产品或持久 Agent 进程。
 
 ```text
 Codex CLI Provider
@@ -12,11 +14,11 @@ Codex CLI Provider
   └── Reviewer Capability Agent
 ```
 
-Each Capability Agent has its own instruction, permissions, input contract, output contract, Context Snapshot, and provider session. Sharing a provider does not merge these boundaries.
+每个 Capability Agent 都有自己的指令、权限、输入契约、输出契约、Context Snapshot 与 Provider 会话。共享同一个 Provider 不会合并这些边界。
 
-## Communication
+## 通信
 
-Capability Agents communicate through Handoffs:
+Capability Agent 通过 Handoff 通信：
 
 ```text
 workflow input
@@ -26,17 +28,17 @@ workflow input
   → Reviewer → ReviewResult
 ```
 
-The runtime resolves Context References, freezes a Context Snapshot, renders the capability prompt, invokes the provider, validates the result, and publishes artifacts. A downstream node never reads an upstream provider's hidden conversation history.
+Runtime 会解析 Context Reference、冻结 Context Snapshot、渲染 Capability prompt、调用 Provider、校验结果并发布 Artifact。下游节点不会读取上游 Provider 的隐藏对话历史。
 
-## Why sessions are independent
+## 为什么会话彼此独立
 
-- The UI can show exactly what an agent saw.
-- A failed attempt can be replayed from the same inputs.
-- Provider-specific history does not become an undocumented dependency.
-- A capability can later move to another provider without changing its consumers.
+- UI 可以准确展示 Agent 实际看到的内容。
+- 失败的 Attempt 可以使用相同输入重放。
+- Provider 特定历史不会变成未记录的依赖。
+- Capability 之后可以切换到其他 Provider，而无需改变消费者。
 
-The accepted cost is repeated context transfer. Archmage favors reproducibility and provider independence over opaque session continuity.
+代价是需要重复传输上下文。相较于不透明的会话连续性，Archmage 更重视可复现性与 Provider 独立性。
 
-## Shared workspace rules
+## 共享工作区规则
 
-Nodes declare `none`, `read`, or `write` workspace access. The scheduler may execute multiple ready nodes concurrently when their dependency and access constraints are compatible. A write node holds an exclusive lease for the run's worktree; `none` nodes can execute alongside it, and multiple readers may execute together against frozen Context Snapshots.
+节点声明 `none`、`read` 或 `write` 工作区访问权限。当依赖和访问约束兼容时，Scheduler 可以并发执行多个已就绪节点。写节点独占该 Run 的 worktree lease；`none` 节点可以与其同时执行，多个读节点也可以基于冻结的 Context Snapshot 并行执行。

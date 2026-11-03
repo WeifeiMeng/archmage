@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/roadmap/stages/s0-real-codex-slice.md) | English
+
 # S0: Real Codex Vertical Slice
 
 **Status:** Approved for implementation planning

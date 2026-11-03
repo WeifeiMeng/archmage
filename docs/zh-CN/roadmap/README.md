@@ -1,40 +1,42 @@
-# Delivery Roadmap
+简体中文 | [English](../../en/roadmap/README.md)
 
-## Strategy
+# 交付路线图
 
-The original brief separates the system into horizontal milestones M0–M7. Archmage will instead deliver vertical stages S0–S4 so every stage produces a runnable, testable increment. This changes sequencing, not product intent.
+## 策略
 
-## Stages
+原始说明把系统拆成横向里程碑 M0–M7。Archmage 改为交付垂直阶段 S0–S4，使每个阶段都产出可运行、可测试的增量。这改变的是顺序，而不是产品意图。
 
-| Stage | Runnable outcome | Depends on | Exit criterion |
+## 阶段
+
+| 阶段 | 可运行成果 | 依赖 | 退出条件 |
 |---|---|---|---|
-| [S0](stages/s0-real-codex-slice.md) | Real Codex provider coordinates Designer, Coder, Tester, and Reviewer in a fixed workflow | None | One command completes and recovers a real repository run with auditable handoffs |
-| S1: Closed-loop workflow | Definitions become externalized; condition, retry, Fixer loop, and human gate work | S0 | Review can approve or route through bounded Fix/Test/Review iterations |
-| S2: Provider expansion | Capabilities can bind to Claude Code, Qoder, or Codex through adapters | S1 | One workflow demonstrably uses at least two providers without changing capability contracts |
-| S3: Desktop MVP | Tauri and React expose project, run, node context, timeline, workspace, and provider management | S2 | The S1 workflow can be started, observed, interrupted, and resumed from the desktop |
-| S4: Alpha hardening | Failure recovery, permissions, packaging, diagnostics, and observability meet alpha quality | S3 | The defined failure matrix and release checklist pass on supported platforms |
+| [S0](stages/s0-real-codex-slice.md) | 真实 Codex Provider 在固定 Workflow 中协调 Designer、Coder、Tester 与 Reviewer | 无 | 一条命令完成并恢复真实仓库 Run，且 Handoff 可审计 |
+| S1：闭环 Workflow | 定义外部化；条件、重试、Fixer 循环与人工门禁可用 | S0 | Review 能批准，或在有界 Fix/Test/Review 迭代中路由 |
+| S2：Provider 扩展 | Capability 可通过 Adapter 绑定 Claude Code、Qoder 或 Codex | S1 | 至少两个 Provider 在不改变 Capability 契约的情况下共同完成一个 Workflow |
+| S3：桌面 MVP | Tauri 与 React 展示 Project、Run、节点上下文、Timeline、Workspace 和 Provider 管理 | S2 | 可从桌面启动、观察、中断并恢复 S1 Workflow |
+| S4：Alpha 加固 | 故障恢复、权限、打包、诊断和可观测性达到 Alpha 质量 | S3 | 支持平台上的故障矩阵与发布清单全部通过 |
 
-## Original milestone traceability
+## 原始里程碑可追踪性
 
-| Original brief | Primary delivery | Notes |
+| 原始说明 | 主要交付 | 备注 |
 |---|---|---|
-| M0 Domain & Runtime Foundation | S0, S1 | S0 implements only the model needed by the real vertical slice; S1 generalizes definitions and control flow |
-| M1 Agent Execution Layer | S0, S2 | S0 proves Codex; S2 proves the adapter architecture with additional providers |
-| M2 Workspace Runtime | S0 | Real per-run Git worktrees are required in the first slice |
-| M3 Capability & Contract | S0, S1 | S0 ships four built-in capabilities; S1 externalizes versioned definitions |
-| M4 Context + Workflow Engine | S0, S1 | S0 provides explicit context and scheduling; S1 adds conditions, loops, retry, and human gates |
-| M5 Coding Collaboration Loop | S0, S1 | S0 proves Design/Code/Test/Review; S1 adds the Fix loop |
-| M6 Desktop Product MVP | S3 | Runtime remains independent of Tauri |
-| M7 Stability & Alpha | S0, S4 | S0 establishes crash-safe invariants; S4 expands the failure matrix and release quality |
+| M0 Domain & Runtime Foundation | S0、S1 | S0 只实现真实垂直切片需要的模型；S1 泛化定义与控制流 |
+| M1 Agent Execution Layer | S0、S2 | S0 验证 Codex；S2 用更多 Provider 验证 Adapter 架构 |
+| M2 Workspace Runtime | S0 | 第一个切片就要求每个 Run 使用真实 Git worktree |
+| M3 Capability & Contract | S0、S1 | S0 提供四个内置 Capability；S1 外部化带版本定义 |
+| M4 Context + Workflow Engine | S0、S1 | S0 提供显式上下文与调度；S1 增加条件、循环、重试和人工门禁 |
+| M5 Coding Collaboration Loop | S0、S1 | S0 验证 Design/Code/Test/Review；S1 增加 Fix 循环 |
+| M6 Desktop Product MVP | S3 | Runtime 继续独立于 Tauri |
+| M7 Stability & Alpha | S0、S4 | S0 建立崩溃安全不变量；S4 扩展故障矩阵与发布质量 |
 
-## Priority traceability
+## 优先级可追踪性
 
-| Original priority | Delivery treatment |
+| 原始优先级 | 交付安排 |
 |---|---|
-| P0 | Collaboration spine in S0; closed loop in S1; runtime views in S3 |
-| P1 | Human gate and permissions begin in S1; provider discovery and usage arrive in S2; IDE actions arrive in S3 |
-| P2 | Remains outside S0–S4 unless a later approved roadmap revision promotes it |
+| P0 | S0 完成协作主干；S1 闭环；S3 提供 Runtime 视图 |
+| P1 | S1 开始人工门禁与权限；S2 增加 Provider 发现与使用；S3 增加 IDE 操作 |
+| P2 | 保持在 S0–S4 之外，除非之后批准的 Roadmap 修订提升其优先级 |
 
-## Stage document rule
+## 阶段文档规则
 
-Only the current or next stage is expanded into a detailed spec and implementation plan. Later stages keep a goal, dependency set, scope boundary, and exit criterion until earlier evidence makes detailed design responsible.
+只有当前或下一阶段会展开为详细规格与实施计划。之后的阶段只保留目标、依赖集合、范围边界和退出条件，直到前序证据足以支持负责任的详细设计。

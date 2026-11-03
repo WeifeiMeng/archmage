@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/architecture/context-and-contracts.md) | English
+
 # Context and Contracts
 
 ## Context binding

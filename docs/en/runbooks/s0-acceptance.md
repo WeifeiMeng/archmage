@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/runbooks/s0-acceptance.md) | English
+
 # S0 Real Codex Acceptance Runbook
 
 ## Purpose

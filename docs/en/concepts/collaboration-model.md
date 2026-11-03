@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/concepts/collaboration-model.md) | English
+
 # Collaboration Model
 
 ## Logical agents over provider instances
