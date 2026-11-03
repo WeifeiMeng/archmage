@@ -1,3 +1,5 @@
+简体中文 | [English](../../../en/acceptance/s0/batch-c-progress.md)
+
 # C 批次：Capability Contract 与 Check Runner
 
 2026-09-17，`codex/s0-runtime-fencing`。本记录覆盖 Task 08–10，不代表 C 批次或 S0 完成。

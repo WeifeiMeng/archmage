@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/adr/0002-separate-provider-and-capability-agent.md) | English
+
 # ADR 0002: Separate Provider and Capability Agent
 
 **Status:** Accepted

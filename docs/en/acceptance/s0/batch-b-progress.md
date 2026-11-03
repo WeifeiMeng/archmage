@@ -1,41 +1,36 @@
-# B 批次：存储基础检查点
+[简体中文](../../../zh-CN/acceptance/s0/batch-b-progress.md) | English
 
-2026-09-17，feat/s0-codex。本检查点不是 B 批次完成或 S0 完成声明。
+# Batch B: Storage foundation checkpoint
 
-## 已实现
+2026-09-17, `feat/s0-codex`. This checkpoint is not a claim that Batch B or S0 is complete.
 
-- SQLite schema v3、事务迁移、WAL、foreign_keys、FULL synchronous、5 秒 busy timeout。
-- Run、NodeRun、attempt 分离；Runtime 生成 UUID；唯一 active attempt。
-- revision/state CAS；状态和事件在同一事务提交。
-- 按 Run 单调事件序列、cursor 查询；active attempt 查询只读。
-- Artifact 私有文件、sync 后发布、SHA-256/长度校验、元数据与 artifact.created 同事务。
-- 仅成功 attempt 的 Artifact 可读作 committed input；未登记文件不可引用。
-- doctor（在线和离线）打开 archmage.db 并返回真实数据库检查结果。
-- 每 Run 的 Workspace provisioning intent；Git 创建失败时保留 intent，不删除碰撞路径。
-- 从 committed baseline 创建真实分支/worktree，dirty source 不进入 Run Worktree。
-- 内容级 Snapshot 覆盖 index diff、working diff、tracked/untracked/binary 文件和 symlink target。
-- provisioning 重启对账只接受 path、branch、baseline、common-dir 全部匹配的已登记 Worktree。
-- ChangeSet 将 tracked binary patch、每个 untracked 内容和 canonical manifest 发布为 attempt-owned Artifact。
-- Unix attempt 使用独立 session/process group；取消验证 PID/PGID/启动标识，并按 TERM、宽限、KILL、wait 确认执行。
-- 每 Run OS owner lock 互斥调度器；数据库 owner generation fencing 拒绝旧 owner 登记进程或提交终态。
+## Implemented
 
-## 验证范围
+- SQLite schema v3, transactional migrations, WAL, foreign keys, FULL synchronous mode, and a five-second busy timeout.
+- Separate Run, NodeRun, and attempt records; Runtime-generated UUIDs; one unique active attempt.
+- Revision/state CAS; state and events committed in the same transaction.
+- Monotonic per-Run event sequence and cursor queries; active-attempt queries are read-only.
+- Private Artifact files, publish after sync, SHA-256/length verification, and metadata plus `artifact.created` in one transaction.
+- Only Artifacts from successful attempts are readable as committed input; unregistered files cannot be referenced.
+- Online and offline Doctor open `archmage.db` and return real database inspection results.
+- Per-Run Workspace provisioning intent; failed Git creation preserves intent and does not delete colliding paths.
+- Real branch/worktree creation from a committed baseline; dirty source changes do not enter the Run worktree.
+- Content-level Snapshot covers index diff, working diff, tracked/untracked/binary files, and symlink targets.
+- Provisioning reconciliation after restart accepts a registered worktree only when path, branch, baseline, and common-dir all match.
+- ChangeSet publishes tracked binary patches, each untracked file's contents, and a canonical manifest as attempt-owned Artifacts.
+- Unix attempts use a separate session/process group; cancellation validates PID/PGID/start identity and performs TERM, grace, KILL, and wait confirmation.
+- One OS owner lock per Run excludes competing schedulers; database owner-generation fencing rejects stale owners registering processes or committing terminal state.
 
-使用临时真实 SQLite，而非模拟存储。覆盖重开、重复迁移、错误 schema、
-并发领取、重复完成、外键失败、事件注入失败时回滚，以及 Artifact 篡改、
-丢失、越界 ID、symlink root、登记失败的孤儿文件。真实临时 Git 仓库测试还覆盖
-dirty source 隔离、空格路径、两个 Run、unborn HEAD、碰撞 intent、partial provisioning
-恢复和 ChangeSet Artifact。普通 shell 测试覆盖双流输出、超限、超时、错误身份拒绝、
-TERM 宽限和忽略 TERM 后整个进程树 KILL。
+## Verification scope
 
-## 明确尚未实现
+Tests use real temporary SQLite rather than simulated storage. They cover reopen, repeated migrations, invalid schema, concurrent claim, repeated completion, foreign-key failure, rollback after event-insertion failure, Artifact tampering, missing files, out-of-range IDs, symlink roots, and orphan files after registration failure. Real temporary Git repository tests also cover dirty-source isolation, paths with spaces, two Runs, unborn HEAD, colliding intent, partial-provision recovery, and ChangeSet Artifacts. Ordinary shell tests cover dual-stream output, limits, timeout, wrong-identity rejection, TERM grace, and killing the whole process tree after TERM is ignored.
 
-- Project/Provider/Capability/Context/Handoff/check/control 的完整持久化模型。
-- 终态、Contract 校验输出及 Handoff 的整体提交；当前 finish_attempt 只是内部 ledger API，
-  调用方必须先做 Contract 校验，不是用户可直接使用的工作流入口。
-- 跨节点调度和 Runtime 恢复编排。
-- 原子文件发布前后的进程崩溃注入矩阵及敌对文件系统 TOCTOU 加固。
-- source 前后不变量检查，以及非精确 partial provisioning 的人工诊断入口。
+## Explicitly not implemented
 
-只有 SQL 查询和持久化，不会在打开数据库时自动恢复或启动 Agent。
-run/status/logs/resume/cancel 的 CLI 业务仍未接线。未自动合并 main 或 push。
+- Complete persistence models for Project/Provider/Capability/Context/Handoff/check/control.
+- Atomic commit of terminal state, Contract-validated output, and Handoff; `finish_attempt` was only an internal ledger API whose caller had to validate the Contract first, not a user-facing Workflow entry point.
+- Cross-node scheduling and Runtime recovery orchestration.
+- Process-crash injection matrix around atomic file publication and adversarial-filesystem TOCTOU hardening.
+- Source before/after invariants and a manual diagnostic entry point for non-exact partial provisioning.
+
+Opening the database only performs SQL queries and persistence; it does not automatically recover or start Agents. CLI business wiring for `run`, `status`, `logs`, `resume`, and `cancel` was still absent. Nothing was automatically merged to main or pushed.

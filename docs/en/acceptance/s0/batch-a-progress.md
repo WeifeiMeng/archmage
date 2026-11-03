@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/acceptance/s0/batch-a-progress.md) | English
+
 # Batch A implementation checkpoint
 
 ## 2026-09-17 follow-up

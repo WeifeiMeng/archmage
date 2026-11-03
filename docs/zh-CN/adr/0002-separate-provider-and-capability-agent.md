@@ -1,20 +1,22 @@
-# ADR 0002: Separate Provider and Capability Agent
+简体中文 | [English](../../en/adr/0002-separate-provider-and-capability-agent.md)
 
-**Status:** Accepted
+# ADR 0002：分离 Provider 与 Capability Agent
 
-**Date:** 2026-09-16
+**状态：** 已接受
 
-## Context
+**日期：** 2026-09-16
 
-The product must support multi-agent collaboration even when a user initially has only one local agent product installed.
+## 背景
 
-## Decision
+即使用户最初只安装了一个本地 Agent 产品，产品也必须支持多 Agent 协作。
 
-A Provider is the physical execution backend. A Capability Agent is a logical role created by binding a Capability to a Provider. S0 uses one Codex CLI Provider for four Capability Agents: Designer, Coder, Tester, and Reviewer.
+## 决策
 
-## Consequences
+Provider 是物理执行后端。Capability Agent 是把 Capability 绑定到 Provider 后形成的逻辑角色。S0 使用一个 Codex CLI Provider 执行 Designer、Coder、Tester 与 Reviewer 四个 Capability Agent。
 
-- Multi-agent semantics do not require multiple vendor products or persistent instances.
-- Provider configuration and capability contracts evolve independently.
-- S2 can move a capability to another provider without changing Handoff consumers.
-- UI and documentation must not use “Agent” ambiguously when Provider or Capability Agent is intended.
+## 后果
+
+- 多 Agent 语义不要求多个供应商产品或持久实例。
+- Provider 配置与 Capability 契约可独立演进。
+- S2 可以把某个 Capability 移到其他 Provider，而无需改变 Handoff 消费者。
+- UI 与文档在实际意指 Provider 或 Capability Agent 时，不得含糊地使用“Agent”。

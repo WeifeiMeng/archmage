@@ -1,19 +1,21 @@
-# ADR 0001: Deliver Vertical Slices
+简体中文 | [English](../../en/adr/0001-deliver-vertical-slices.md)
 
-**Status:** Accepted
+# ADR 0001：交付垂直切片
 
-**Date:** 2026-09-16
+**状态：** 已接受
 
-## Context
+**日期：** 2026-09-16
 
-The original brief orders horizontal foundations before real agent execution and product validation. That sequence can produce generalized abstractions before the collaboration contract is tested against a real provider and repository.
+## 背景
 
-## Decision
+原始说明先安排横向基础设施，再进行真实 Agent 执行与产品验证。这种顺序可能在协作契约尚未经过真实 Provider 和仓库验证前，就产生泛化抽象。
 
-Deliver S0–S4 as runnable vertical stages. S0 crosses the original M0–M5 layers to prove one real Codex collaboration path. Later stages generalize only after evidence from earlier stages.
+## 决策
 
-## Consequences
+以可运行的垂直阶段 S0–S4 交付。S0 横跨原始 M0–M5 层级，验证一条真实 Codex 协作路径。后续阶段仅在取得前序证据后再泛化。
 
-- S0 must implement thin versions of persistence, workspace, capability, context, contract, and workflow concerns together.
-- Some S0 definitions are built in and deliberately not user-editable.
-- The roadmap maintains explicit traceability to M0–M7 and P0–P2 so resequencing does not drop requirements.
+## 后果
+
+- S0 必须同时实现持久化、Workspace、Capability、Context、Contract 与 Workflow 的精简版本。
+- 部分 S0 定义内置且有意不允许用户编辑。
+- Roadmap 保持对 M0–M7 与 P0–P2 的显式可追踪性，确保调整顺序不会遗漏需求。

@@ -1,3 +1,5 @@
+简体中文 | [English](../../../en/acceptance/s0/batch-b-progress.md)
+
 # B 批次：存储基础检查点
 
 2026-09-17，feat/s0-codex。本检查点不是 B 批次完成或 S0 完成声明。

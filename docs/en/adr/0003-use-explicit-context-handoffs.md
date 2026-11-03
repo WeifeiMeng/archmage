@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/adr/0003-use-explicit-context-handoffs.md) | English
+
 # ADR 0003: Use Explicit Context Handoffs
 
 **Status:** Accepted

@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/adr/0005-use-real-codex-only-in-product-flow.md) | English
+
 # ADR 0005: Use Real Codex Only in the Product Flow
 
 **Status:** Accepted

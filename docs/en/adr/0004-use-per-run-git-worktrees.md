@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/adr/0004-use-per-run-git-worktrees.md) | English
+
 # ADR 0004: Use Per-Run Git Worktrees
 
 **Status:** Accepted

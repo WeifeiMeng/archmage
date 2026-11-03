@@ -1,3 +1,5 @@
+[简体中文](../../zh-CN/adr/0001-deliver-vertical-slices.md) | English
+
 # ADR 0001: Deliver Vertical Slices
 
 **Status:** Accepted
