@@ -1,16 +1,18 @@
-# Agent Management and Goal-Driven Runs Implementation Plan
+# 代理管理和目标驱动的运行实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-09-28-agent-management-and-goal-runs.md)
 
-**Goal:** Add a real local Codex Agent management page with durable capability bindings, and let users start a Run with only a repository and goal while Tester autonomously performs validation.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** `archmage-core` owns a persisted Agent-instance registry, global capability bindings, real Codex discovery/probing, and immutable per-Run binding snapshots. Tauri exposes typed commands to React; the workbench adds an Agents destination and removes predeclared checks from new Runs without deleting legacy CheckRunner infrastructure.
+**目标：** 添加具有持久功能绑定的真正本地 Codex Agent 管理页面，并让用户仅使用存储库和目标即可启动运行，同时测试人员自主执行验证。
 
-**Tech Stack:** Rust 1.95, Tokio, rusqlite/SQLite, real Codex CLI, Tauri 2, React 19, TypeScript, Vite, Vitest.
+**架构：** `archmage-core` 拥有持久的代理实例注册表、全局功能绑定、真正的 Codex discovery/probing 和不可变的每次运行绑定快照。Tauri 将键入的命令暴露给 React；工作台添加了代理目标并从新运行中删除了预先声明的检查，而无需删除旧的 CheckRunner 基础设施。
+
+**技术堆栈：** Rust 1.95、Tokio、rusqlite/SQLite、真正的 Codex CLI、Tauri 2、React 19、TypeScript、Vite、Vitest。
 
 ---
 
-## File structure
+## 文件结构
 
 ```text
 crates/archmage-core/
@@ -40,16 +42,16 @@ docs/guide.md                           # Agent setup and Run usage
 docs/runbooks/desktop-s0.md             # real connection verification steps
 ```
 
-### Task 1: Persist Agent instances and capability bindings
+### 任务 1：保留 Agent 实例和功能绑定
 
-**Files:**
-- Create: `crates/archmage-core/migrations/0008_agents.sql`
-- Create: `crates/archmage-core/src/agent.rs`
-- Create: `crates/archmage-core/tests/agents.rs`
-- Modify: `crates/archmage-core/src/lib.rs`
-- Modify: `crates/archmage-core/src/store/mod.rs`
+**文件：**
+- 创建：`crates/archmage-core/migrations/0008_agents.sql`
+- 创建：`crates/archmage-core/src/agent.rs`
+- 创建：`crates/archmage-core/tests/agents.rs`
+- 修改：`crates/archmage-core/src/lib.rs`
+- 修改：`crates/archmage-core/src/store/mod.rs`
 
-- [ ] **Step 1: Write the failing migration and Store test**
+- [ ] **第 1 步：编写失败的迁移和存储测试**
 
 ```rust
 #[test]
@@ -71,17 +73,17 @@ fn stores_multiple_codex_instances_with_stable_ids() {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **第 2 步：运行 RED**
 
-Run: `cargo test -p archmage-core --test agents`
+运行： `cargo test -p archmage-core --test agents`
 
-Expected: compilation fails because migration v8 and Agent Store APIs do not exist.
+预期：编译失败，因为迁移 v8 和代理存储 API 不存在。
 
-- [ ] **Step 3: Add migration and typed records**
+- [ ] **步骤 3：添加迁移和键入记录**
 
-Create `agent_instances` with `id`, `provider_kind`, `display_name`, nullable `executable_path` and `model`, `enabled`, connectivity fields, timestamps, and JSON-safe constraints. Create `capability_bindings` keyed by the four built-in capability keys and referencing `agent_instances(id)`. Seed `codex-default` plus four bindings in the migration.
+使用 `id`、`provider_kind`、`display_name`、可空 `executable_path` 和 `model`、`enabled`、连接字段、时间戳和 JSON 安全约束创建 `agent_instances`。创建由四个内置功能键键入的 `capability_bindings`，并引用 `agent_instances(id)`。种子 `codex-default` 以及迁移中的四个绑定。
 
-Define these public types in `agent.rs`:
+在 `agent.rs` 中定义这些公共类型：
 
 ```rust
 pub enum ProviderKind { Codex, Claude, OpenClaw, Hermes }
@@ -92,31 +94,31 @@ pub struct AdapterDescriptor { pub kind: ProviderKind, pub supported: bool }
 pub struct AgentManagementSnapshot { pub adapters: Vec<AdapterDescriptor>, pub instances: Vec<AgentInstance>, pub bindings: Vec<CapabilityBinding> }
 ```
 
-Update Store migration sequencing to require schema version 8 and add CRUD/query methods. Reject binding an unknown, disabled, or unsupported instance. Reject disabling a currently bound instance.
+更新存储迁移顺序以需要架构版本 8 并添加 CRUD/query 方法。拒绝绑定未知、已禁用或不受支持的实例。拒绝禁用当前绑定的实例。
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **第 4 步：运行绿色**
 
-Run: `cargo test -p archmage-core --test agents`
+运行： `cargo test -p archmage-core --test agents`
 
-Expected: both tests pass.
+预期：两项测试均通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **第 5 步：承诺**
 
 ```bash
 git add crates/archmage-core/migrations/0008_agents.sql crates/archmage-core/src/agent.rs crates/archmage-core/src/lib.rs crates/archmage-core/src/store/mod.rs crates/archmage-core/tests/agents.rs
 git commit -m "feat: persist agent instances and bindings"
 ```
 
-### Task 2: Configure and verify the real Codex instance
+### 任务 2：配置并验证真实的 Codex 实例
 
-**Files:**
-- Modify: `crates/archmage-core/src/provider/codex.rs`
-- Modify: `crates/archmage-core/src/agent.rs`
-- Modify: `crates/archmage-core/tests/agents.rs`
-- Modify: `crates/archmage-core/tests/codex_protocol.rs`
-- Modify: `crates/archmage-core/tests/codex_live.rs`
+**文件：**
+- 修改：`crates/archmage-core/src/provider/codex.rs`
+- 修改：`crates/archmage-core/src/agent.rs`
+- 修改：`crates/archmage-core/tests/agents.rs`
+- 修改：`crates/archmage-core/tests/codex_protocol.rs`
+- 修改：`crates/archmage-core/tests/codex_live.rs`
 
-- [ ] **Step 1: Write failing executable-resolution tests**
+- [ ] **步骤 1：编写失败的可执行解析测试**
 
 ```rust
 #[tokio::test]
@@ -137,43 +139,43 @@ fn changing_execution_config_invalidates_verification() {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **第 2 步：运行 RED**
 
-Run: `cargo test -p archmage-core --test agents --test codex_protocol`
+运行： `cargo test -p archmage-core --test agents --test codex_protocol`
 
-Expected: failure because configured discovery and persisted verification do not exist.
+预期：失败，因为配置的发现和持久验证不存在。
 
-- [ ] **Step 3: Implement discovery and real verification**
+- [ ] **第3步：实施发现和真实验证**
 
-Add `codex::inspect_at(Option<&Path>)`; validate an explicit executable without PATH lookup and keep the existing `inspect()` as the default wrapper. Add optional model to `CodexInvocation` and emit `--model <value>` only when configured.
+添加 `codex::inspect_at(Option<&Path>)`；验证显式可执行文件而不进行 PATH 查找，并将现有 `inspect()` 保留为默认包装器。将可选模型添加到 `CodexInvocation` 并仅在配置时发出 `--model <value>`。
 
-Implement `AgentService::discover(id)` and `AgentService::verify(id)`. `verify` runs `readonly_probe_logged`, stores ready/failed state with a sanitized message, and returns the refreshed management snapshot. Unsupported Provider kinds return a typed preflight error and never execute a fallback.
+实施 `AgentService::discover(id)` 和 `AgentService::verify(id)`。`verify` 运行 `readonly_probe_logged`，使用清理后的消息存储 ready/failed 状态，并返回刷新的管理快照。不受支持的提供程序类型会返回类型化的预检错误并且从不执​​行回退。
 
-- [ ] **Step 4: Run GREEN and the opt-in real probe**
+- [ ] **第 4 步：运行 GREEN 并选择加入真实探测**
 
-Run: `cargo test -p archmage-core --test agents --test codex_protocol`
+运行： `cargo test -p archmage-core --test agents --test codex_protocol`
 
-Expected: all non-network tests pass.
+预期：所有非网络测试均通过。
 
-Run when local Codex authentication is available: `cargo test -p archmage-core --test codex_live real_readonly_probe -- --ignored --nocapture`
+当本地 Codex 身份验证可用时运行：`cargo test -p archmage-core --test codex_live real_readonly_probe -- --ignored --nocapture`
 
-Expected: one ignored real probe test passes with a nonblank thread ID.
+预期：一个被忽略的真实探针测试通过非空线程 ID。
 
-- [ ] **Step 5: Commit**
+- [ ] **第 5 步：承诺**
 
 ```bash
 git add crates/archmage-core/src/provider/codex.rs crates/archmage-core/src/agent.rs crates/archmage-core/tests/agents.rs crates/archmage-core/tests/codex_protocol.rs crates/archmage-core/tests/codex_live.rs
 git commit -m "feat: verify configured Codex agents"
 ```
 
-### Task 3: Freeze global capability bindings into goal-only Runs
+### 任务 3：将全局功能绑定冻结为仅目标运行
 
-**Files:**
-- Modify: `crates/archmage-core/src/runtime/mod.rs`
-- Modify: `crates/archmage-core/src/runtime/dispatch.rs`
-- Modify: `crates/archmage-core/tests/runtime.rs`
+**文件：**
+- 修改：`crates/archmage-core/src/runtime/mod.rs`
+- 修改：`crates/archmage-core/src/runtime/dispatch.rs`
+- 修改：`crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: Write failing goal-only and frozen-binding tests**
+- [ ] **第 1 步：编写失败的仅目标测试和冻结绑定测试**
 
 ```rust
 #[test]
@@ -192,43 +194,43 @@ fn changing_global_binding_does_not_change_existing_run() {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **第 2 步：运行 RED**
 
-Run: `cargo test -p archmage-core --test runtime repository_and_goal_are_sufficient_to_define_a_run changing_global_binding_does_not_change_existing_run`
+运行： `cargo test -p archmage-core --test runtime repository_and_goal_are_sufficient_to_define_a_run changing_global_binding_does_not_change_existing_run`
 
-Expected: compilation fails because `RunRequest` still requires checks and snapshots lack Agent bindings.
+预期：编译失败，因为 `RunRequest` 仍需要检查并且快照缺少代理绑定。
 
-- [ ] **Step 3: Implement the new Run definition**
+- [ ] **步骤 3：实施新的 Run 定义**
 
-Remove `checks` from new `RunRequest` and `RunSnapshot`. Replace `FrozenRunDefinition.checks` with `agent_bindings: BTreeMap<String, FrozenAgentBinding>`. Resolve and validate all four bindings before persisting the Run. Keep backward-compatible deserialization for definitions containing legacy `checks` by ignoring that field.
+从新的 `RunRequest` 和 `RunSnapshot` 中删除 `checks`。将 `FrozenRunDefinition.checks` 替换为 `agent_bindings: BTreeMap<String, FrozenAgentBinding>`。在持续运行之前解析并验证所有四个绑定。通过忽略该字段，为包含旧版 `checks` 的定义保持向后兼容的反序列化。
 
-Change dispatch to resolve Codex tools and model from each node's frozen binding rather than calling one global `codex::inspect()` for the whole Run.
+更改调度以从每个节点的冻结绑定解析 Codex 工具和模型，而不是为整个运行调用一个全局 `codex::inspect()`。
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **第 4 步：运行绿色**
 
-Run: `cargo test -p archmage-core --test runtime`
+运行： `cargo test -p archmage-core --test runtime`
 
-Expected: all Runtime tests pass with goal-only requests.
+预期：所有运行时测试都通过仅目标请求。
 
-- [ ] **Step 5: Commit**
+- [ ] **第 5 步：承诺**
 
 ```bash
 git add crates/archmage-core/src/runtime/mod.rs crates/archmage-core/src/runtime/dispatch.rs crates/archmage-core/tests/runtime.rs
 git commit -m "feat: freeze agent bindings into goal driven runs"
 ```
 
-### Task 4: Give Tester an autonomous task instead of frozen checks
+### 任务 4：给测试人员一个自主任务，而不是冻结检查
 
-**Files:**
-- Modify: `crates/archmage-core/capabilities/v1/tester.md`
-- Modify: `crates/archmage-core/capabilities/v1/tester.schema.json`
-- Modify: `crates/archmage-core/capabilities/v1/reviewer.md`
-- Modify: `crates/archmage-core/src/contract.rs`
-- Modify: `crates/archmage-core/src/runtime/dispatch.rs`
-- Modify: `crates/archmage-core/tests/contracts.rs`
-- Modify: `crates/archmage-core/tests/runtime.rs`
+**文件：**
+- 修改：`crates/archmage-core/capabilities/v1/tester.md`
+- 修改：`crates/archmage-core/capabilities/v1/tester.schema.json`
+- 修改：`crates/archmage-core/capabilities/v1/reviewer.md`
+- 修改：`crates/archmage-core/src/contract.rs`
+- 修改：`crates/archmage-core/src/runtime/dispatch.rs`
+- 修改：`crates/archmage-core/tests/contracts.rs`
+- 修改：`crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: Write failing Tester contract tests**
+- [ ] **第 1 步：编写失败的测试器合约测试**
 
 ```rust
 #[test]
@@ -250,39 +252,39 @@ fn reviewer_cannot_approve_failed_or_blocked_testing() {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **第 2 步：运行 RED**
 
-Run: `cargo test -p archmage-core --test contracts tester_reports_commands_it_selected_without_required_check_ids reviewer_cannot_approve_failed_or_blocked_testing`
+运行： `cargo test -p archmage-core --test contracts tester_reports_commands_it_selected_without_required_check_ids reviewer_cannot_approve_failed_or_blocked_testing`
 
-Expected: Tester schema rejects autonomous command results and `tester_accepted` does not exist.
+预期：测试器架构拒绝自主命令结果并且 `tester_accepted` 不存在。
 
-- [ ] **Step 3: Implement autonomous Tester dispatch**
+- [ ] **步骤 3：实施自主测试人员调度**
 
-Update the Tester prompt and schema to require `status`, chosen `commands`, and `limitations`. Remove `invoke_tester`, Unix socket injection, frozen check lookup, and required-check contract assembly from built-in dispatch. Invoke Tester through the normal workspace-write Codex path.
+更新测试仪提示和架构以要求 `status`、选择 `commands` 和 `limitations`。从内置调度中删除 `invoke_tester`、Unix 套接字注入、冻结检查查找和必需检查合约汇编。通过正常的工作区写入 Codex 路径调用 Tester。
 
-Replace `ContractContext.required_checks/checks_failed` with `tester_accepted` for Reviewer validation. Derive it from the persisted Tester result status. Keep `check_runner.rs`, the internal CLI helper, and migration v5 untouched as dormant lower-level infrastructure.
+将 `ContractContext.required_checks/checks_failed` 替换为 `tester_accepted` 以进行审阅者验证。从持久的测试器结果状态中得出它。保持 `check_runner.rs`、内部 CLI 帮助程序和迁移 v5 作为休眠的较低级别基础设施保持不变。
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **第 4 步：运行绿色**
 
-Run: `cargo test -p archmage-core --test contracts --test runtime --test checks`
+运行： `cargo test -p archmage-core --test contracts --test runtime --test checks`
 
-Expected: contracts and Runtime pass; legacy CheckRunner unit tests remain green.
+预期：合同和运行时通行证；旧版 CheckRunner 单元测试保持绿色。
 
-- [ ] **Step 5: Commit**
+- [ ] **第 5 步：承诺**
 
 ```bash
 git add crates/archmage-core/capabilities/v1/tester.md crates/archmage-core/capabilities/v1/tester.schema.json crates/archmage-core/capabilities/v1/reviewer.md crates/archmage-core/src/contract.rs crates/archmage-core/src/runtime/dispatch.rs crates/archmage-core/tests/contracts.rs crates/archmage-core/tests/runtime.rs
 git commit -m "feat: delegate testing to the bound agent"
 ```
 
-### Task 5: Expose Agent management through Tauri
+### 任务 5：通过 Tauri 公开 Agent 管理
 
-**Files:**
-- Modify: `apps/archmage-desktop/src-tauri/src/lib.rs`
-- Modify: `apps/archmage-desktop/src/api.ts`
-- Modify: `apps/archmage-desktop/src/model.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src-tauri/src/lib.rs`
+- 修改：`apps/archmage-desktop/src/api.ts`
+- 修改：`apps/archmage-desktop/src/model.ts`
 
-- [ ] **Step 1: Add typed frontend contracts before commands**
+- [ ] **第 1 步：在命令之前添加类型化的前端合约**
 
 ```ts
 export type AgentManagementSnapshot = {
@@ -294,15 +296,15 @@ export type AgentManagementSnapshot = {
 export type RunRequest = { repository: string; goal: string };
 ```
 
-Run: `npm test -- --run` in `apps/archmage-desktop`.
+运行：`apps/archmage-desktop` 中的 `npm test -- --run`。
 
-Expected: existing request serialization test fails because it expects checks.
+预期：现有请求序列化测试失败，因为它需要检查。
 
-- [ ] **Step 2: Add Tauri commands**
+- [ ] **第 2 步：添加 Tauri 命令**
 
-Expose `get_agent_management`, `save_agent_instance`, `verify_agent_instance`, and `bind_capability`. Commands call Core only, return safe DTOs, and never expose probe stderr. Change `start_run` to accept the goal-only request.
+公开 `get_agent_management`、`save_agent_instance`、`verify_agent_instance` 和 `bind_capability`。命令仅调用 Core，返回安全 DTO，并且从不公开探针 stderr。更改 `start_run` 以接受仅目标请求。
 
-- [ ] **Step 3: Add typed API methods**
+- [ ] **步骤 3：添加类型化 API 方法**
 
 ```ts
 getAgentManagement: () => invoke<AgentManagementSnapshot>("get_agent_management"),
@@ -311,29 +313,29 @@ verifyAgentInstance: (agentInstanceId) => invoke<AgentManagementSnapshot>("verif
 bindCapability: (capability, agentInstanceId) => invoke<AgentManagementSnapshot>("bind_capability", { capability, agentInstanceId }),
 ```
 
-- [ ] **Step 4: Compile**
+- [ ] **第四步：编译**
 
-Run: `cargo check -p archmage-desktop`
+运行： `cargo check -p archmage-desktop`
 
-Expected: Tauri command layer compiles.
+预期：Tauri 命令层编译。
 
-- [ ] **Step 5: Commit**
+- [ ] **第 5 步：承诺**
 
 ```bash
 git add apps/archmage-desktop/src-tauri/src/lib.rs apps/archmage-desktop/src/api.ts apps/archmage-desktop/src/model.ts
 git commit -m "feat: expose agent management to desktop"
 ```
 
-### Task 6: Build the Agent management page and simplify New Run
+### 任务6：构建Agent管理页面并简化New Run
 
-**Files:**
+**文件：**
 - Create: `apps/archmage-desktop/src/AgentManagement.tsx`
-- Modify: `apps/archmage-desktop/src/App.tsx`
-- Modify: `apps/archmage-desktop/src/model.ts`
-- Modify: `apps/archmage-desktop/src/model.test.ts`
-- Modify: `apps/archmage-desktop/src/styles.css`
+- 修改：`apps/archmage-desktop/src/App.tsx`
+- 修改：`apps/archmage-desktop/src/model.ts`
+- 修改：`apps/archmage-desktop/src/model.test.ts`
+- 修改：`apps/archmage-desktop/src/styles.css`
 
-- [ ] **Step 1: Write failing model tests**
+- [ ] **第 1 步：编写失败的模型测试**
 
 ```ts
 it("serializes a run from repository and goal only", () => {
@@ -345,51 +347,51 @@ it("does not call an unverified Codex connection ready", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **第 2 步：运行 RED**
 
-Run: `npm test -- --run` in `apps/archmage-desktop`.
+运行：`apps/archmage-desktop` 中的 `npm test -- --run`。
 
-Expected: request signature and status helper tests fail.
+预期：请求签名和状态帮助程序测试失败。
 
-- [ ] **Step 3: Implement pure model behavior**
+- [ ] **步骤 3：实现纯模型行为**
 
-Remove CheckSpec from frontend Run DTOs. Implement goal-only `toRunRequest`, safe connection labels, and helpers that summarize capability binding readiness.
+从前端运行 DTO 中删除 CheckSpec。实施仅目标 `toRunRequest`、安全连接标签以及总结功能绑定准备情况的帮助程序。
 
-- [ ] **Step 4: Run GREEN for model tests**
+- [ ] **步骤 4：运行 GREEN 进行模型测试**
 
-Run: `npm test -- --run` in `apps/archmage-desktop`.
+运行：`apps/archmage-desktop` 中的 `npm test -- --run`。
 
-Expected: frontend tests pass.
+预期：前端测试通过。
 
 - [ ] **Step 5: Implement the page**
 
-Add Runs/Agents sidebar navigation. Build `AgentManagement` with the Codex configuration card, online verification action, unsupported Adapter cards, capability binding selectors, and an advanced additional-Codex-instance form. Remove check-command state and controls from New Run. Show frozen Agent identity on each Run node.
+Add Runs/Agents sidebar navigation.使用 Codex 配置卡、在线验证操作、不支持的适配器卡、功能绑定选择器和高级附加 Codex 实例表单构建 `AgentManagement`。从“新运行”中删除检查命令状态和控件。Show frozen Agent identity on each Run node.
 
 - [ ] **Step 6: Build and commit**
 
-Run: `npm run build` in `apps/archmage-desktop`.
+运行：`apps/archmage-desktop` 中的 `npm run build`。
 
-Expected: TypeScript and Vite complete with exit code 0.
+预期：TypeScript 和 Vite 完成，退出代码为 0。
 
 ```bash
 git add apps/archmage-desktop/src/AgentManagement.tsx apps/archmage-desktop/src/App.tsx apps/archmage-desktop/src/model.ts apps/archmage-desktop/src/model.test.ts apps/archmage-desktop/src/styles.css
 git commit -m "feat: add local Agent management page"
 ```
 
-### Task 7: Update usage documentation and run final verification
+### 任务 7：更新使用文档并运行最终验证
 
-**Files:**
-- Modify: `docs/guide.md`
-- Modify: `docs/runbooks/desktop-s0.md`
-- Modify: `docs/architecture/runtime-and-state.md`
+**文件：**
+- 修改：`docs/guide.md`
+- 修改：`docs/runbooks/desktop-s0.md`
+- 修改：`docs/architecture/runtime-and-state.md`
 
-- [ ] **Step 1: Document the real workflow**
+- [ ] **第 1 步：记录真实的工作流程**
 
-Document `./scripts/dev-desktop.sh`, opening Agents, verifying the real Codex connection, reading capability bindings, adding another Codex instance, and starting a Run with repository plus goal. State explicitly that Claude, OpenClaw, and Hermes are not implemented and that Tester chooses its own validation commands.
+记录 `./scripts/dev-desktop.sh`，打开代理，验证真实的 Codex 连接，读取功能绑定，添加另一个 Codex 实例，并开始使用存储库和目标运行。明确声明 Claude、OpenClaw 和 Hermes 未实现，测试人员选择自己的验证命令。
 
-- [ ] **Step 2: Run focused verification**
+- [ ] **第 2 步：运行重点验证**
 
-Run:
+运行：
 
 ```bash
 cargo test -p archmage-core --test agents --test runtime --test contracts --test codex_protocol --test checks
@@ -397,23 +399,23 @@ cargo test -p archmage-core --test agents --test runtime --test contracts --test
 cargo check -p archmage-desktop
 ```
 
-Expected: all commands exit 0.
+预期：所有命令退出 0。
 
-- [ ] **Step 3: Run workspace regression verification**
+- [ ] **步骤 3：运行工作区回归验证**
 
-Run: `cargo test --workspace`
+运行： `cargo test --workspace`
 
-Expected: all non-ignored workspace tests pass.
+预期：所有不可忽略的工作区测试均通过。
 
-- [ ] **Step 4: Run real Codex verification when credentials are available**
+- [ ] **步骤 4：当凭证可用时运行真正的 Codex 验证**
 
-Run: `cargo test -p archmage-core --test codex_live real_readonly_probe -- --ignored --nocapture`
+运行： `cargo test -p archmage-core --test codex_live real_readonly_probe -- --ignored --nocapture`
 
-Expected: the real probe completes with exit code 0 and a nonblank thread ID. If unavailable, report it separately rather than claiming online verification.
+预期：实际探测以退出代码 0 和非空线程 ID 完成。如果无法提供，请单独报告，而不是要求在线验证。
 
-- [ ] **Step 5: Self-review against the approved design and commit docs**
+- [ ] **步骤 5：根据批准的设计和提交文档进行自我审查**
 
-Confirm that Run has no check-command input, all four bindings are frozen, unsupported Providers are truthful, no per-Run override exists, and no Fake Agent was added.
+确认运行没有检查命令输入，所有四个绑定都被冻结，不受支持的提供程序是真实的，不存在每次运行覆盖，并且没有添加Fake Agent。
 
 ```bash
 git add docs/guide.md docs/runbooks/desktop-s0.md docs/architecture/runtime-and-state.md docs/superpowers/specs/2026-09-28-agent-management-and-goal-runs-design.md docs/superpowers/plans/2026-09-28-agent-management-and-goal-runs.md

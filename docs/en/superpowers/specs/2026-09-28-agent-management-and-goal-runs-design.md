@@ -1,5 +1,7 @@
 # Agent Management and Goal-Driven Runs Design
 
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-28-agent-management-and-goal-runs-design.md) | English
+
 **Status:** Approved for implementation planning
 
 ## Goal

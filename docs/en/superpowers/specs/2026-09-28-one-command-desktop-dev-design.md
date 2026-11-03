@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-28-one-command-desktop-dev-design.md) | English
+
 # One-command Desktop Development Design
 
 **Status:** Approved approach, pending implementation

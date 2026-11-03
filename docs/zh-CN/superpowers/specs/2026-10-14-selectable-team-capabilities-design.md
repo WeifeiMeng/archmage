@@ -1,23 +1,25 @@
-# Selectable Team Capabilities Design
+简体中文 | [English](../../../en/superpowers/specs/2026-10-14-selectable-team-capabilities-design.md)
 
-**Status:** Approved direction for implementation on `main`.
+# 可选择 Team Capability 设计
 
-## Scope
+**状态：** 已批准在 `main` 实施的方向。
 
-Team creation lets a user choose at least two of the four existing Capabilities, then choose directed relationships between selected members. The user creates their own teams; no additional team is seeded. Existing four-member teams and historical Runs remain valid.
+## 范围
 
-The first release preserves the fixed semantic order Designer → Coder → Tester → Reviewer. Any forward edge between selected members is allowed. A saved graph must be a single connected directed acyclic graph: every selected member participates in an edge, and all members are reachable from one entry. No duplicate/self/backward edge is allowed. Relationships retain the current meaning: downstream reviews the upstream deliverable before its own main task; siblings may consult concurrently. Main tasks remain serialized in semantic order because they share one worktree.
+创建 Team 时，用户从现有四个 Capability 中至少选择两个，再选择成员之间的有向关系。用户自行创建 Team；系统不再额外 seed Team。已有四成员 Team 与历史 Run 继续有效。
+
+首版保留固定语义顺序 Designer → Coder → Tester → Reviewer。允许所选成员之间的任意前向边。已保存图必须是单个连通有向无环图：每个成员都参与一条边，并且所有成员都能从唯一入口到达。禁止重复边、自环、反向边。关系保持当前含义：下游在执行自己的主任务前评审上游交付；兄弟节点可并发咨询。主任务因共享同一 worktree，仍按语义顺序串行。
 
 ## Runtime
 
-A new Run freezes only the selected Capabilities, their bindings, configurations, and graph. The scheduler derives readiness from incoming graph edges, not from the old four-node spine. A source with outgoing edges must receive approvals before a downstream main task starts. The last selected node determines completion. If Reviewer is present, its status is the Run outcome. Otherwise successful completion is `approved`; any blocked/failed node fails the Run.
+新 Run 只冻结所选 Capability、其绑定、配置和图。Scheduler 根据图的入边而不是旧四节点主干推导 ready。拥有出边的源节点必须先得到批准，下游主任务才能开始。最后一个所选节点决定完成；若包含 Reviewer，其状态就是 Run outcome，否则成功完成为 `approved`，任何 blocked/failed 节点都会使 Run 失败。
 
-Prompt inputs depend on which upstream roles are present. Designer uses goal and repository view. Coder uses design if present, otherwise goal and repository view. Tester uses implementation and ChangeSet if Coder is present, otherwise goal and repository view; design is included when present. Reviewer receives available design, implementation/ChangeSet, and test result. Without Tester, Reviewer may approve based on available evidence; it must not claim tests occurred. Built-in role prompts explain optional inputs while output JSON schemas stay unchanged.
+Prompt 输入取决于存在哪些上游角色。Designer 使用 goal 与 repository view。Coder 有 Design 时使用 Design，否则使用 goal 与 repository view。Tester 有 Coder 时使用 implementation 与 ChangeSet，否则使用 goal 与 repository view；存在 Design 时也包含 Design。Reviewer 接收可用的 Design、implementation/ChangeSet 与 Test result。没有 Tester 时，Reviewer 可依据现有证据批准，但不得声称测试已发生。内置角色 prompt 解释可选输入，输出 JSON Schema 不变。
 
-Review feedback from outgoing consultations reruns the producing Capability, bounded to three revisions. A final Reviewer `changes_requested` reruns the nearest upstream non-Reviewer Capability and every later member in semantic order, again bounded to three revisions. For `Coder → Reviewer`, this means Coder then Reviewer; for the original four-member team it remains Coder, Tester, Reviewer. Existing Run definitions without a Team keep legacy behavior.
+出边咨询的 Review 反馈会让生产 Capability 重跑，最多三次 revision。最终 Reviewer `changes_requested` 会重跑最近的上游非 Reviewer Capability 及语义顺序中之后的所有成员，同样最多三次。对 `Coder → Reviewer` 即重跑 Coder、Reviewer；对原四成员 Team 仍为 Coder、Tester、Reviewer。没有 Team 的旧 Run 定义保持 legacy 行为。
 
-## Desktop and validation
+## 桌面端与校验
 
-Team creation starts from an empty graph. The user selects Capabilities, then toggles forward relationships between selected members and arranges nodes on the canvas. Removing a member also removes its edges. The page explains the valid graph rules, disabled controls, save conflicts, and the difference between consultations and main tasks. Existing teams can be edited under the same rules. A browser preview never invents persisted teams.
+Team 创建从空图开始。用户选择 Capability、切换所选成员间的前向关系，并在画布上排列节点。移除成员也移除其边。页面解释有效图规则、禁用控件、保存冲突，以及咨询与主任务的区别。已有 Team 也按同一规则编辑。浏览器预览绝不虚构已持久化 Team。
 
-Backend validation is authoritative. Invalid graphs are rejected before persistence and Run creation; unsupported or disabled Agent bindings for unselected Capabilities do not block a Run. Tests cover graph selection and rejection, persisted round trips, dynamic Run nodes, scheduler, Coder→Reviewer context and outcome, and four-node compatibility. Live Codex acceptance is separate from deterministic tests.
+后端校验是权威。无效图在持久化与创建 Run 前被拒绝；未选择 Capability 的不支持或禁用 Agent 绑定不会阻塞 Run。测试覆盖图选择/拒绝、持久化往返、动态 Run 节点、Scheduler、Coder→Reviewer Context/outcome 与四节点兼容性。真实 Codex 验收与确定性测试分开。

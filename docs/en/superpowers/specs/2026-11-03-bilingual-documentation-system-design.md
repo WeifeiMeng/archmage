@@ -1,5 +1,7 @@
 # Bilingual Documentation System Design
 
+[简体中文](../../../zh-CN/superpowers/specs/2026-11-03-bilingual-documentation-system-design.md) | English
+
 **Status:** Approved for implementation planning.
 
 ## Purpose

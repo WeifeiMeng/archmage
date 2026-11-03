@@ -1,5 +1,7 @@
 # Settings, Light Theme, and App Icon Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-29-settings-light-theme-and-app-icon.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a bottom-left Settings destination, persistent light/dark appearance cards with light as the default, and a unified wizard portrait icon across the sidebar, web favicon, and Tauri desktop assets.

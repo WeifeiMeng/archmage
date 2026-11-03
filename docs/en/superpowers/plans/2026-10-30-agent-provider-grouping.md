@@ -1,24 +1,26 @@
 # Agent Provider Grouping Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-30-agent-provider-grouping.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 Agent 管理页改为 Codex 与 DeepSeek Harness 分组展示，并把添加入口放入各自 Provider 分组。
+**Goal:** Change the Agent management page to display the Codex and DeepSeek Harness groups, and put the added entries into the respective Provider groups.
 
-**Architecture:** 保持现有 API、数据模型和保存流程不变，只重组 React 展示组件。顶层组件维护当前正在添加的 Provider；纯展示组件按 Provider 过滤实例并渲染分组，以便通过服务端静态渲染验证结构。
+**Architecture:** Keep the existing API, data model and save process unchanged, and only restructure the React presentation components. The top-level component maintains the Provider currently being added; the pure display component filters instances by Provider and renders groups to verify the structure through server-side static rendering.
 
-**Tech Stack:** React 19、TypeScript、Vitest、现有 CSS 设计变量
+**Tech Stack:** React 19, TypeScript, Vitest, existing CSS design variables
 
 ---
 
-### Task 1: Provider 分组与定向添加表单
+### Task 1: Provider grouping and directed addition form
 
 **Files:**
 - Modify: `apps/archmage-desktop/src/AgentManagement.test.tsx`
 - Modify: `apps/archmage-desktop/src/AgentManagement.tsx`
 
-- [ ] **Step 1: 写失败的结构测试**
+- [ ] **Step 1: Write failing structural tests**
 
-在 `AgentManagement.test.tsx` 中构造包含 Codex、DeepSeek Harness 和未支持 Adapter 的 `AgentManagementSnapshot`，静态渲染新的可测试内容组件，并断言：
+Construct `AgentManagementSnapshot` with Codex, DeepSeek Harness, and unsupported Adapter in `AgentManagement.test.tsx`, statically render the new testable content component, and assert:
 
 ```tsx
 const html = renderToStaticMarkup(
@@ -39,15 +41,15 @@ expect(html).toContain("添加 DeepSeek Harness 实例");
 expect(html).not.toContain("<select");
 ```
 
-- [ ] **Step 2: 运行测试并确认因组件尚不存在而失败**
+- [ ] **Step 2: Run the test and confirm that it fails because the component does not exist yet**
 
 Run: `npm test -- --run src/AgentManagement.test.tsx`
 
-Expected: FAIL，提示 `AgentManagementContent` 未导出或断言不满足。
+Expected: FAIL, prompting `AgentManagementContent` not exported or assertion not satisfied.
 
-- [ ] **Step 3: 实现 Provider 分组**
+- [ ] **Step 3: Implement Provider Grouping**
 
-在 `AgentManagement.tsx` 中：
+In `AgentManagement.tsx`:
 
 ```tsx
 type SupportedProvider = Extract<ProviderKind, "codex" | "deepseek_harness">;
@@ -62,31 +64,31 @@ const providerSections: Array<{
 ];
 ```
 
-将 `adding: boolean` 替换为 `addingProvider: SupportedProvider | null`。导出 `AgentManagementContent`，由它渲染无眉题、无 Hero 操作的 `ManagementHero`，并对 `providerSections` 逐项输出：分组标题、次级添加按钮、该 Provider 的实例卡片、空状态或定向的新实例表单。
+Replace `adding: boolean` with `addingProvider: SupportedProvider | null`. Export `AgentManagementContent`, which renders `ManagementHero` with no title and no Hero operation, and outputs item by item for `providerSections`: group title, secondary add button, instance card of this Provider, empty state, or directed new instance form.
 
-`NewAgentCard` 改为接收固定 `provider: SupportedProvider`，删除内部 Provider state 与 `<select>`，标题显示 `添加 Codex 实例` 或 `添加 DeepSeek Harness 实例`。创建成功和取消均通过现有回调关闭表单。
+`NewAgentCard` receives fixed `provider: SupportedProvider` instead, removes the internal Provider state with `<select>`, and the header displays `添加 Codex 实例` or `添加 DeepSeek Harness 实例`. Both successful creation and cancellation close the form through existing callbacks.
 
-- [ ] **Step 4: 运行测试并确认通过**
+- [ ] **Step 4: Run the test and confirm it passes**
 
 Run: `npm test -- --run src/AgentManagement.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 5: 提交结构改动**
+- [ ] **Step 5: Commit structural changes**
 
 ```bash
 git add apps/archmage-desktop/src/AgentManagement.tsx apps/archmage-desktop/src/AgentManagement.test.tsx
 git commit -m "feat: group Agent instances by provider"
 ```
 
-### Task 2: 分组样式与完整验收
+### Task 2: Grouping style and complete acceptance
 
 **Files:**
 - Modify: `apps/archmage-desktop/src/agents.css`
 
-- [ ] **Step 1: 写失败的样式约束测试**
+- [ ] **Step 1: Write a failing style constraint test**
 
-在 `AgentManagement.test.tsx` 读取 `agents.css` 并断言新的分组选择器存在，且旧 Hero 强调入口选择器消失：
+At `AgentManagement.test.tsx` reads `agents.css` and asserts that the new group selector exists and the old Hero emphasis entry selector disappears:
 
 ```tsx
 const css = readFileSync(new URL("./agents.css", import.meta.url), "utf8");
@@ -95,15 +97,15 @@ expect(css).toContain(".agent-provider-heading");
 expect(css).not.toContain(".agents-view .management-hero-actions");
 ```
 
-- [ ] **Step 2: 运行测试并确认缺少新样式而失败**
+- [ ] **Step 2: Run the test and confirm it fails due to missing new styles**
 
 Run: `npm test -- --run src/AgentManagement.test.tsx`
 
-Expected: FAIL，提示缺少 `.agent-provider-section`。
+Expected: FAIL, prompting that `.agent-provider-section` is missing.
 
-- [ ] **Step 3: 实现低强调 Provider 分组样式**
+- [ ] **Step 3: Implement low-emphasis Provider grouping style**
 
-删除 Agent 页面专用的 Hero 添加按钮强调规则，新增：
+Delete the Hero add button dedicated to the Agent page to emphasize the rules, and add:
 
 ```css
 .agent-provider-section { display: grid; gap: 10px; }
@@ -113,15 +115,15 @@ Expected: FAIL，提示缺少 `.agent-provider-section`。
 .agent-provider-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); }
 ```
 
-在窄屏断点中允许标题区换行或纵向排列，添加按钮继续使用现有 `.secondary-action`，不添加强调色覆盖。
+Allow title area to wrap or align vertically in narrow screen breakpoints, add buttons to continue using existing `.secondary-action`, and do not add accent color overlays.
 
-- [ ] **Step 4: 运行桌面端完整测试与构建**
+- [ ] **Step 4: Run full desktop test and build**
 
 Run: `cd apps/archmage-desktop && npm test && npm run build`
 
-Expected: 现有测试全部 PASS，TypeScript 与 Vite 构建成功。
+Expected: All existing tests are PASS, TypeScript and Vite built successfully.
 
-- [ ] **Step 5: 检查差异并提交**
+- [ ] **Step 5: Check the differences and submit**
 
 ```bash
 git diff --check
@@ -129,19 +131,19 @@ git add apps/archmage-desktop/src/AgentManagement.test.tsx apps/archmage-desktop
 git commit -m "style: align Agent actions with provider sections"
 ```
 
-### Task 3: 最终回归
+### Task 3: Final return
 
 **Files:**
 - Verify only
 
-- [ ] **Step 1: 运行完整项目验收**
+- [ ] **Step 1: Run complete project acceptance**
 
 Run: `cargo fmt --all -- --check && cargo test -p archmage-core && (cd apps/archmage-desktop && npm test && npm run build)`
 
-Expected: Rust 测试、桌面端测试和生产构建全部成功；需要真实认证的 live 测试仍按既有设置忽略。
+Expected: Rust tests, desktop tests, and production builds all succeed; live tests that require real authentication are still ignored according to the existing settings.
 
-- [ ] **Step 2: 确认工作区状态**
+- [ ] **Step 2: Confirm workspace status**
 
 Run: `git status --short && git log --oneline -5`
 
-Expected: 没有未提交文件，日志包含本计划的两个实现提交。
+Expected: There are no uncommitted files and the log contains two implementation commits for this plan.

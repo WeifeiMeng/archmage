@@ -1,5 +1,7 @@
 # Agent Provider Grouping Implementation Plan
 
+简体中文 | [English](../../../en/superpowers/plans/2026-10-30-agent-provider-grouping.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 Agent 管理页改为 Codex 与 DeepSeek Harness 分组展示，并把添加入口放入各自 Provider 分组。

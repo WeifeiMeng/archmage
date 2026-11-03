@@ -1,41 +1,43 @@
-# Capability Guidance Implementation Plan
+# 能力指导实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-09-30-capability-guidance.md)
 
-**Goal:** Make each Capability's role supplement, Skills, and Tools editable and pass the frozen guidance to its real Agent.
+> **对于代理工人：** 所需的子技能：使用超能力：执行计划来逐个任务地实施该计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Add two JSON list columns to the existing revision-guarded Capability row. Extend the frozen configuration and both prompt builders; keep Codex permissions unchanged. Expand the existing list/detail editor rather than adding a topology or a separate catalog.
+**目标：** 使每个能力的角色补充、技能和工具可编辑，并将冻结的指导传递给其真正的代理。
 
-**Tech Stack:** Rust, rusqlite, serde, Tauri, React, TypeScript, Vitest.
+**架构：** 将两个 JSON 列表列添加到现有的修订保护功能行。扩展冻结配置和两个提示构建器；保持 Codex 权限不变。展开现有的 list/detail 编辑器，而不是添加拓扑或单独的目录。
+
+**技术堆栈：** Rust、rusqlite、serde、Tauri、React、TypeScript、Vitest。
 
 ---
 
-### Task 1: Persist validated guidance
+### 任务 1：坚持经过验证的指导
 
-**Files:** `crates/archmage-core/src/capability.rs`, `crates/archmage-core/src/store/capabilities.rs`, `crates/archmage-core/src/store/mod.rs`, `crates/archmage-core/migrations/0013_capability_guidance.sql`, `crates/archmage-core/tests/agents.rs`.
+**文件：** `crates/archmage-core/src/capability.rs`、`crates/archmage-core/src/store/capabilities.rs`、`crates/archmage-core/src/store/mod.rs`、`crates/archmage-core/migrations/0013_capability_guidance.sql`、`crates/archmage-core/tests/agents.rs`。
 
-- [x] Add a failing test that saves Designer with one Skill (`brainstorming`) and one Tool (`web_search`), reloads both, and rejects a duplicate name and stale revision. Run `cargo test -p archmage-core --test agents capability_config -- --nocapture` and confirm the expected failure.
-- [x] Add `CapabilityGuidance { name: String, purpose: String }` and `skills`/`tools` arrays (serde defaults) to configuration and input. Validate nonblank names and purposes, maximum 16 entries per list, name length 80, purpose length 500, and case-insensitive unique names within each list.
-- [x] Migrate with `ALTER TABLE capability_configurations ADD COLUMN skills_json TEXT NOT NULL DEFAULT '[]'` and the equivalent `tools_json`; register version 13 in `Store::open`. Decode/encode the JSON arrays inside the existing guarded save transaction.
-- [x] Re-run the focused test and check it passes. Update existing input literals in tests with empty arrays and migration version assertions to 13.
+- [x] 添加一个失败的测试，用一项技能 (`brainstorming`) 和一项工具 (`web_search`) 保存设计人员，重新加载两者，并拒绝重复的名称和过时的修订。运行 `cargo test -p archmage-core --test agents capability_config -- --nocapture` 并确认预期的失败。
+- [x] 将 `CapabilityGuidance { name: String, purpose: String }` 和 `skills`/`tools` 数组（serde 默认值）添加到配置和输入。验证非空名称和用途、每个列表最多 16 个条目、名称长度 80、用途长度 500 以及每个列表中不区分大小写的唯一名称。
+- [x] 使用 `ALTER TABLE capability_configurations ADD COLUMN skills_json TEXT NOT NULL DEFAULT '[]'` 和等效的 `tools_json` 进行迁移；在 `Store::open` 中注册版本 13。Decode/encode 现有受保护保存事务内的 JSON 数组。
+- [x] 重新运行重点测试并检查其是否通过。使用空数组和迁移版本断言将测试中的现有输入文字更新为 13。
 
-### Task 2: Freeze and deliver guidance
+### 任务 2：冻结并提供指导
 
-**Files:** `crates/archmage-core/src/context.rs`, `crates/archmage-core/src/runtime/dispatch.rs`, `crates/archmage-core/src/runtime/consultation.rs`, `crates/archmage-core/tests/context.rs`, `crates/archmage-core/tests/consultation_prompt.rs`, `crates/archmage-core/tests/runtime.rs`.
+**文件：** `crates/archmage-core/src/context.rs`、`crates/archmage-core/src/runtime/dispatch.rs`、`crates/archmage-core/src/runtime/consultation.rs`、`crates/archmage-core/tests/context.rs`、`crates/archmage-core/tests/consultation_prompt.rs`、`crates/archmage-core/tests/runtime.rs`。
 
-- [x] Add failing prompt tests: primary context includes Skill/Tool names, purposes, and advisory semantics; consultation includes the target Capability's same frozen guidance. Add a Run snapshot test that changing a Capability after Run creation does not change that Run's arrays.
-- [x] Pass configuration into primary context assembly and consultation rendering. Keep built-in persona and output schema intact. Include the guidance as structured fields, with an explicit advisory/non-enforcement note.
-- [x] Re-run focused context, consultation, and runtime tests; resolve only new regressions.
+- [x] 添加失败提示测试：主要上下文包括 Skill/Tool 名称、用途和咨询语义；协商包括目标能力的相同冻结指导。添加运行快照测试，在创建运行后更改功能不会更改该运行的数组。
+- [x] 将配置传递到主上下文组装和咨询渲染中。保持内置角色和输出模式完整。将指南包含为结构化字段，并带有明确的 advisory/non-enforcement 注释。
+- [x] 重新运行重点上下文、咨询和运行时测试；仅解决新的回归。
 
-### Task 3: Edit guidance in Capability management
+### 任务 3：编辑能力管理中的指南
 
-**Files:** `apps/archmage-desktop/src/model.ts`, `apps/archmage-desktop/src/model.test.ts`, `apps/archmage-desktop/src/CapabilityManagement.tsx`, `apps/archmage-desktop/src/capabilities.css`, `docs/guide.md`.
+**文件：** `apps/archmage-desktop/src/model.ts`、`apps/archmage-desktop/src/model.test.ts`、`apps/archmage-desktop/src/CapabilityManagement.tsx`、`apps/archmage-desktop/src/capabilities.css`、`docs/guide.md`。
 
-- [x] Add failing Vitest coverage for serializing an edited draft and for dirty detection when role text, Skill list, Tool list, or binding changes. Run `npm test --prefix apps/archmage-desktop` and confirm the expected failure.
-- [x] Replace the binding-only draft helper with a full-configuration draft. Add editable role textarea and name/purpose rows for Skills and Tools. Save all fields through the existing Tauri command and display validation/conflict errors. Show counts in the list and the advisory disclaimer in the detail view.
-- [x] Document the workflow and the advisory-only semantics in `docs/guide.md`; run frontend tests and build.
+- [x] 添加失败的 Vitest 覆盖范围，以序列化已编辑的草稿以及角色文本、技能列表、工具列表或绑定更改时的脏检测。运行 `npm test --prefix apps/archmage-desktop` 并确认预期的失败。
+- [x] 将仅绑定草稿助手替换为完整配置草稿。为技能和工具添加可编辑角色文本区域和 name/purpose 行。通过现有的 Tauri 命令保存所有字段并显示 validation/conflict 错误。在列表中显示计数并在详细视图中显示咨询免责声明。
+- [x] 在 `docs/guide.md` 中记录工作流程和仅供咨询的语义；运行前端测试并构建。
 
-### Task 4: Final verification
+### 任务4：最终验证
 
-- [x] Run `cargo fmt --check`, `cargo test --workspace`, `npm test --prefix apps/archmage-desktop`, `npm run build --prefix apps/archmage-desktop`, and `git diff --check` from repository root.
-- [x] Check the diff against the design and report any unverified live-Codex behavior distinctly from deterministic tests.
+- [x] 从存储库根运行 `cargo fmt --check`、`cargo test --workspace`、`npm test --prefix apps/archmage-desktop`、`npm run build --prefix apps/archmage-desktop` 和 `git diff --check`。
+- [x] 根据设计检查差异，并报告任何未经验证的实时 Codex 行为，以区别于确定性测试。

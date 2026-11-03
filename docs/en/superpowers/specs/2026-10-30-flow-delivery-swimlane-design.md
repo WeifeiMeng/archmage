@@ -1,170 +1,172 @@
-# Run 交付消息泳道设计
+# Run delivery message swim lane design
 
-## 背景
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-flow-delivery-swimlane-design.md) | English
 
-Run 详情页目前只把 `flowDeliveries` 渲染为一组路由标签，例如 `coder 已交付 → reviewer`。运行时实际已经将每轮能力产出持久化到对应 Attempt 的 `output_json`，但 RunSnapshot 没有把这份内容投影到交付记录中，因此前端无法展示“交付了什么”。
+## background
 
-同时，“交付消息”面板受到通用 `.panel` 最小高度影响，即使只有少量标签也会占据大块空白区域。
+The Run details page currently only renders `flowDeliveries` as a set of routing labels, such as `coder 已交付 → reviewer`. The runtime has actually persisted the capacity output of each round to `output_json` corresponding to Attempt, but RunSnapshot does not project this content into the delivery record, so the front end cannot display "what was delivered."
 
-## 目标
+Also, the Delivery Messages panel suffers from the universal `.panel` minimum height, taking up large chunks of white space even with just a few labels.
 
-- 在 Run 详情页直接呈现不同能力之间每一轮交付的来源、目标、顺序、状态和内容摘要。
-- 使用动态能力泳道展示团队内的交付路径，并支持 Coder、Reviewer、Designer、Tester 的任意组合。
-- 点击交付卡片后，在发送能力所在的泳道格子内展开完整结构化内容。
-- 复用已经持久化的历史 Attempt 输出，让已有 Run 无需重新执行即可显示交付内容。
-- 让面板高度跟随实际内容，不再留下整屏空白。
+## target
 
-## 数据设计
+- The source, target, sequence, status and content summary of each round of delivery between different capabilities are directly presented on the Run details page.
+- Use dynamic capability swim lanes to display the delivery path within the team, and support any combination of Coder, Reviewer, Designer, and Tester.
+- After clicking the delivery card, expand the complete structured content in the swim lane grid where the sending capability is located.
+- Reuse the persisted historical Attempt output so that existing Runs can display delivery content without re-executing it.
+- Let the panel height follow the actual content and no longer leave the entire screen blank.
 
-### FlowDelivery 输出投影
+## data design
 
-在 `FlowDelivery` 的 RunSnapshot 表示中增加可选 `output` 字段：
+### FlowDelivery output projection
+
+Add optional `output` field to RunSnapshot representation of `FlowDelivery`:
 
 ```text
 output: JSON | null
 ```
 
-查询 `flow_deliveries` 时，根据该交付自己的 `attempt_id` 关联 `attempts.output_json`。这里使用当前交付的执行 Attempt，而不是目标能力的“最新结果”，从而保证历史反馈循环中的每一轮内容都准确对应自己的交付记录。
+When querying for `flow_deliveries`, `attempts.output_json` is associated with its own `attempt_id` based on that delivery. Here, the currently delivered execution Attempt is used instead of the "latest result" of the target capability, thereby ensuring that each round of content in the historical feedback loop accurately corresponds to its own delivery record.
 
-该调整不新增数据库列，也不修改 Artifact 内容：
+This adjustment does not add new database columns, nor does it modify Artifact content:
 
-- 已完成交付：`output` 为该轮能力的结构化 deliverable。
-- 等待或执行中的交付：`output` 为 `null`。
-- 失败、中断或取消的交付：保留状态，只有已经持久化输出时才返回内容。
-- 历史 Run：直接从现有 `attempts.output_json` 读取，无需迁移或回填。
+- Delivery Completed: `output` is a structured deliverable for this round of capabilities.
+- Delivery pending or in progress: `output` for `null`.
+- Failed, interrupted, or canceled delivery: Preserves state and returns content only if the output has been persisted.
+- Historical Run: Read directly from existing `attempts.output_json`, no migration or backfill required.
 
-敏感诊断、Provider 原始输出和凭证不进入该投影。
+Sensitive diagnostics, provider raw output, and credentials do not enter this projection.
 
-### 交付方向
+### Delivery direction
 
-一条已完成 `FlowDelivery` 表示执行能力把本轮产出交给下一目标：
+One completed `FlowDelivery` indicates the execution ability to hand over the output of this round to the next target:
 
-- 发送能力：`delivery.target`。
-- 接收能力：`delivery.routing.next`。
-- 流程完成：`delivery.routing.decision == complete`，接收端显示“完成”。
-- 多接收方：同一卡片显示多个目标，并在对应目标泳道中表达接收状态。
-- 初始待执行记录：在尚无 routing 时显示当前执行目标与队列/运行状态，不虚构发送方或摘要。
+- Sending capability: `delivery.target`.
+- Receiving capability: `delivery.routing.next`.
+- The process is completed: `delivery.routing.decision == complete`, and the receiving end displays "Complete".
+- Multiple receivers: The same card displays multiple targets and expresses the receiving status in the corresponding target swim lane.
+- Initial pending execution record: when there is no routing, the current execution target and queue/running status are displayed, without fictitious sender or summary.
 
-## 界面结构
+## Interface structure
 
-### 动态泳道
+### Dynamic lane
 
-泳道列来自 Run 冻结团队的 `team.graph.nodes`，顺序与冻结团队配置一致。最左侧保留窄序号列，每条 `FlowDelivery` 占一行。
+The swim lane columns are from `team.graph.nodes` for the Run frozen team, in the same order as the frozen team configuration. The narrow serial number column is reserved on the far left, and each `FlowDelivery` occupies one line.
 
-交付卡片放在发送能力对应的泳道格子中，卡片默认展示：
+The delivery card is placed in the swim lane grid corresponding to the sending capability. The card is displayed by default:
 
-- 交付序号。
-- 发送能力和接收能力。
-- 当前状态。
-- 从结构化输出提取的一段摘要。
-- 展开/收起状态。
+- Delivery serial number.
+- Sending and receiving capabilities.
+- Current status.
+- A snippet extracted from the structured output.
+- Expand/collapse state.
 
-其他能力格子不复制交付内容，只显示与该轮相关的轻量状态，例如“等待接收”“收到反馈”或“流程完成”。
+Other capability cells do not copy the deliverable content and only display lightweight status related to the round, such as "Waiting to receive", "Feedback received" or "Process completed".
 
-### 格子内展开
+### Expand within the grid
 
-点击交付卡片后，详情直接在该卡片所在的泳道格子内展开：
+After clicking to deliver the card, the details will be expanded directly in the swim lane grid where the card is located:
 
-- 展开只增加当前交付行的高度。
-- 详情不会移动到跨全宽区域或右侧检查器。
-- 同一时间默认只展开一条交付，减少长页面噪声。
-- 卡片按钮使用 `aria-expanded` 和明确的可访问名称，并支持键盘操作。
+- Expanding only increases the height of the current delivery row.
+- Details are not moved across the full width area or to the right of the inspector.
+- By default, only one delivery is expanded at the same time to reduce long page noise.
+- Card buttons use `aria-expanded` and an explicit accessible name, and support keyboard operation.
 
-友好字段根据输出内容按以下优先级展示：
+Friendly fields are displayed according to the following priority based on output content:
 
-1. `status`、`summary_markdown` 等总体结论。
-2. `issues`、`suggestions` 等审查或反馈项。
-3. `changed_paths`、`notes` 等实现与验证信息。
-4. 其他结构化字段以稳定的键值形式展示。
+1. `status`, `summary_markdown` and other overall conclusions.
+2. `issues`, `suggestions` and other review or feedback items.
+3. `changed_paths`, `notes` and other implementation and verification information.
+4. Other structured fields are presented as stable key-values.
 
-原始 JSON 放在详情底部的二级 `<details>` 中，默认收起。
+The original JSON is placed in the secondary `<details>` at the bottom of the details, which is collapsed by default.
 
-### 摘要生成
+### Summary generation
 
-摘要只使用当前交付的结构化 `output`，按以下顺序选择：
+The abstract uses only the currently delivered structured `output`, selected in the following order:
 
-1. 非空 `summary_markdown` 的首段。
-2. `issues` 的数量与首个问题摘要。
-3. `notes` 的首项。
-4. `changed_paths` 的数量。
-5. 无可读字段时显示“已产生结构化交付，展开查看详情”。
+1. The first segment of non-empty `summary_markdown`.
+2. Quantity and first issue summary for `issues`.
+3. First item of `notes`.
+4. `changed_paths` quantity.
+5. When there are no readable fields, "Structured delivery has been generated, expand to view details" is displayed.
 
-摘要在 UI 层做纯展示转换，不写回数据库，也不调用额外模型。
+The abstract performs pure display conversion at the UI layer, without writing back to the database or calling additional models.
 
-## 状态与异常展示
+## Status and exception display
 
-- `queued`：显示“等待执行”，不显示内容摘要。
-- `running`：显示“执行中”，使用现有低干扰加载指示。
-- `completed`：显示摘要、路由和可展开详情。
-- `failed`、`cancelled`、`interrupted`：使用语义状态色和文字说明；若无输出，不显示空详情入口。
-- `skipped_*`：显示跳过原因，不生成虚假的发送箭头。
-- 输出 JSON 无法解析：后端保持现有数据错误边界；前端不接收部分解析结果。
+- `queued`: Displays "Waiting for execution" and does not display the content summary.
+- `running`: Displays "Executing", using existing low-disruption loading instructions.
+- `completed`: Show summary, routing, and expandable details.
+- `failed`, `cancelled`, `interrupted`: Use semantic status colors and text descriptions; if there is no output, the empty details entry will not be displayed.
+- `skipped_*`: Show skip reason, do not generate false send arrow.
+- Output JSON cannot be parsed: backend maintains existing data error bounds; frontend does not accept partial parsing results.
 
-颜色不是唯一状态信号，所有状态同时提供文字或图标。
+Color is not the only status signal, all statuses also provide text or icons.
 
-## 响应式设计
+## Responsive design
 
-- 宽屏：使用完整动态泳道表格。
-- 泳道列保持可读的最小宽度，字段文本自然换行。
-- 小窗口或能力较多时：退化为纵向交付卡片，每张卡片继续显示 `发送能力 → 接收能力`，展开内容仍保留在当前卡片内。
-- 不依赖全页面横向滚动；局部内容优先重排，而不是压缩到不可读宽度。
-- 现有 `prefers-reduced-motion` 规则继续生效。
+- Widescreen: Use full dynamic swimlane table.
+- Swimlane columns are kept to a minimum readable width, and field text wraps naturally.
+- When the window is small or there are many capabilities: it degrades to delivering cards vertically, each card continues to display `发送能力 → 接收能力`, and the expanded content remains within the current card.
+- Does not rely on full-page horizontal scrolling; partial content is reflowed first rather than compressed to unreadable width.
+- The existing `prefers-reduced-motion` rule continues to be in effect.
 
-## 空白区域修正
+## White space correction
 
-为交付面板使用比通用 `.panel` 更明确的组件样式，使其 `min-height` 为内容驱动。该修正只作用于 Run 交付消息，不改变时间线和节点检查器面板高度。
+Use a more explicit component style than generic `.panel` for the delivery panel, making it `min-height` content-driven. This fix only affects Run delivery messages and does not change the timeline and Node Inspector panel height.
 
-空交付状态使用紧凑说明文字，不渲染大尺寸空白容器。
+Empty delivery states use compact description text and do not render large empty containers.
 
-## 组件边界
+## component boundaries
 
-新增独立的交付泳道组件，负责：
+Added a new independent delivery swim lane component, responsible for:
 
-- 动态泳道布局。
-- 交付状态、方向和摘要展示。
-- 展开状态管理。
-- 友好字段与原始 JSON 展示。
-- 响应式退化。
+- Dynamic swimlane layout.
+- Delivery status, directions and summary display.
+- Expand status management.
+- Friendly fields and raw JSON presentation.
+- Responsive degradation.
 
-`RunWorkbench` 只负责传入冻结团队成员和 `flowDeliveries`，不继续内联交付消息的渲染细节。
+`RunWorkbench` is only responsible for incoming frozen team members and `flowDeliveries` does not continue the rendering details of the inline delivery message.
 
-后端 Store 负责把 Attempt 输出投影到 `FlowDelivery`；Runtime 调度、路由决策和持久化事务保持不变。
+The backend Store is responsible for projecting Attempt output to `FlowDelivery`; runtime scheduling, routing decisions, and persistent transactions remain unchanged.
 
-## 验证
+## Verify
 
-### 后端
+### backend
 
-- 已完成交付返回与自身 Attempt 对应的 `output`。
-- 多轮 Coder/Reviewer 循环不会错误复用能力的最新结果。
-- 等待和运行中的交付返回 `output: null`。
-- 已有数据库无需迁移即可读取历史交付内容。
-- Flow 与 Runtime 现有测试继续通过。
+- Completed delivery returns `output` corresponding to its own Attempt.
+- Multiple rounds of Coder/Reviewer loops will not incorrectly reuse the latest results.
+- Pending and running deliveries return `output: null`.
+- Existing databases can read historical delivery content without migrating.
+- Existing tests for Flow and Runtime continue to pass.
 
-### 前端
+### front end
 
-- 泳道顺序来自冻结团队成员。
-- Coder → Reviewer、Reviewer → Coder 和 Reviewer → 完成都显示正确方向。
-- 多接收方交付显示全部目标。
-- 摘要选择遵循固定优先级。
-- 点击卡片只在当前泳道格子内展开，并正确设置 `aria-expanded`。
-- 友好字段和原始 JSON 折叠项正确显示。
-- queued、running、failed、skipped 和无内容状态均有明确文案。
-- 多能力和窄窗口使用纵向卡片布局。
-- 面板高度跟随内容，不再继承整页级最小高度。
+- Lane order comes from frozen team members.
+- Coder → Reviewer, Reviewer → Coder and Reviewer → Done all show the correct direction.
+- Multi-recipient delivery shows all targets.
+- Summary selection follows fixed priority.
+- Clicking on the card will only expand it within the current lane grid, and set `aria-expanded` correctly.
+- Friendly fields and raw JSON collapse items display correctly.
+- Queued, running, failed, skipped and no content status all have clear copy.
+- Use vertical card layout for multiple capabilities and narrow windows.
+- The height of the panel follows the content and no longer inherits the minimum height of the entire page.
 
-### 闭环验收
+### Closed loop acceptance
 
-使用现有 Coder/Reviewer Run 验证至少四轮历史交付：
+Verify at least four rounds of historical deliveries using existing Coder/Reviewer Run:
 
-1. Coder → Reviewer：实现摘要与验证记录。
-2. Reviewer → Coder：问题列表与修改请求。
-3. Coder → Reviewer：反馈修复摘要。
-4. Reviewer → 完成：最终批准结论。
+1. Coder → Reviewer: Implement summary and verification records.
+2. Reviewer → Coder: Issue lists and revision requests.
+3. Coder → Reviewer: Feedback fix summary.
+4. Reviewer → Done: Final approval of the conclusion.
 
-## 非目标
+## non-target
 
-- 不改变 Flow 路由规则、24 步限制或能力执行顺序。
-- 不改变 Agent 输出 Schema 或重新生成历史摘要。
-- 不将交付内容写入新的数据库副本。
-- 不把泳道升级为可编辑团队拓扑。
-- 不改变节点检查器、运行时间线或 Artifact 存储方式。
+- No changes to Flow routing rules, 24-step limits, or capability execution order.
+- Does not change the Agent output schema or regenerate the historical summary.
+- Deliveries are not written to the new database copy.
+- Do not upgrade swim lanes to editable team topology.
+- No changes to the node inspector, runtime timeline, or how artifacts are stored.

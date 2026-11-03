@@ -1,5 +1,7 @@
 # Desktop Runtime Vertical Slice Implementation Plan
 
+简体中文 | [English](../../../en/superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 补齐由真实本地 Codex 驱动的四能力 Runtime 主链，并交付可启动、可观察、可取消和可回看历史 Run 的 Tauri 桌面客户端。

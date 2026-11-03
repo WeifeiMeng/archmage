@@ -1,5 +1,7 @@
 # Agent Management and Goal-Driven Runs Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-09-28-agent-management-and-goal-runs.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a real local Codex Agent management page with durable capability bindings, and let users start a Run with only a repository and goal while Tester autonomously performs validation.

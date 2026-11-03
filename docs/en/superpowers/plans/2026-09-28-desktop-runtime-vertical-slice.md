@@ -1,26 +1,28 @@
 # Desktop Runtime Vertical Slice Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 补齐由真实本地 Codex 驱动的四能力 Runtime 主链，并交付可启动、可观察、可取消和可回看历史 Run 的 Tauri 桌面客户端。
+**Goal:** Complete the four-capability Runtime main chain driven by real local Codex, and deliver a Tauri desktop client that can start, observe, cancel, and review historical Runs.
 
-**Architecture:** `archmage-core` 新增 UI 无关的 Runtime facade、状态查询和固定工作流调度；CLI 与 Tauri 都只调用这套 API。桌面端采用 Tauri 2、React、TypeScript 和 Vite，使用 typed commands 读取 durable snapshot/events，实时事件只作为刷新信号。
+**Architecture:** `archmage-core` adds UI-independent Runtime facade, status query and fixed workflow scheduling; both CLI and Tauri only call this set of APIs. The desktop uses Tauri 2, React, TypeScript and Vite, uses typed commands to read durable snapshot/events, and real-time events are only used as refresh signals.
 
-**Tech Stack:** Rust 1.95、Tokio、SQLite/rusqlite、真实 Codex CLI、Git worktree、Tauri 2、React 19、TypeScript、Vite、Vitest。
+**Tech Stack:** Rust 1.95, Tokio, SQLite/rusqlite, real Codex CLI, Git worktree, Tauri 2, React 19, TypeScript, Vite, Vitest.
 
 ---
 
-## 实施约定
+## implementation agreement
 
-- 在独立 `codex/desktop-runtime-slice` worktree 实施，不直接修改 `main`。
-- 不增加 Fake Agent；最终验收必须调用已登录的真实 Codex CLI。
-- 单个 Run 固定包含 `designer`、`coder`、`tester`、`reviewer` 四个 Node Run。
-- S0 的依赖是线性的，但 Ready Set 从节点状态和依赖表计算，不写成四次硬编码调用。
-- 测试保持小：每个行为只增加一个聚焦测试；前端只测表单序列化与事件 reducer。
-- Runtime 负责持久化、Git、Codex、检查和取消；React 不直接访问 SQLite、Git 或 Codex。
-- 不实现 daemon、自动重试、Fix loop、Workflow 编辑器、Provider 设置或自动提交/合并。
+- Implemented in a standalone `codex/desktop-runtime-slice` worktree and does not modify `main` directly.
+- No Fake Agent is added; final acceptance must call the logged-in real Codex CLI.
+- A single Run always contains four Node Runs: `designer`, `coder`, `tester`, and `reviewer`.
+- S0's dependencies are linear, but Ready Set is calculated from the node state and dependency table and is not written as four hard-coded calls.
+- Keep tests small: only add one focused test per behavior; front-end only tests form serialization and event reducers.
+- The runtime is responsible for persistence, Git, Codex, checking, and cancellation; React does not have direct access to SQLite, Git, or Codex.
+- Does not implement daemon, auto-retry, Fix loop, Workflow editor, Provider settings, or auto-commit/merge.
 
-## 文件布局
+## File layout
 
 ```text
 crates/archmage-core/
@@ -54,7 +56,7 @@ docs/cli-reference.md                  # 可复制的 run/status/logs/cancel 命
 docs/runbooks/desktop-s0.md            # 桌面启动与真实验收步骤
 ```
 
-### Task 1：Runtime 数据契约与持久化查询
+### Task 1: Runtime data contract and persistent query
 
 **Files:**
 - Create: `crates/archmage-core/migrations/0006_runtime.sql`
@@ -63,9 +65,9 @@ docs/runbooks/desktop-s0.md            # 桌面启动与真实验收步骤
 - Modify: `crates/archmage-core/src/store/transitions.rs`
 - Modify: `crates/archmage-core/src/runtime/mod.rs`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: Write failing tests**
 
-在 `tests/runtime.rs` 建临时 Store，用 `RunRequest` 创建 Run 后断言 definition 保存 repo/goal/checks、四个节点顺序固定，`list_runs()` 与 `snapshot()` 返回同一 Run。
+Build a temporary store in `tests/runtime.rs`, use `RunRequest` to create Run and then assert definition to save repo/goal/checks. The order of the four nodes is fixed. `list_runs()` and `snapshot()` return the same Run.
 
 ```rust
 #[test]
@@ -83,17 +85,17 @@ fn start_definition_is_queryable_as_one_four_node_run() {
 }
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [ ] **Step 2: Run RED**
 
 Run: `cargo test -p archmage-core --test runtime start_definition_is_queryable_as_one_four_node_run`
 
-Expected: FAIL，因为 `RunRequest`、Runtime 查询和 v6 migration 尚不存在。
+Expected: FAIL because `RunRequest`, runtime query, and v6 migration do not exist yet.
 
-- [ ] **Step 3: 实现最小契约**
+- [ ] **Step 3: Implement minimal contract**
 
-加入可序列化的 `RunRequest`、`CheckSpec`、`RunSummary`、`RunSnapshot`、`NodeSnapshot`；v6 为 `runs` 增加 repository/definition 所需字段，为 attempts/artifacts 增加结果引用查询所需字段。`Store::list_runs` 按 `created_at DESC`，`Store::run_snapshot` 一次组装 Run、Node、workspace 与 latest event sequence。
+Add serializable `RunRequest`, `CheckSpec`, `RunSummary`, `RunSnapshot`, `NodeSnapshot`; v6 adds the required fields for repository/definition for `runs` and for attempts/artifactsAdd the required fields for the result reference query.`Store::list_runs` Press `created_at DESC`, `Store::run_snapshot` assembles Run, Node, workspace and latest event sequence at once.
 
-- [ ] **Step 4: 运行 GREEN 并提交**
+- [ ] **Step 4: Run GREEN and submit**
 
 Run: `cargo test -p archmage-core --test runtime`
 
@@ -101,7 +103,7 @@ Expected: PASS。
 
 Commit: `feat: add runtime run snapshots`
 
-### Task 2：通用真实 Codex Invocation
+### Task 2: Universal real Codex Invocation
 
 **Files:**
 - Modify: `crates/archmage-core/src/provider/codex.rs`
@@ -109,9 +111,9 @@ Commit: `feat: add runtime run snapshots`
 - Modify: `crates/archmage-core/src/process.rs`
 - Test: `crates/archmage-core/tests/codex_protocol.rs`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: Write failing tests**
 
-测试 `CodexInvocation::argv()` 对 designer/read-only 与 coder/workspace-write 生成显式 `--cd`、`--sandbox`、`--json`、`--output-schema`、`--output-last-message`，且 prompt 只从 stdin 传入。
+Test `CodexInvocation::argv()` generates explicit `--cd`, `--sandbox`, `--json`, `--output-schema`, `--output-last-message` for designer/read-only and coder/workspace-write, with prompt only passed in from stdin.
 
 ```rust
 #[test]
@@ -123,17 +125,17 @@ fn invocation_builds_schema_bound_argv_without_prompt_text() {
 }
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [ ] **Step 2: Run RED**
 
 Run: `cargo test -p archmage-core --test codex_protocol invocation_builds_schema_bound_argv_without_prompt_text`
 
-Expected: FAIL，因为通用 invocation 类型不存在。
+Expected: FAIL because the generic invocation type does not exist.
 
-- [ ] **Step 3: 实现 invocation**
+- [ ] **Step 3: Implement invocation**
 
-抽出 `CodexInvocation`、`CodexOutcome` 与 `invoke()`；保留完整 JSONL/stderr/result 文件，限制大小和 deadline，要求 exit code 0、`turn.completed`、thread ID 和合法 result 文件同时成立。不得把 stderr 原文拼入用户错误。
+Extract `CodexInvocation`, `CodexOutcome` and `invoke()`; keep the complete JSONL/stderr/result file, limit the size and deadline, and require exit code 0, `turn.completed`, thread ID and legal result files to be established at the same time. The original text of stderr must not be spelled into user error.
 
-- [ ] **Step 4: 运行 GREEN 并提交**
+- [ ] **Step 4: Run GREEN and submit**
 
 Run: `cargo test -p archmage-core --test codex_protocol`
 
@@ -141,7 +143,7 @@ Expected: PASS。
 
 Commit: `feat: generalize real Codex invocation`
 
-### Task 3：Ready Set 与 Run 终态
+### Task 3: Ready Set and Run final state
 
 **Files:**
 - Create: `crates/archmage-core/src/runtime/scheduler.rs`
@@ -149,9 +151,9 @@ Commit: `feat: generalize real Codex invocation`
 - Modify: `crates/archmage-core/src/store/transitions.rs`
 - Test: `crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: Write failing tests**
 
-对四节点状态分别断言：初始只 designer ready；designer succeeded 后只 coder ready；failed/cancelled 不再派发后继；reviewer succeeded 后 Run completed。
+Assert the status of the four nodes respectively: initially only designer ready; after designer succeeded, only coder ready; failed/cancelled will no longer dispatch successors; after reviewer succeeded, Run completed.
 
 ```rust
 #[test]
@@ -162,17 +164,17 @@ fn ready_set_advances_from_persisted_dependencies() {
 }
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [ ] **Step 2: Run RED**
 
 Run: `cargo test -p archmage-core --test runtime ready_set_advances_from_persisted_dependencies`
 
-Expected: FAIL，因为 scheduler 不存在。
+Expected: FAIL because scheduler does not exist.
 
-- [ ] **Step 3: 实现 Ready Set**
+- [ ] **Step 3: Implement Ready Set**
 
-定义固定 dependency 表并从 snapshot 计算 Ready Set；增加事务方法 `mark_ready`、`complete_run`、`fail_run`、`cancel_run`，每次状态变化与 event 同事务提交。
+Define a fixed dependency table and calculate the Ready Set from the snapshot; add transaction methods `mark_ready`, `complete_run`, `fail_run`, `cancel_run`. Each status change is submitted with the same transaction as the event.
 
-- [ ] **Step 4: 运行 GREEN 并提交**
+- [ ] **Step 4: Run GREEN and submit**
 
 Run: `cargo test -p archmage-core --test runtime`
 
@@ -180,7 +182,7 @@ Expected: PASS。
 
 Commit: `feat: schedule persisted workflow nodes`
 
-### Task 4：四能力真实 Dispatch 与 Handoff
+### Task 4: Four abilities real Dispatch and Handoff
 
 **Files:**
 - Create: `crates/archmage-core/src/runtime/dispatch.rs`
@@ -190,9 +192,9 @@ Commit: `feat: schedule persisted workflow nodes`
 - Modify: `crates/archmage-core/src/check_runner.rs`
 - Test: `crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: Write failing tests**
 
-使用已提交 artifact 和真实 SQLite，不启动 Provider，分别构造四个节点的 inputs，断言 required context keys、handoff producer、Tester check policy 和 Reviewer changeset/test result 完整。
+Use the submitted artifact and real SQLite, do not start the Provider, construct the inputs of the four nodes respectively, and assert that the required context keys, handoff producer, Tester check policy and Reviewer changeset/test result are complete.
 
 ```rust
 #[test]
@@ -203,21 +205,21 @@ fn reviewer_context_uses_canonical_changeset_and_test_evidence() {
 }
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [ ] **Step 2: Run RED**
 
 Run: `cargo test -p archmage-core --test runtime reviewer_context_uses_canonical_changeset_and_test_evidence`
 
-Expected: FAIL，因为 dispatch/context builder 尚不存在。
+Expected: FAIL because dispatch/context builder does not exist yet.
 
-- [ ] **Step 3: 实现单节点执行**
+- [ ] **Step 3: Implement single node execution**
 
-`dispatch_node` 完成 begin attempt、context persist/bind、schema 写入 attempt 目录、真实 Codex invocation、contract 校验、结果 artifact 发布和 attempt completion。Designer/Reviewer 用 read-only；Coder/Tester 使用 worktree-write。Tester 启动 attempt-specific check socket，只有 `archmage internal check` 可请求冻结 check；Reviewer 输入使用 Runtime 发布的 ChangeSet 与 canonical check evidence。
+`dispatch_node` completes begin attempt, context persist/bind, schema write to attempt directory, real Codex invocation, contract verification, result artifact release and attempt completion. Designer/Reviewer uses read-only; Coder/Tester uses worktree-write. Tester starts the attempt-specific check socket, and only `archmage internal check` can request a frozen check; Reviewer inputs ChangeSet and canonical check evidence published using Runtime.
 
-- [ ] **Step 4: 接入 `run_to_terminal`**
+- [ ] **Step 4: Access `run_to_terminal`**
 
-循环读取 snapshot → 计算 Ready Set → dispatch；节点失败时将 Run 标为 failed，不自动重试。Reviewer `approved` 对应 completed/approved，`changes_requested` 对应 completed/changes_requested。
+Cyclically read snapshot → calculate Ready Set → dispatch; when the node fails, Run will be marked as failed and will not be automatically retried. Reviewer `approved` corresponds to completed/approved, `changes_requested` corresponds to completed/changes_requested.
 
-- [ ] **Step 5: 运行 GREEN 并提交**
+- [ ] **Step 5: Run GREEN and submit**
 
 Run: `cargo test -p archmage-core --test runtime --test context --test contracts --test checks`
 
@@ -225,7 +227,7 @@ Expected: PASS。
 
 Commit: `feat: execute four capability workflow`
 
-### Task 5：取消、恢复和 CLI 主链
+### Task 5: Cancel, restore and CLI main chain
 
 **Files:**
 - Create: `crates/archmage-core/src/runtime/recovery.rs`
@@ -237,9 +239,9 @@ Commit: `feat: execute four capability workflow`
 - Modify: `crates/archmage-cli/tests/cli.rs`
 - Test: `crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: Write failing tests**
 
-测试 cancel request 是 durable event；启动时发现 active attempt 但 owner lock 无持有者时标记 attempt/node/run interrupted；status/logs 只读且不会擅自改变状态。
+The test cancel request is a durable event; when an active attempt is found at startup but the owner lock has no holder, it is marked attempt/node/run interrupted; status/logs is read-only and will not change the state without authorization.
 
 ```rust
 #[test]
@@ -250,17 +252,17 @@ fn reconciliation_marks_abandoned_run_interrupted() {
 }
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [ ] **Step 2: Run RED**
 
 Run: `cargo test -p archmage-core --test runtime reconciliation_marks_abandoned_run_interrupted`
 
-Expected: FAIL，因为 Runtime recovery 不存在。
+Expected: FAIL because runtime recovery does not exist.
 
-- [ ] **Step 3: 实现 control/recovery 与 CLI**
+- [ ] **Step 3: Implement control/recovery and CLI**
 
-`Runtime::cancel` 持久化请求并终止 owned process group；`reconcile_interrupted` 只在能取得 Run owner lock且进程身份不再存活时写 interrupted。接线 `archmage run/status/logs/cancel`，`run` 前台等待 terminal，`status --json` 输出 snapshot，`logs` 输出 events。
+`Runtime::cancel` persists the request and terminates the owned process group; `reconcile_interrupted` only writes interrupted when the Run owner lock can be obtained and the process identity is no longer alive. Wiring `archmage run/status/logs/cancel`, `run` waits for the terminal, `status --json` outputs snapshot, `logs` outputs events.
 
-- [ ] **Step 4: 运行 GREEN 并提交**
+- [ ] **Step 4: Run GREEN and submit**
 
 Run: `cargo test -p archmage-core --test runtime && cargo test -p archmage-cli --test cli`
 
@@ -268,7 +270,7 @@ Expected: PASS。
 
 Commit: `feat: expose runtime through CLI`
 
-### Task 6：Tauri 2 + React 桌面骨架
+### Task 6: Tauri 2 + React desktop skeleton
 
 **Files:**
 - Create: `apps/archmage-desktop/package.json`
@@ -282,32 +284,32 @@ Commit: `feat: expose runtime through CLI`
 - Create: `apps/archmage-desktop/src-tauri/capabilities/default.json`
 - Modify: `Cargo.toml`
 
-- [ ] **Step 1: 生成并收紧官方 Tauri 2 React/TS/Vite 结构**
+- [ ] **Step 1: Generate and tighten the official Tauri 2 React/TS/Vite structure**
 
-使用当前官方模板结构，workspace 加入 `apps/archmage-desktop/src-tauri`。只启用 core commands、dialog folder picker 和 opener；不启用 shell plugin，避免前端直接执行任意命令。
+Using the current official template structure, the workspace added `apps/archmage-desktop/src-tauri`. Only core commands, dialog folder picker and opener are enabled; shell plugin is not enabled to prevent the front end from directly executing arbitrary commands.
 
-- [ ] **Step 2: 实现 typed Tauri commands**
+- [ ] **Step 2: Implement typed Tauri commands**
 
-`AppState` 保存 Runtime 和 `run_id -> JoinHandle`。命令实现 `doctor`、`start_run`、`list_runs`、`get_run_snapshot`、`list_events`、`cancel_run`、`reveal_workspace`；`start_run` 创建 durable Run 后 spawn `run_to_terminal`，通过 `run-event` 只发送 run_id/event_seq。
+`AppState` Save Runtime and `run_id -> JoinHandle`. Command implementation `doctor`, `start_run`, `list_runs`, `get_run_snapshot`, `list_events`, `cancel_run`, `reveal_workspace`; `start_run` spawn after creating durable Run`run_to_terminal`, send only run_id/event_seq via `run-event`.
 
-- [ ] **Step 3: 编译并提交**
+- [ ] **Step 3: Compile and submit**
 
 Run: `npm install --prefix apps/archmage-desktop && npm run build --prefix apps/archmage-desktop && cargo check -p archmage-desktop`
 
-Expected: TypeScript/Vite build 与 Tauri Rust check 均成功。
+Expected: TypeScript/Vite build and Tauri Rust check both succeeded.
 
 Commit: `feat: scaffold Tauri runtime client`
 
-### Task 7：Workbench-first 客户端
+### Task 7: Workbench-first client
 
 **Files:**
 - Create: `apps/archmage-desktop/src/{main.tsx,api.ts,model.ts,App.tsx,styles.css}`
 - Create: `apps/archmage-desktop/src/components/{RunForm,RunSidebar,RunHeader,NodeProgress,Timeline,NodeInspector}.tsx`
 - Create: `apps/archmage-desktop/src/model.test.ts`
 
-- [ ] **Step 1: 写两个失败测试**
+- [ ] **Step 1: Write two failing tests**
 
-表单测试把 repository/goal/check rows 序列化为 `RunRequest` 并过滤空 check；reducer 测试按 event_seq 去重、检测 sequence gap 并要求 snapshot refresh。
+The form test serializes repository/goal/check rows into `RunRequest` and filters empty checks; the reducer test deduplicates event_seq, detects sequence gaps, and requires snapshot refresh.
 
 ```ts
 it("serializes nonblank checks", () => {
@@ -320,21 +322,21 @@ it("requests refresh on an event gap", () => {
 });
 ```
 
-- [ ] **Step 2: 运行 RED**
+- [ ] **Step 2: Run RED**
 
 Run: `npm test --prefix apps/archmage-desktop`
 
-Expected: FAIL，因为 model/reducer 尚不存在。
+Expected: FAIL because model/reducer does not exist yet.
 
-- [ ] **Step 3: 实现数据层与布局 A**
+- [ ] **Step 3: Implement data layer and layout A**
 
-建立 typed invoke wrappers；启动时 `list_runs`，选择 Run 时加载 snapshot+events，监听 `run-event` 后增量刷新。实现左侧 Run 列表、新 Run 表单、四节点进度、timeline、inspector、Cancel/Reveal Workspace。状态颜色和文案同时表达，不只依赖颜色。
+Create typed invoke wrappers; `list_runs` at startup, load snapshot+events when Run is selected, and incrementally refresh after listening to `run-event`. Implement the left Run list, new Run form, four-node progress, timeline, inspector, and Cancel/Reveal Workspace. The status color and copy are expressed at the same time, not just relying on color.
 
-- [ ] **Step 4: 实现窗口关闭保护**
+- [ ] **Step 4: Implement window closing protection**
 
-存在 active Run 时阻止 close，并用原生确认框提供“返回应用”或“取消并退出”；不宣称关闭后后台继续。
+Prevent close when active Run exists, and use native confirmation box to provide "return to application" or "cancel and exit"; do not declare background continuation after close.
 
-- [ ] **Step 5: 运行 GREEN 并提交**
+- [ ] **Step 5: Run GREEN and submit**
 
 Run: `npm test --prefix apps/archmage-desktop && npm run build --prefix apps/archmage-desktop`
 
@@ -342,7 +344,7 @@ Expected: PASS。
 
 Commit: `feat: build desktop run workbench`
 
-### Task 8：真实 Codex 验收与使用文档
+### Task 8: Real Codex acceptance and usage documents
 
 **Files:**
 - Create: `crates/archmage-core/tests/runtime_live.rs`
@@ -350,28 +352,28 @@ Commit: `feat: build desktop run workbench`
 - Modify: `docs/cli-reference.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: 增加 ignored 真实验收**
+- [ ] **Step 1: Add ignored true experiment collection**
 
-fixture repo 只包含一个可快速修改的小任务和一条检查命令。测试调用公开 Runtime API，断言四节点均产生不同真实 Codex thread ID、Run terminal、events 连续、worktree 可检查、source repo HEAD/status/content 未变。
+The fixture repo only contains a small task that can be modified quickly and a check command. The test calls the public Runtime API and asserts that the four nodes all generate different real Codex thread IDs, Run terminal, events are continuous, the worktree is checkable, and the source repo HEAD/status/content remains unchanged.
 
-- [ ] **Step 2: 运行真实 Core/CLI 验收**
+- [ ] **Step 2: Run the real Core/CLI for acceptance**
 
 Run: `cargo test -p archmage-core --test runtime_live -- --ignored --nocapture`
 
-Expected: 真实 Codex 完成四次 capability invocation；若 Reviewer changes_requested，流程仍是合法 terminal，但不得伪装成 approved。
+Expected: The real Codex completes four capability invocations; if Reviewer changes_requested, the process is still a legal terminal, but it must not be disguised as approved.
 
-- [ ] **Step 3: 启动桌面端手工烟测**
+- [ ] **Step 3: Start manual smoke test on desktop**
 
 Run: `npm run tauri dev --prefix apps/archmage-desktop`
 
-验证：选择 repo、输入目标/检查、启动真实 Run、观察四节点/timeline、查看历史 Run、Reveal Workspace。只做这一轮桌面手工验证。
+Verification: Select repo, enter target/check, start real run, observe four nodes/timeline, view historical run, Reveal Workspace. Only do this round of desktop manual verification.
 
-- [ ] **Step 4: 更新文档并做最终轻量门禁**
+- [ ] **Step 4: Update the document and make the final lightweight access control**
 
-文档给出 `archmage run/status/logs/cancel` 与 `npm run tauri dev --prefix apps/archmage-desktop` 的可复制命令，明确 `resume` 尚未提供自动修复语义。
+The document gives reproducible commands for `archmage run/status/logs/cancel` and `npm run tauri dev --prefix apps/archmage-desktop`, and makes it clear that `resume` does not yet provide automatic repair semantics.
 
 Run: `cargo fmt --all --check && cargo test --workspace && npm test --prefix apps/archmage-desktop && npm run build --prefix apps/archmage-desktop`
 
-Expected: 所有非 ignored 检查通过。
+Expected: All non-ignored checks pass.
 
 Commit: `docs: add runtime and desktop guide`

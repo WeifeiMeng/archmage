@@ -1,5 +1,7 @@
 # Agent 管理按 Provider 分组设计
 
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-agent-provider-grouping-design.md)
+
 ## 目标
 
 让 Agent 管理页的添加入口与 Provider 建立直接归属关系，降低顶部操作的视觉权重，并让 Codex 与 DeepSeek Harness 的实例管理能力保持对等。

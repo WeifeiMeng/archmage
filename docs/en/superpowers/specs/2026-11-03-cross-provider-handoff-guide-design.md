@@ -1,5 +1,7 @@
 # Cross-Provider Handoff Guide Design
 
+[简体中文](../../../zh-CN/superpowers/specs/2026-11-03-cross-provider-handoff-guide-design.md) | English
+
 **Status:** Approved for documentation implementation.
 
 ## Purpose

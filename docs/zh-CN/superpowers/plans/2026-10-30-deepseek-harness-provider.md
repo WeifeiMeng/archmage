@@ -1,44 +1,46 @@
-# DeepSeek Harness Provider Implementation Plan
+# DeepSeek Harness提供商实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-30-deepseek-harness-provider.md)
 
-**Goal:** Replace the current experimental DeepSeek Harness headless-CLI integration with an Archmage-owned Python SDK sidecar, so a `Run + Capability` keeps one DSH conversation for its full live Run and Agent Management can configure, discover, verify, and bind that provider.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Archmage ships a small JSONL Python bridge plus a Cordis composition and launches them through the published `deepseek-harness-sdk` / matching `deepseek-harness-runtime-bin`. Rust owns one long-lived bridge process per `(run_id, capability)`, uses temporary bridges for consultations, strictly parses the final assistant text as one JSON object, and destroys all sidecars at Run terminal/cancel boundaries. The existing Codex path remains stateless and unchanged; no DeepSeek Harness repository change is part of this delivery.
+**目标：** 将当前实验性的 DeepSeek Harness 无头 CLI 集成替换为 Archmage 拥有的 Python SDK sidecar，以便 `Run + Capability` 为其完整的实时运行保留一个 DSH 对话，并且代理管理可以配置、发现、验证和绑定该提供程序。
 
-**Tech Stack:** Rust 2024, Tokio process/IO primitives, SQLite/rusqlite, Python 3 + `deepseek-harness-sdk`, JSONL, Cordis YAML, React/TypeScript/Vitest, Cargo tests.
+**架构：** Archmage 提供了一个小型 JSONL Python 桥加上 Cordis 组合，并通过已发布的 `deepseek-harness-sdk` / 匹配的 `deepseek-harness-runtime-bin` 启动它们。Rust 对每个 `(run_id, capability)` 拥有一个长期存在的桥接进程，使用临时桥进行协商，将最终的辅助文本严格解析为一个 JSON 对象，并在 Run terminal/cancel 边界处销毁所有 sidecar。现有的 Codex 路径保持无状态且不变；本次交付不包含 DeepSeek Harness 存储库更改。
+
+**技术堆栈：** Rust 2024、Tokio process/IO 原语、SQLite/rusqlite、Python 3 + `deepseek-harness-sdk`、JSONL、Cordis YAML、React/TypeScript/Vitest、Cargo 测试。
 
 ---
 
-## Scope and replacement rules
+## 范围和替换规则
 
-- Work only in the Archmage repository. The existing DSH worktree/branch created for the superseded CLI design is not merged, edited, reset, or deleted by this plan.
-- Rewrite the unshipped migration `0016_deepseek_harness.sql` in place. This feature branch has not been released, so retaining the obsolete `provider_sessions` table or its seeded guessed-model Agent would create needless compatibility debt.
-- Preserve the already-added `ProviderKind::DeepseekHarness`, but replace every headless CLI flag, create/resume lease, and persisted-provider-session assumption with the SDK bridge/pool model.
-- Keep verification focused: unit/integration tests use controlled bridge/SDK fakes; the real credentialed smoke is one optional final command and is reported as skipped when prerequisites are absent.
+- 只能在Archmage存储库中工作。此计划不会合并、编辑、重置或删除为被取代的 CLI 设计创建的现有 DSH worktree/branch。
+- 就地重写未发货的迁移 `0016_deepseek_harness.sql`。此功能分支尚未发布，因此保留过时的 `provider_sessions` 表或其种子猜测模型代理将产生不必要的兼容性债务。
+- 保留已添加的 `ProviderKind::DeepseekHarness`，但用 SDK bridge/pool 模型替换每个无头 CLI 标志、create/resume 租约和持久提供者会话假设。
+- 保持验证重点：unit/integration 测试使用受控 bridge/SDK 假货；真正的凭证烟雾是一个可选的最终命令，并且在不满足先决条件时报告为已跳过。
 
-## Task 1: Correct the Agent schema and frozen configuration
+## 任务 1：更正代理架构和冻结配置
 
-**Files:**
-- Modify: `crates/archmage-core/migrations/0016_deepseek_harness.sql`
-- Modify: `crates/archmage-core/src/agent.rs`
-- Modify: `crates/archmage-core/src/store/mod.rs`
-- Modify: `crates/archmage-core/src/runtime/mod.rs`
-- Modify: `crates/archmage-core/tests/agents.rs`
-- Modify: `crates/archmage-core/tests/runtime.rs`
+**文件：**
+- 修改：`crates/archmage-core/migrations/0016_deepseek_harness.sql`
+- 修改：`crates/archmage-core/src/agent.rs`
+- 修改：`crates/archmage-core/src/store/mod.rs`
+- 修改：`crates/archmage-core/src/runtime/mod.rs`
+- 修改：`crates/archmage-core/tests/agents.rs`
+- 修改：`crates/archmage-core/tests/runtime.rs`
 
-- [ ] **Step 1: Write failing schema and validation tests**
+- [ ] **第 1 步：编写失败的架构和验证测试**
 
-Add tests proving:
+添加测试证明：
 
-1. schema 8 upgrades preserve existing Codex instances/bindings and create no DSH instance automatically;
-2. `agent_instances` has nullable `provider_route` and no `provider_sessions` table;
-3. DSH input requires nonblank `provider_route` and `model`;
-4. Codex rejects `provider_route` but retains its optional `model` behavior;
-5. saving a changed Python path, route, or model invalidates verification;
-6. frozen Run bindings retain resolved Python path, route, and model after the global Agent is edited.
+1. 模式 8 升级保留现有 Codex instances/bindings 并不会自动创建 DSH 实例；
+2. `agent_instances` 具有可为空的 `provider_route` 并且没有 `provider_sessions` 表；
+3. DSH 输入需要非空白 `provider_route` 和 `model`；
+4. Codex 拒绝 `provider_route`，但保留其可选的 `model` 行为；
+5. 保存更改的 Python 路径、路由或模型会使验证无效；
+6. 编辑全局 Agent 后，frozen Run 绑定会保留已解析的 Python 路径、路线和模型。
 
-Use this input shape in all new fixtures:
+在所有新灯具中使用此输入形状：
 
 ```rust
 AgentInstanceInput {
@@ -52,15 +54,15 @@ AgentInstanceInput {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm the red state**
+- [ ] **步骤 2：运行重点测试并确认红色状态**
 
-Run: `cargo test -p archmage-core --test agents --test runtime`
+运行： `cargo test -p archmage-core --test agents --test runtime`
 
-Expected: compile/assertion failures because `provider_route` is absent and migration 16 still seeds an Agent and creates `provider_sessions`.
+预期：compile/assertion 失败，因为 `provider_route` 不存在，并且迁移 16 仍播种代理并创建 `provider_sessions`。
 
-- [ ] **Step 3: Rewrite migration 16 and the Rust data model**
+- [ ] **步骤 3：重写迁移 16 和 Rust 数据模型**
 
-Make migration 16 rebuild `agent_instances` with this column order:
+使用此列顺序使迁移 16 重建 `agent_instances`：
 
 ```sql
 id, provider_kind, display_name, executable_path, provider_route, model,
@@ -68,9 +70,9 @@ enabled, connection_state, discovered_version, last_verified_at, last_error,
 verification_thread_id, created_at, updated_at
 ```
 
-Copy existing rows with `NULL AS provider_route`, rebuild `capability_bindings` to preserve foreign keys, and finish with only `INSERT INTO schema_migrations(version) VALUES(16);`. Do not seed a DSH Agent and do not create `provider_sessions`.
+使用 `NULL AS provider_route` 复制现有行，重建 `capability_bindings` 以保留外键，最后仅使用 `INSERT INTO schema_migrations(version) VALUES(16);` 完成。不要播种 DSH 代理，也不要创建 `provider_sessions`。
 
-Add `provider_route: Option<String>` to `AgentInstanceInput`, `AgentInstance`, and `FrozenAgentBinding`. Validation must trim stored values and enforce this matrix:
+将 `provider_route: Option<String>` 添加到 `AgentInstanceInput`、`AgentInstance` 和 `FrozenAgentBinding`。验证必须修剪存储的值并强制执行此矩阵：
 
 ```rust
 match self.provider_kind {
@@ -89,51 +91,51 @@ match self.provider_kind {
 }
 ```
 
-Update every Agent SELECT/row index and upsert. Verification state is retained only when `executable_path`, `provider_route`, and `model` are all unchanged. Bump `FrozenRunDefinition.version` from 5 to 6 and freeze all three DSH launch values.
+更新每个代理 SELECT/row 索引并更新插入。仅当 `executable_path`、`provider_route` 和 `model` 均未更改时，才会保留验证状态。将 `FrozenRunDefinition.version` 从 5 提高到 6，并冻结所有三个 DSH 启动值。
 
-- [ ] **Step 4: Remove the persisted session lease API**
+- [ ] **步骤 4：删除持久会话租用 API**
 
-Delete `ProviderSessionMode`, `ProviderSessionLease`, `Store::begin_provider_session`, and `Store::mark_provider_session_ready`, plus their tests. Session ownership will move to the live sidecar pool in Task 4.
+删除 `ProviderSessionMode`、`ProviderSessionLease`、`Store::begin_provider_session` 和 `Store::mark_provider_session_ready` 及其测试。会话所有权将转移到任务 4 中的实时 sidecar 池。
 
-- [ ] **Step 5: Re-run focused tests and commit**
+- [ ] **步骤 5：重新运行重点测试并提交**
 
-Run: `cargo test -p archmage-core --test agents --test runtime`
+运行： `cargo test -p archmage-core --test agents --test runtime`
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add crates/archmage-core && git commit -m "feat: configure DeepSeek Harness SDK agents"`
+提交： `git add crates/archmage-core && git commit -m "feat: configure DeepSeek Harness SDK agents"`
 
-## Task 2: Add the Archmage-owned SDK bridge and Cordis composition
+## 任务2：添加Archmage拥有的SDK桥和Cordis组合
 
-**Files:**
-- Create: `crates/archmage-core/resources/deepseek_harness_bridge.py`
-- Create: `crates/archmage-core/resources/deepseek_harness.cordis.yml`
-- Create: `crates/archmage-core/tests/fixtures/deepseek_harness_sdk/deepseek_harness/__init__.py`
-- Create: `crates/archmage-core/tests/deepseek_harness_bridge.rs`
+**文件：**
+- 创建：`crates/archmage-core/resources/deepseek_harness_bridge.py`
+- 创建：`crates/archmage-core/resources/deepseek_harness.cordis.yml`
+- 创建：`crates/archmage-core/tests/fixtures/deepseek_harness_sdk/deepseek_harness/__init__.py`
+- 创建：`crates/archmage-core/tests/deepseek_harness_bridge.rs`
 
-- [ ] **Step 1: Write a failing black-box bridge test**
+- [ ] **第 1 步：编写失败的黑盒桥接测试**
 
-The test launches the real bridge script with `PYTHONPATH` pointing at the fake `deepseek_harness` package, sends two JSONL `invoke` frames, then a `close` frame. Assert:
+该测试启动真实的桥接脚本，其中 `PYTHONPATH` 指向假 `deepseek_harness` 包，发送两个 JSONL `invoke` 帧，然后发送一个 `close` 帧。断言：
 
-- stdout contains exactly `ready`, two matching `result` frames, and `closed`;
-- both results carry the same configured session ID;
-- the fake SDK log shows one `DeepSeekHarness` instance and two ordered `Session.run()` calls;
-- invalid input, duplicate invocation ID, oversized final text, and SDK exception each return one bounded `error` frame and terminate nonzero;
-- protocol output never contains SDK diagnostics written to stderr.
+- stdout 恰好包含 `ready`、两个匹配的 `result` 帧和 `closed`；
+- 两个结果都带有相同的配置会话 ID；
+- 伪造的 SDK 日志显示一个 `DeepSeekHarness` 实例和两个有序的 `Session.run()` 调用；
+- 无效输入、重复调用 ID、过大的最终文本和 SDK 异常均返回一个有界 `error` 帧并终止非零；
+- 协议输出从不包含写入 stderr 的 SDK 诊断信息。
 
-Run: `cargo test -p archmage-core --test deepseek_harness_bridge`
+运行： `cargo test -p archmage-core --test deepseek_harness_bridge`
 
-Expected: FAIL because the bridge/resources do not exist.
+预期：失败，因为 bridge/resources 不存在。
 
-- [ ] **Step 2: Implement the bridge protocol using only the public high-level SDK**
+- [ ] **步骤 2：仅使用公共高级 SDK 实现桥接协议**
 
-The bridge reads one startup JSON object from stdin:
+该桥从 stdin 读取一个启动 JSON 对象：
 
 ```json
 {"op":"start","protocol":1,"cwd":"/repo","provider":"deepseek-official","model":"deepseek-v4-flash","sessionId":"archmage-...","cordis":"/private/cordis.yml","sessionRoot":"/private/sessions","maxResultBytes":1048576,"requestTimeoutSeconds":900}
 ```
 
-It must instantiate exactly:
+它必须准确地实例化：
 
 ```python
 config = DeepSeekHarnessConfig(
@@ -149,73 +151,73 @@ harness = DeepSeekHarness(config)
 session = harness.start_session(start["sessionId"])
 ```
 
-For each unique request:
+对于每个独特的请求：
 
 ```json
 {"op":"invoke","id":"attempt-or-consultation-id","task":"...","schema":{}}
 ```
 
-render one prompt containing the task followed by the compact schema and the instruction `Return exactly one JSON object matching this schema, without Markdown fences.`; call `session.run(prompt)`; reject non-`completed` finish reasons, empty responses, invalid UTF-8 at the process boundary, and responses over `maxResultBytes`; then emit:
+渲染一个包含任务的提示，后跟紧凑模式和指令 `Return exactly one JSON object matching this schema, without Markdown fences.`；调用 `session.run(prompt)`；拒绝非 `completed` 完成原因、空响应、进程边界处的无效 UTF-8 以及通过 `maxResultBytes` 的响应；然后发出：
 
 ```json
 {"op":"result","id":"...","sessionId":"archmage-...","text":"{...}","finishReason":"completed"}
 ```
 
-`close` calls `harness.close()` in `finally` and emits `closed`. Catch errors at the top level, emit a safe `{op:"error", id, code, message}` frame without environment/credential values, then exit nonzero. Use `importlib.metadata.version()` to verify `deepseek-harness-sdk` and `deepseek-harness-runtime-bin` are present and exactly version-matched before emitting `ready`.
+`close` 在 `finally` 中调用 `harness.close()` 并发出 `closed`。在顶层捕获错误，发出没有 environment/credential 值的安全 `{op:"error", id, code, message}` 帧，然后以非零值退出。在发出 `ready` 之前，使用 `importlib.metadata.version()` 验证 `deepseek-harness-sdk` 和 `deepseek-harness-runtime-bin` 是否存在且版本完全匹配。
 
-- [ ] **Step 3: Add the unattended Cordis composition**
+- [ ] **步骤 3：添加无人值守的 Cordis 组合物**
 
-Base the resource on the runtime-wheel plugins proven by the official JSON-RPC and ACP examples. Include:
+该资源基于官方 JSON-RPC 和 ACP 示例证明的运行时轮插件。包括：
 
-- `@deepseek-ai/dsh-sdk-jsonrpc-server`;
-- `@deepseek-ai/dsh-llm-deepseek`;
-- `@deepseek-ai/dsh-sandbox-local` and `@deepseek-ai/dsh-sandbox-policy`, with `mode: !!js process.env.DSH_PERMISSION_MODE` and workspace root `DSH_CWD`;
-- local subprocess plus sandboxed Bash;
-- `@deepseek-ai/dsh-user-approval` with `policy: never`;
-- the agent spine with background jobs and interactive questions disabled;
-- JSONL persistence and checkpoint policy;
-- sandboxed filesystem, observation policy, and filesystem tools;
-- token meter and bounded compaction.
+- `@deepseek-ai/dsh-sdk-jsonrpc-server`；
+- `@deepseek-ai/dsh-llm-deepseek`；
+- `@deepseek-ai/dsh-sandbox-local` 和 `@deepseek-ai/dsh-sandbox-policy`，以及 `mode: !!js process.env.DSH_PERMISSION_MODE` 和工作空间根 `DSH_CWD`；
+- 本地子进程加上沙盒 Bash；
+- `@deepseek-ai/dsh-user-approval` 与 `policy: never`；
+- 禁用后台作业和交互式问题的代理脊柱；
+- JSONL 持久化和检查点策略；
+- 沙盒文件系统、观察策略和文件系统工具；
+- 令牌计和有界压缩。
 
-No console logger, terminal UI, question tool, telemetry exporter, or interactive approval answerer may be present because stdout belongs to JSONL and Archmage execution is unattended.
+可能不存在控制台记录器、终端 UI、问题工具、遥测导出器或交互式审批应答器，因为 stdout 属于 JSONL 并且 Archmage 执行是无人值守的。
 
-- [ ] **Step 4: Make the fake SDK assert applied configuration**
+- [ ] **步骤 4：制作假 SDK 断言应用的配置**
 
-The fake package must expose the same constructor surface used above and record provider, model, cwd, cordis, session root, session ID, prompts, and close count to a test-only path supplied by `FAKE_DSH_LOG`. It must also support deterministic exception/oversize/finish-reason modes through non-secret test variables.
+假包必须公开上面使用的相同构造函数表面，并记录提供程序、模型、cwd、cordis、会话根、会话 ID、提示和关闭计数到 `FAKE_DSH_LOG` 提供的仅测试路径。它还必须通过非秘密测试变量支持确定性 exception/oversize/finish-reason 模式。
 
-- [ ] **Step 5: Run and commit**
+- [ ] **第5步：运行并提交**
 
-Run: `cargo test -p archmage-core --test deepseek_harness_bridge`
+运行： `cargo test -p archmage-core --test deepseek_harness_bridge`
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add crates/archmage-core/resources crates/archmage-core/tests && git commit -m "feat: add DeepSeek Harness SDK bridge"`
+提交： `git add crates/archmage-core/resources crates/archmage-core/tests && git commit -m "feat: add DeepSeek Harness SDK bridge"`
 
-## Task 3: Build the persistent Rust sidecar transport
+## 任务 3：构建持久的 Rust sidecar 传输
 
-**Files:**
-- Modify: `crates/archmage-core/src/process.rs`
-- Replace: `crates/archmage-core/src/provider/deepseek_harness.rs`
-- Replace: `crates/archmage-core/tests/deepseek_harness_protocol.rs`
-- Modify: `crates/archmage-core/tests/provider_execution.rs`
+**文件：**
+- 修改：`crates/archmage-core/src/process.rs`
+- 替换： `crates/archmage-core/src/provider/deepseek_harness.rs`
+- 替换： `crates/archmage-core/tests/deepseek_harness_protocol.rs`
+- 修改：`crates/archmage-core/tests/provider_execution.rs`
 
-- [ ] **Step 1: Write failing transport tests with a fake JSONL bridge**
+- [ ] **步骤 1：使用假 JSONL 桥编写失败的传输测试**
 
-Cover ready handshake, two sequential invocations on one process, invocation-ID matching, stdout line/result limits, timeout, malformed/duplicate frames, early exit, bounded stderr capture, graceful close, and process-group kill. The fake bridge must record its PID so the test can prove a cancelled sidecar is gone.
+涵盖就绪握手、一个进程上的两次连续调用、调用 ID 匹配、stdout line/result 限制、超时、malformed/duplicate 帧、提前退出、有界 stderr 捕获、优雅关闭和进程组终止。假桥必须记录其 PID，以便测试可以证明已取消的边车已经消失。
 
-Run: `cargo test -p archmage-core --test deepseek_harness_protocol --test provider_execution`
+运行： `cargo test -p archmage-core --test deepseek_harness_protocol --test provider_execution`
 
-Expected: FAIL because the current adapter launches one headless CLI process per call.
+预期：失败，因为当前适配器每次调用都会启动一个无头 CLI 进程。
 
-- [ ] **Step 2: Add an owned piped-process primitive**
+- [ ] **步骤 2：添加拥有的管道进程原语**
 
-Extend `process.rs` with `spawn_owned_piped(binary, args, cwd, env)` returning a type that owns `ChildStdin`, line-buffered `ChildStdout`, a background bounded-stderr drain, `ProcessIdentity`, `try_wait`, `wait`, and the existing identity-checked TERM/KILL ladder. Keep `spawn_owned` and bounded one-shot capture behavior unchanged for Codex and existing tests.
+使用 `spawn_owned_piped(binary, args, cwd, env)` 扩展 `process.rs`，返回一个类型，该类型拥有 `ChildStdin`、行缓冲 `ChildStdout`、后台有界 stderr 漏极、`ProcessIdentity`、`try_wait`、`wait` 和现有的经过身份检查的 TERM/KILL 梯子。对于 Codex 和现有测试，保持 `spawn_owned` 和有界一次性捕获行为不变。
 
-Do not hold a blocking mutex across async reads/writes. A sidecar is serialized by one Tokio mutex at the provider-pool layer.
+不要跨异步 reads/writes 持有阻塞互斥体。sidecar 由提供者池层的一个 Tokio 互斥体序列化。
 
-- [ ] **Step 3: Replace the CLI adapter with an SDK sidecar**
+- [ ] **步骤 3：用 SDK sidecar 替换 CLI 适配器**
 
-Define these core types:
+定义这些核心类型：
 
 ```rust
 pub struct SdkInspection {
@@ -242,48 +244,48 @@ pub struct SidecarConfig {
 pub struct DeepseekHarnessSidecar { /* process, framed IO, config, poisoned */ }
 ```
 
-`DeepseekHarnessSidecar::start` materializes the embedded Python/YAML resources under `<data_root>/provider-resources/deepseek-harness/<sha256>/` with owner-only permissions, launches `<python> -u bridge.py`, inherits the current environment (including `DSH_HOME` and provider credentials), and overrides only `DSH_PERMISSION_MODE`. It sends `start`, waits for exactly one compatible `ready`, and exposes its process identity.
+`DeepseekHarnessSidecar::start` 以仅限所有者的权限实现 `<data_root>/provider-resources/deepseek-harness/<sha256>/` 下嵌入的 Python/YAML 资源，启动 `<python> -u bridge.py`，继承当前环境（包括 `DSH_HOME` 和提供者凭据），并仅覆盖 `DSH_PERMISSION_MODE`。它发送 `start`，等待恰好一个兼容的 `ready`，并公开其进程身份。
 
-`invoke(id, prompt, schema)` writes one frame, reads exactly the matching terminal frame under the deadline, validates byte/line bounds, strictly runs `serde_json::from_str::<serde_json::Value>(&text)`, and returns `ProviderOutcome { conversation_id: session_id, result }`. Any timeout/protocol/exit error marks the sidecar poisoned; later calls return the original stable failure without respawning.
+`invoke(id, prompt, schema)` 写入一帧，在截止日期内准确读取匹配的终端帧，验证 byte/line 边界，严格运行 `serde_json::from_str::<serde_json::Value>(&text)`，并返回 `ProviderOutcome { conversation_id: session_id, result }`。任何 timeout/protocol/exit 错误都标志着 sidecar 中毒；稍后的调用将返回原始的稳定故障而不重生。
 
-- [ ] **Step 4: Simplify the common executor boundary**
+- [ ] **步骤 4：简化公共执行器边界**
 
-Remove `ProviderSession`, `ProviderLifecycle::ConversationPersisted`, and all old DSH CLI invocation construction. Retain the Codex one-shot branch in `executor.rs`; expose a provider-neutral result and process-spawn observer, while DSH calls are supplied an already-owned sidecar by the pool in Task 4.
+删除 `ProviderSession`、`ProviderLifecycle::ConversationPersisted` 和所有旧的 DSH CLI 调用构造。在 `executor.rs` 中保留 Codex 一次性分支；公开提供者中立的结果和进程生成观察者，而 DSH 调用由任务 4 中的池提供已拥有的 sidecar。
 
-- [ ] **Step 5: Run and commit**
+- [ ] **第5步：运行并提交**
 
-Run: `cargo test -p archmage-core --test deepseek_harness_protocol --test provider_execution`
+运行： `cargo test -p archmage-core --test deepseek_harness_protocol --test provider_execution`
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add crates/archmage-core/src crates/archmage-core/tests && git commit -m "feat: run DeepSeek Harness through an SDK sidecar"`
+提交： `git add crates/archmage-core/src crates/archmage-core/tests && git commit -m "feat: run DeepSeek Harness through an SDK sidecar"`
 
-## Task 4: Add the `(Run, Capability)` sidecar pool
+## 任务 4：添加 `(Run, Capability)` sidecar 池
 
-**Files:**
-- Create: `crates/archmage-core/src/provider/pool.rs`
-- Modify: `crates/archmage-core/src/provider/mod.rs`
-- Modify: `crates/archmage-core/src/runtime/mod.rs`
-- Create: `crates/archmage-core/tests/provider_pool.rs`
+**文件：**
+- 创建：`crates/archmage-core/src/provider/pool.rs`
+- 修改：`crates/archmage-core/src/provider/mod.rs`
+- 修改：`crates/archmage-core/src/runtime/mod.rs`
+- 创建：`crates/archmage-core/tests/provider_pool.rs`
 
-- [ ] **Step 1: Write failing pool tests**
+- [ ] **第 1 步：编写失败的池测试**
 
-Use a configurable fake bridge and assert:
+使用可配置的假桥并断言：
 
-- two invocations for `(run-a, coder)` use one PID/session;
-- `(run-a, reviewer)` and `(run-b, coder)` use distinct PID/session values;
-- a consultation uses a fresh temporary sidecar and does not alter the target's main sidecar;
-- a poisoned key never respawns;
-- `close_run("run-a")` closes only run-a sidecars;
-- `cancel_capability("run-a", "coder")` kills only coder and poisons that key.
+- 对 `(run-a, coder)` 的两次调用使用一个 PID/session；
+- `(run-a, reviewer)` 和 `(run-b, coder)` 使用不同的 PID/session 值；
+- 协商使用新的临时 sidecar，并且不会更改目标的主要 sidecar；
+- 中毒的钥匙永远不会重生；
+- `close_run("run-a")`仅关闭run-a sidecar；
+- `cancel_capability("run-a", "coder")` 仅杀死编码员并毒害该密钥。
 
-Run: `cargo test -p archmage-core --test provider_pool`
+运行： `cargo test -p archmage-core --test provider_pool`
 
-Expected: FAIL because no pool exists.
+预期：失败，因为不存在池。
 
-- [ ] **Step 2: Implement pool ownership without global serialization**
+- [ ] **步骤 2：在没有全局序列化的情况下实现池所有权**
 
-Use:
+用途：
 
 ```rust
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -294,48 +296,48 @@ pub struct ProviderPool {
 }
 ```
 
-The map lock is held only for lookup/insert/remove; each sidecar lock serializes that Capability's turns. `invoke_main` lazily creates a stable `archmage-<uuid>` session and records either `Live(sidecar)` or `Poisoned(error)`. `invoke_temporary` uses `archmage-consult-<uuid>` and always closes/kills in a finally-style path. `close_run` removes entries before awaiting shutdown, so no new caller can acquire a closing entry.
+地图锁仅针对 lookup/insert/remove 持有；每个 sidecar 锁都会序列化该能力的轮次。`invoke_main` 延迟创建稳定的 `archmage-<uuid>` 会话并记录 `Live(sidecar)` 或 `Poisoned(error)`。`invoke_temporary` 在最终样式路径中使用 `archmage-consult-<uuid>` 并始终使用 closes/kills。`close_run` 在等待关闭之前删除条目，因此新的调用者无法获取关闭条目。
 
-- [ ] **Step 3: Put the pool on Runtime**
+- [ ] **第 3 步：将池置于运行时**
 
-Change `Runtime` to hold `Arc<ProviderPool>` alongside `Config`, initialize it in `Runtime::open`, and keep `Clone` sharing the same pool. Add a test-only constructor or bridge override through `Config` rather than global environment mutation so parallel tests remain deterministic.
+更改 `Runtime` 以将 `Arc<ProviderPool>` 与 `Config` 一起保存，在 `Runtime::open` 中对其进行初始化，并保持 `Clone` 共享同一池。通过 `Config` 添加仅测试构造函数或桥重写，而不是全局环境突变，以便并行测试保持确定性。
 
-- [ ] **Step 4: Run and commit**
+- [ ] **第 4 步：运行并提交**
 
-Run: `cargo test -p archmage-core --test provider_pool`
+运行： `cargo test -p archmage-core --test provider_pool`
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add crates/archmage-core && git commit -m "feat: retain DSH conversations per run capability"`
+提交： `git add crates/archmage-core && git commit -m "feat: retain DSH conversations per run capability"`
 
-## Task 5: Route normal, flow, consultation, cancellation, and recovery paths
+## 任务5：路由正常、流量、咨询、取消和恢复路径
 
-**Files:**
-- Modify: `crates/archmage-core/src/runtime/dispatch.rs`
-- Modify: `crates/archmage-core/src/runtime/flow.rs`
-- Modify: `crates/archmage-core/src/runtime/consultation.rs`
-- Modify: `crates/archmage-core/src/runtime/recovery.rs`
-- Modify: `crates/archmage-core/src/runtime/mod.rs`
-- Modify: `crates/archmage-core/tests/runtime.rs`
-- Modify: `crates/archmage-core/tests/flow.rs`
-- Modify: `crates/archmage-core/tests/consultations.rs`
+**文件：**
+- 修改：`crates/archmage-core/src/runtime/dispatch.rs`
+- 修改：`crates/archmage-core/src/runtime/flow.rs`
+- 修改：`crates/archmage-core/src/runtime/consultation.rs`
+- 修改：`crates/archmage-core/src/runtime/recovery.rs`
+- 修改：`crates/archmage-core/src/runtime/mod.rs`
+- 修改：`crates/archmage-core/tests/runtime.rs`
+- 修改：`crates/archmage-core/tests/flow.rs`
+- 修改：`crates/archmage-core/tests/consultations.rs`
 
-- [ ] **Step 1: Add failing runtime continuity tests**
+- [ ] **步骤 1：添加失败的运行时连续性测试**
 
-Add only the four high-value scenarios:
+仅添加四种高价值场景：
 
-1. reviewer feedback reopens coder and coder's fake bridge log shows two ordered turns on one session;
-2. a flow delivery revisiting the same Capability reuses its sidecar;
-3. consultation gets a temporary session and the later main target turn uses its untouched main session;
-4. cancel/terminal completion leaves no recorded fake bridge PID alive.
+1. 审阅者反馈重新打开编码器，并且编码器的假桥日志显示在一个会话上有两个有序轮次；
+2. 重新访问相同功能的流交付重用其 sidecar；
+3. 协商得到一个临时会话，稍后的主要目标轮流使用其未触及的主要会话；
+4. cancel/terminal 完成后不会留下任何记录的假桥 PID。
 
-Run: `cargo test -p archmage-core --test runtime --test flow --test consultations`
+运行： `cargo test -p archmage-core --test runtime --test flow --test consultations`
 
-Expected: FAIL until all runtime paths use the pool and terminal cleanup is centralized.
+预期：失败，直到所有运行时路径都使用该池并且集中进行终端清理。
 
-- [ ] **Step 2: Route DSH executions through the pool**
+- [ ] **步骤 2：通过池路由 DSH 执行**
 
-Replace `main_provider_session(...)` and the old provider-session lease calls. Build a `SidecarConfig` from the frozen binding (`executable_path`, `provider_route`, `model`), workspace, schema, limits, and capability permission:
+替换 `main_provider_session(...)` 和旧的提供商会话租用调用。从冻结的绑定（`executable_path`、`provider_route`、`model`）、工作空间、架构、限制和功能权限构建 `SidecarConfig`：
 
 ```rust
 let permission = match kind {
@@ -344,40 +346,40 @@ let permission = match kind {
 };
 ```
 
-Normal and flow paths call `pool.invoke_main(SidecarKey { run_id, capability }, ...)`. Consultation calls `pool.invoke_temporary(...)` with read-only permission. Codex continues through the existing executor. Attach the DSH bridge `ProcessIdentity` to the active attempt/consultation record so existing recovery can kill orphan process groups after a crash.
+正常路径和流路径调用 `pool.invoke_main(SidecarKey { run_id, capability }, ...)`。咨询调用 `pool.invoke_temporary(...)` 具有只读权限。法典通过现有的执行者继续进行。将 DSH 桥 `ProcessIdentity` 连接到活动 attempt/consultation 记录，以便现有恢复可以在崩溃后终止孤立进程组。
 
-- [ ] **Step 3: Centralize live-run cleanup**
+- [ ] **第 3 步：集中实时运行清理**
 
-Wrap both legacy and flow terminal drivers so every return path performs `pool.close_run(run_id).await`. On explicit cancellation, request cancellation, call `pool.cancel_run(run_id).await`, kill any database-recorded orphan identity as a fallback, then apply the cancel transition. Cleanup errors are recorded as diagnostics and may turn an otherwise successful provider cleanup into a reported infrastructure failure, but never turn a failed/cancelled Run into success.
+包装传统终端驱动程序和流终端驱动程序，以便每个返回路径都执行 `pool.close_run(run_id).await`。在显式取消、请求取消时，调用 `pool.cancel_run(run_id).await`，终止任何数据库记录的孤立身份作为后备，然后应用取消转换。清理错误被记录为诊断，并且可能会将原本成功的提供程序清理变成报告的基础设施故障，但永远不会将 failed/cancelled 运行成功。
 
-`reconcile_interrupted` remains restart-safe: the in-memory pool is empty after restart, so it kills persisted active attempt/consultation identities and marks the Run interrupted. Do not claim or implement DSH session resume across Archmage restarts.
+`reconcile_interrupted` 保持重新启动安全：重新启动后内存池为空，因此它会杀死持久的活动 attempt/consultation 身份并将运行标记为已中断。不要在 Archmage 重新启动时声明或实施 DSH 会话恢复。
 
-- [ ] **Step 4: Run and commit**
+- [ ] **第 4 步：运行并提交**
 
-Run: `cargo test -p archmage-core --test runtime --test flow --test consultations`
+运行： `cargo test -p archmage-core --test runtime --test flow --test consultations`
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add crates/archmage-core && git commit -m "feat: route Archmage runs through persistent DSH sidecars"`
+提交： `git add crates/archmage-core && git commit -m "feat: route Archmage runs through persistent DSH sidecars"`
 
-## Task 6: Replace discovery and verification with SDK checks
+## 任务 6：用 SDK 检查替换发现和验证
 
-**Files:**
-- Modify: `crates/archmage-core/src/agent.rs`
-- Modify: `crates/archmage-core/src/provider/deepseek_harness.rs`
-- Modify: `crates/archmage-core/tests/agents.rs`
+**文件：**
+- 修改：`crates/archmage-core/src/agent.rs`
+- 修改：`crates/archmage-core/src/provider/deepseek_harness.rs`
+- 修改：`crates/archmage-core/tests/agents.rs`
 
-- [ ] **Step 1: Write failing management tests**
+- [ ] **第 1 步：编写失败的管理测试**
 
-Test default Python resolution (`python3`), explicit Python path, import failure, missing runtime distribution, SDK/runtime version mismatch, nonblank route/model validation, and a successful verification that performs one temporary read-only model turn and closes the process.
+测试默认 Python 分辨率 (`python3`)、显式 Python 路径、导入失败、缺少运行时分发、SDK/runtime 版本不匹配、非空白 route/model 验证以及执行一次临时只读模型转动并关闭进程的成功验证。
 
-Run: `cargo test -p archmage-core --test agents`
+运行： `cargo test -p archmage-core --test agents`
 
-Expected: FAIL because discovery still inspects the DSH CLI and verification uses headless flags.
+预期：失败，因为发现仍然检查 DSH CLI 并且验证使用无头标志。
 
-- [ ] **Step 2: Implement safe SDK inspection**
+- [ ] **步骤 2：实施安全 SDK 检查**
 
-Resolve the configured executable or `python3`, then run a bounded probe equivalent to:
+解析配置的可执行文件或 `python3`，然后运行相当于以下内容的有界探测：
 
 ```python
 import json
@@ -388,80 +390,80 @@ runtime = version("deepseek-harness-runtime-bin")
 print(json.dumps({"sdkVersion": sdk, "runtimeVersion": runtime}))
 ```
 
-Require exact version equality. Return a combined display version such as `SDK 0.4.0 / runtime 0.4.0`, and sanitize all errors before persisting them.
+要求精确的版本相等。返回组合显示版本，例如 `SDK 0.4.0 / runtime 0.4.0`，并在保留错误之前清理所有错误。
 
-- [ ] **Step 3: Verify through the real bridge boundary**
+- [ ] **第三步：通过真实的桥边界进行验证**
 
-`AgentService::verify` creates a private temporary Git directory, starts a temporary read-only sidecar with the configured route/model, requests a fixed tiny schema such as `{"ok": boolean}`, requires `{"ok": true}`, closes the sidecar, and stores `Ready { version, thread_id: session_id }`. It must not read, rewrite, or display `DSH_HOME` or credentials.
+`AgentService::verify` 创建一个私有临时 Git 目录，使用配置的 route/model 启动临时只读 sidecar，请求固定的微型模式（例如 `{"ok": boolean}`），需要 `{"ok": true}`，关闭 sidecar，并存储 `Ready { version, thread_id: session_id }`。它不得读取、重写或显示 `DSH_HOME` 或凭据。
 
-- [ ] **Step 4: Run and commit**
+- [ ] **第4步：运行并提交**
 
-Run: `cargo test -p archmage-core --test agents`
+运行： `cargo test -p archmage-core --test agents`
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add crates/archmage-core && git commit -m "feat: discover and verify DeepSeek Harness SDK agents"`
+提交： `git add crates/archmage-core && git commit -m "feat: discover and verify DeepSeek Harness SDK agents"`
 
-## Task 7: Update Agent Management UI and API types
+## 任务 7：更新代理管理 UI 和 API 类型
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/model.ts`
-- Modify: `apps/archmage-desktop/src/AgentManagement.tsx`
-- Modify: `apps/archmage-desktop/src/AgentManagement.test.tsx`
-- Modify: `apps/archmage-desktop/src/model.test.ts`
-- Modify: `apps/archmage-desktop/src/managementLayout.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src/model.ts`
+- 修改：`apps/archmage-desktop/src/AgentManagement.tsx`
+- 修改：`apps/archmage-desktop/src/AgentManagement.test.tsx`
+- 修改：`apps/archmage-desktop/src/model.test.ts`
+- 修改：`apps/archmage-desktop/src/managementLayout.test.ts`
 
-- [ ] **Step 1: Write failing UI/model tests**
+- [ ] **步骤 1：编写失败的 UI/model 测试**
 
-Assert a DSH Agent carries `providerRoute`, the create/edit form shows `Python 路径`, `Provider route`, and `Model`, route/model are required for DSH, model remains optional for Codex, and the explanatory copy says credentials/endpoints inherit Archmage's environment while route/model are explicit.
+断言 DSH 代理携带 `providerRoute`，create/edit 表格显示 `Python 路径`、`Provider route` 和 `Model`、route/model 对于 DSH 是必需的，模型对于 Codex 仍然是可选的，解释性副本表示credentials/endpoints 继承了 Archmage 的环境，而 route/model 是显式的。
 
-Run: `npm test -- --run AgentManagement.test.tsx model.test.ts managementLayout.test.ts` from `apps/archmage-desktop`.
+从 `apps/archmage-desktop` 运行：`npm test -- --run AgentManagement.test.tsx model.test.ts managementLayout.test.ts`。
 
-Expected: FAIL because the current form hides DSH model and describes inherited `DSH_HOME` model selection.
+预期：失败，因为当前表单隐藏 DSH 模型并描述继承的 `DSH_HOME` 模型选择。
 
-- [ ] **Step 2: Update types and forms**
+- [ ] **第 2 步：更新类型和表格**
 
-Add `providerRoute: string | null` to `AgentInstance`, `AgentInstanceInput`, and `FrozenAgentBinding`. For DSH, default Python path to blank (backend resolves `python3`) and submit trimmed nonblank route/model. For Codex, submit `providerRoute: null`. Keep unsupported Provider cards non-creatable.
+将 `providerRoute: string | null` 添加到 `AgentInstance`、`AgentInstanceInput` 和 `FrozenAgentBinding`。对于 DSH，默认 Python 路径为空白（后端解析 `python3`）并提交修剪后的非空白 route/model。对于 Codex，请提交 `providerRoute: null`。保持不受支持的提供商卡不可创建。
 
-Display discovered SDK/runtime versions and existing connection state fields without showing environment values or credential material.
+显示发现的 SDK/runtime 版本和现有连接状态字段，而不显示环境值或凭证材料。
 
-- [ ] **Step 3: Run build/tests and commit**
+- [ ] **步骤 3：运行 build/tests 并提交**
 
-Run from `apps/archmage-desktop`:
+从 `apps/archmage-desktop` 运行：
 
 ```bash
 npm test
 npm run build
 ```
 
-Expected: PASS.
+预期：通过。
 
-Commit: `git add apps/archmage-desktop && git commit -m "feat: configure DSH SDK agents in the desktop UI"`
+提交： `git add apps/archmage-desktop && git commit -m "feat: configure DSH SDK agents in the desktop UI"`
 
-## Task 8: Replace obsolete docs and run the compact acceptance suite
+## 任务 8：替换过时的文档并运行紧凑的验收套件
 
-**Files:**
-- Modify: `README.md`
-- Modify: `docs/runbooks/desktop-s0.md`
-- Modify/Delete: obsolete headless-CLI test fixtures under `crates/archmage-core/tests/`
-- Review: `docs/superpowers/specs/2026-10-30-deepseek-harness-provider-design.md`
+**文件：**
+- 修改：`README.md`
+- 修改：`docs/runbooks/desktop-s0.md`
+- Modify/Delete：`crates/archmage-core/tests/` 下过时的无头 CLI 测试夹具
+- 评论： `docs/superpowers/specs/2026-10-30-deepseek-harness-provider-design.md`
 
-- [ ] **Step 1: Remove obsolete CLI language and fixtures**
+- [ ] **第 1 步：删除过时的 CLI 语言和固定装置**
 
-Delete tests/fixtures whose only purpose is asserting `--headless`, `--session-id`, or `--resume-session`. Update the runbook to document:
+删除 tests/fixtures，其唯一目的是声明 `--headless`、`--session-id` 或 `--resume-session`。更新 Runbook 以记录：
 
-- install matching `deepseek-harness-sdk` / runtime wheel into the configured Python;
-- create a DSH Agent with Python path, route, and model;
-- inherited environment/`DSH_HOME` behavior;
-- live Run continuity scope and no cross-restart resume;
-- read-only versus workspace-write capability permissions;
-- one optional real verification/smoke procedure.
+- 将匹配的 `deepseek-harness-sdk` / 运行时轮安装到已配置的 Python 中；
+- 使用 Python 路径、路由和模型创建 DSH 代理；
+- 继承环境/`DSH_HOME` 行为；
+- live 运行连续性范围且无交叉重启恢复；
+- 只读与工作区写入能力权限；
+- 一个可选的真实 verification/smoke 程序。
 
-State explicitly that no DeepSeek Harness repository patch is required or delivered. Do not delete/reset the separate superseded DSH branch; leave that cleanup for an explicit user decision.
+明确声明不需要或交付任何 DeepSeek Harness 存储库补丁。不要 delete/reset 单独的被取代的 DSH 分支；将清理工作留给明确的用户决定。
 
-- [ ] **Step 2: Run formatting and the focused full suite**
+- [ ] **第 2 步：运行格式化和重点整套**
 
-Run:
+运行：
 
 ```bash
 cargo fmt --all -- --check
@@ -469,15 +471,15 @@ cargo test -p archmage-core
 (cd apps/archmage-desktop && npm test && npm run build)
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 3: Run one optional real SDK smoke**
+- [ ] **第 3 步：运行一个可选的真实 SDK 烟雾**
 
-If the selected Python can import both matching packages and required provider credentials are present, create a temporary Agent/config and run one tiny verification plus a two-turn Run using one existing Capability schema. Otherwise record the precise missing prerequisite and mark only the real smoke as skipped; do not substitute a fake result.
+如果所选的 Python 可以导入匹配的包并且存在所需的提供程序凭据，则创建一个临时 Agent/config 并使用一个现有功能架构运行一项微小验证和两轮运行。否则记录精确缺失的先决条件，并仅将真实烟雾标记为已跳过；不要用假结果代替。
 
-- [ ] **Step 4: Inspect the final diff for scope and secrets**
+- [ ] **步骤 4：检查最终差异的范围和秘密**
 
-Run:
+运行：
 
 ```bash
 git diff --check
@@ -486,19 +488,19 @@ git diff --stat HEAD~8..HEAD
 rg -n -- "--headless|--resume-session|provider_sessions|DEEPSEEK_API_KEY=|api[_-]?key" crates apps README.md docs
 ```
 
-Expected: no obsolete runtime dependencies, no credential values, and only intended Archmage files changed.
+预期：没有过时的运行时依赖项，没有凭证值，并且仅更改了预期的Archmage文件。
 
-- [ ] **Step 5: Commit documentation/cleanup**
+- [ ] **步骤 5：提交 documentation/cleanup**
 
-Commit: `git add README.md docs crates/archmage-core/tests && git commit -m "docs: document the DeepSeek Harness SDK provider"`
+提交： `git add README.md docs crates/archmage-core/tests && git commit -m "docs: document the DeepSeek Harness SDK provider"`
 
-## Final acceptance checklist
+## 最终验收清单
 
-- [ ] Agent Management can create, discover, verify, edit, and bind a DSH SDK Agent with explicit Python/route/model.
-- [ ] Same `Run + Capability` reuses one bridge PID and DSH session across retries, reviewer feedback, and flow revisits.
-- [ ] Different Run/Capability keys and consultations are isolated.
-- [ ] Cancel, failure, completion, and interruption leave no owned sidecar process group running.
-- [ ] DSH final text is accepted only as one valid JSON object satisfying the existing Capability contract.
-- [ ] Cordis enforces read-only/workspace-write and automatic approval rejection without interactive UI.
-- [ ] Codex behavior and existing Run persistence remain green.
-- [ ] No DSH repository change is required for delivery.
+- [ ] 代理管理可以使用显式 Python/route/model 创建、发现、验证、编辑和绑定 DSH SDK 代理。
+- [ ] 同一 `Run + Capability` 在重试、审阅者反馈和流程重新访问中重复使用一个网桥 PID 和 DSH 会话。
+- [ ] 不同的 Run/Capability 密钥和协商是隔离的。
+- [ ] 取消、失败、完成和中断不会导致任何拥有的 sidecar 进程组运行。
+- [ ] DSH 最终文本仅作为满足现有功能契约的有效 JSON 对象而被接受。
+- [ ] Cordis 强制执行 read-only/workspace-write 和自动批准拒绝，无需交互式 UI。
+- [ ] Codex 行为和现有的 Run 持久性保持绿色。
+- [ ] 交付时无需更改 DSH 存储库。

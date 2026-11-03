@@ -1,29 +1,31 @@
-# Real Codex Vertical Slice Design
+# Real Codex 垂直切片设计
 
-**Status:** Approved
+简体中文 | [English](../../../en/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
 
-**Date:** 2026-09-16
+**状态：** 已批准
 
-## Summary
+**日期：** 2026-09-16
 
-S0 connects one real local Codex CLI provider and coordinates four logical Capability Agents—Designer, Coder, Tester, and Reviewer—through explicit Handoffs in a per-run Git worktree. Each node runs in a new Codex session, receives a frozen Context Snapshot, and must return a schema-valid result. SQLite and the local artifact store make every state transition, input, output, and recovery decision durable.
+## 总结
 
-This slice intentionally crosses the original M0–M5 layers. It produces a runnable collaboration proof before generalizing workflow definitions or building a desktop UI.
+S0 连接一个真正的本地 Codex CLI 提供商，并通过每次运行的 Git worktree中的显式交接来协调四个逻辑能力代理（设计者、编码者、测试者和审阅者）。每个节点都在新的 Codex 会话中运行，接收冻结的上下文快照，并且必须返回架构有效的结果。SQLite 和本地工件存储使每个状态转换、输入、输出和恢复决策都持久。
 
-## Decisions already approved
+该切片有意跨越原始 M0-M5 层。它在概括工作流定义或构建桌面 UI 之前生成可运行的协作证明。
 
-1. Deliver a vertical slice rather than a domain-only foundation.
-2. Use a real Git worktree from the first stage.
-3. Call real Codex for every Capability Agent; product execution has no Fake Agent mode.
-4. Ship Runtime plus CLI before Tauri and React.
-5. Treat Provider as the physical execution backend and Capability Agent as the collaboration actor.
-6. Allow concurrent ready nodes subject to dependency, provider capacity, and workspace-access constraints.
-7. Use independent Codex sessions and explicit Handoffs instead of cross-node session history.
-8. Leave worktrees and branches intact; do not automatically commit, merge, push, or delete.
+## 决定已获批准
 
-## Architecture
+1. 提供垂直切片而不是纯域基础。
+2. 从第一阶段开始就使用真正的 Git worktree。
+3. 为每个能力代理调用真正的 Codex；产品执行没有Fake Agent模式。
+4. 在 Tauri 和 React 之前发布运行时和 CLI。
+5. 将Provider视为物理执行后端，将Capability Agent视为协作参与者。
+6. 允许并发就绪节点受依赖性、提供者容量和工作区访问限制。
+7. 使用独立的 Codex 会话和显式切换，而不是跨节点会话历史记录。
+8. 保持worktree和树枝完好无损；不要自动提交、合并、推送或删除。
 
-The Rust runtime owns workflow state, scheduling, context resolution, contracts, workspace lifecycle, persistence, artifacts, and events. A provider-neutral interface separates runtime policy from Codex process details. The CLI is a presentation and control layer over runtime APIs.
+## 架构
+
+Rust 运行时拥有工作流状态、调度、上下文解析、契约、工作空间生命周期、持久性、工件和事件。提供者中立的接口将运行时策略与 Codex 流程细节分开。CLI 是运行时 API 的表示和控制层。
 
 ```text
 CLI → Runtime → Capability Agent invocation → Codex Provider → codex exec
@@ -33,29 +35,29 @@ CLI → Runtime → Capability Agent invocation → Codex Provider → codex exe
         └→ Store → SQLite + local artifacts
 ```
 
-Although S0 has only one provider implementation, runtime types use provider-neutral identities and outcomes. Provider-specific JSONL types remain inside the Codex adapter.
+尽管 S0 只有一种提供程序实现，但运行时类型使用提供程序中立的身份和结果。特定于提供者的 JSONL 类型保留在 Codex 适配器内。
 
-## Collaboration flow
+## 协作流程
 
-### Designer
+### 设计师
 
-Receives the goal, baseline repository metadata, and a bounded repository view. It runs read-only and returns a versioned design JSON plus `summary_markdown`.
+接收目标、基线存储库元数据和有界存储库视图。它以只读方式运行并返回版本化设计 JSON 和 `summary_markdown`。
 
-### Coder
+### 编码员
 
-Receives the goal and validated design artifacts. It runs with workspace-write access in the run worktree and returns an ImplementationResult. The runtime independently captures the resulting status and diff against baseline.
+接收目标和经过验证的设计工件。它在运行worktree中使用工作区写入访问权限运行，并返回一个 ImplementResult。运行时独立捕获结果状态以及与基线的差异。
 
-### Tester
+### 测试员
 
-Receives the goal, design, implementation result, workspace, and explicit validation policy. Each required check has an ID and must be invoked by the Tester through an Archmage-owned check runner. That runner executes the configured command in the real worktree and durably records command, exit status, stdout, stderr, and duration before returning control to Codex. The Tester interprets this evidence and returns TestResult. Runtime invariants prevent `passed` when required evidence is missing or contains a non-zero result.
+接收目标、设计、实施结果、工作空间和显式验证策略。每项必需的检查都有一个 ID，并且必须由测试者通过​​Archmage拥有的检查运行程序调用。该运行程序在实际worktree中执行配置的命令，并在将控制权返回给 Codex 之前持久记录命令、退出状态、stdout、stderr 和持续时间。测试人员解释此证据并返回 TestResult。当所需证据丢失或包含非零结果时，运行时不变量会阻止 `passed`。
 
-### Reviewer
+### 审稿人
 
-Receives the goal, design, implementation result, baseline diff, and TestResult. It runs read-only and returns ReviewResult. S0 records `approved` or `changes_requested` but treats either as a terminal Reviewer outcome; S1 adds conditional routing to Fixer. Both outcomes complete the workflow lifecycle, while a separate completion outcome preserves the review decision. The CLI returns success for `approved` and a distinct non-zero outcome code for `changes_requested`.
+接收目标、设计、实施结果、基线差异和测试结果。它以只读方式运行并返回 ReviewResult。S0 记录 `approved` 或 `changes_requested`，但将其视为最终审阅者结果；S1 向 Fixer 添加条件路由。两种结果都完成了工作流生命周期，而单独的完成结果则保留审核决策。CLI 返回 `approved` 成功，并为 `changes_requested` 返回不同的非零结果代码。
 
-## Provider protocol
+## 提供商协议
 
-The adapter invokes the installed Codex CLI using the non-interactive interface:
+适配器使用非交互式界面调用已安装的 Codex CLI：
 
 ```text
 codex exec
@@ -67,68 +69,68 @@ codex exec
   -
 ```
 
-The rendered prompt is written to stdin. JSONL on stdout is parsed incrementally and persisted; stderr is captured separately. The adapter records the `thread.started` identifier, process identity, version, timestamps, exit status, usage when available, and termination path.
+呈现的提示符写入标准输入。stdout 上的 JSONL 被增量解析并持久化；stderr 是单独捕获的。适配器记录 `thread.started` 标识符、进程标识、版本、时间戳、退出状态、可用时的使用情况以及终止路径。
 
-Normal Handoffs never call `codex exec resume`. On Archmage resume, an interrupted node starts a new Codex session with a new attempt and the same persisted logical inputs. If an interrupted writer left partial workspace changes, the new attempt also receives a new recovery Context Snapshot describing the current workspace and its delta from the previous snapshot. Previous snapshots remain immutable. This keeps recovery independent of provider-local conversation files without pretending that code changes disappeared after interruption.
+正常切换永远不会调用 `codex exec resume`。在Archmage恢复时，中断的节点会通过新的尝试和相同的持久逻辑输入启动新的 Codex 会话。如果被中断的编写器留下部分工作区更改，则新尝试还会收到一个新的恢复上下文快照，该快照描述当前工作区及其与前一个快照的增量。以前的快照保持不变。这使得恢复独立于提供商本地对话文件，而不会假装代码更改在中断后消失。
 
-## Context and Handoff
+## 上下文和切换
 
-Each attempt resolves typed Context References into an immutable snapshot before it starts. The snapshot records origin, hash, serialization version, prompt version, provider binding, and workspace identity. Downstream nodes can read only committed upstream artifacts.
+每次尝试在开始之前都会将类型化的上下文引用解析为不可变的快照。快照记录源、哈希、序列化版本、提示版本、提供程序绑定和工作区标识。下游节点只能读取已提交的上游工件。
 
-Handoffs are explicit records linking producer artifacts to consumer Context bindings. They do not expose hidden provider reasoning or conversation history.
+切换是将生产者工件链接到消费者上下文绑定的显式记录。它们不会暴露隐藏的提供者推理或对话历史记录。
 
-## Contracts
+## 合约
 
-Each built-in Capability has a versioned JSON Schema. Codex is asked to conform through `--output-schema`, and the runtime validates the final file again. Capability-specific invariants validate relationships the schema alone cannot express.
+每个内置功能都有一个版本化的 JSON 架构。Codex 被要求通过 `--output-schema` 来符合，并且运行时再次验证最终文件。特定于功能的不变量验证模式本身无法表达的关系。
 
-Every valid result contains `summary_markdown`. The runtime stores validated JSON for machines, extracted Markdown for people, and the raw provider stream for diagnosis.
+每个有效结果都包含 `summary_markdown`。运行时为机器存储经过验证的 JSON、为人员提取的 Markdown 以及用于诊断的原始提供商流。
 
-## Scheduler and concurrency
+## 调度程序和并发
 
-The scheduler derives a Ready Set from persisted dependencies and Context availability. S0's built-in workflow is linear, but the engine allows compatible nodes to run concurrently.
+调度程序从持久的依赖关系和上下文可用性中派生出就绪集。S0的内置工作流程是线性的，但引擎允许兼容的节点同时运行。
 
-Nodes declare workspace access:
+节点声明工作空间访问：
 
-- `none`: compatible with all other access modes
-- `read`: compatible with `none` and other readers
-- `write`: compatible only with `none` and holds an exclusive worktree lease
+- `none`：与所有其他访问模式兼容
+- `read`：与 `none` 和其他读卡器兼容
+- `write`：仅与 `none` 兼容并拥有独家worktree租约
 
-Dispatch also respects `run.max_parallelism` and provider capacity. State transition plus Event insertion is atomic.
+Dispatch 还尊重 `run.max_parallelism` 和提供商容量。状态转换加上事件插入是原子的。
 
-## Workspace lifecycle
+## 工作区生命周期
 
-Run creation freezes the source repository's current `HEAD` as baseline and creates `archmage/run-<run-id>` in `<archmage-data>/workspaces/<run-id>`. Dirty source changes are excluded and reported as a warning.
+运行创建将源存储库的当前 `HEAD` 冻结为基线，并在 `<archmage-data>/workspaces/<run-id>` 中创建 `archmage/run-<run-id>`。脏源更改被排除并报告为警告。
 
-Worktree identity, baseline, branch, `HEAD`, and status are checked before and after every write-capable node. Capability instructions forbid commits, and a changed `HEAD` fails the workspace invariant. Diff artifacts are generated independently of agent claims. S0 retains the worktree and branch after all terminal outcomes.
+在每个可写节点之前和之后都会检查worktree身份、基线、分支、`HEAD` 和状态。功能指令禁止提交，并且更改的 `HEAD` 使工作区不变式失败。差异工件的生成与代理声明无关。S0 在所有最终结果之后保留worktree和分支。
 
-## Persistence and recovery
+## 坚持与恢复
 
-SQLite uses migrations, WAL, foreign keys, transactions, and bounded busy handling. Artifact content uses temporary-file write, flush, and atomic rename before metadata insertion.
+SQLite 使用迁移、WAL、外键、事务和有界繁忙处理。工件内容在元数据插入之前使用临时文件写入、刷新和原子重命名。
 
-On startup, owned attempts left in `running` are reconciled. If their process cannot be safely confirmed, the attempt becomes `interrupted`. `archmage resume` preserves successful nodes, discards incomplete outputs from Context eligibility, and creates a new attempt for retryable work.
+启动时，将协调 `running` 中剩余的拥有尝试。如果无法安全地确认其进程，则尝试将变为 `interrupted`。`archmage resume` 保留成功的节点，丢弃上下文资格中的不完整输出，并为可重试工作创建新的尝试。
 
-Reconciliation requires exclusive scheduler ownership of the Run. An interrupted classification does not establish that an old child process stopped: replacement writers must wait until owned Codex/check processes are confirmed exited or safely terminated. Uncertain process identity blocks execution instead of authorizing a signal to a possibly reused PID. Read-only status inspection does not take over an active Run.
+协调需要运行的排他调度程序所有权。中断的分类并不表明旧的子进程已停止：替换编写器必须等到拥有的 Codex/check 进程被确认退出或安全终止。不确定的进程身份会阻止执行，而不是将信号授权给可能重用的 PID。只读状态检查不会接管活动运行。
 
-## Error model
+## 误差模型
 
-S0 distinguishes at least:
+S0至少区分：
 
-- `preflight_failed`
-- `spawn_failed`
-- `auth_failed`
-- `timed_out`
-- `cancelled`
-- `cli_failed`
-- `contract_invalid`
-- `workspace_invariant_failed`
-- `storage_failed`
-- `interrupted`
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
 
-Every failure retains available diagnostics, emits a typed event, and leaves the worktree available for inspection. Free-form prose cannot override a failed exit status or invariant.
+每次故障都会保留可用的诊断信息，发出类型化事件，并使worktree可供检查。自由形式的散文不能覆盖失败的退出状态或不变量。
 
-## CLI
+## 命令行界面
 
-S0 exposes:
+S0暴露：
 
 ```text
 archmage doctor
@@ -139,41 +141,41 @@ archmage resume <run-id>
 archmage cancel <run-id>
 ```
 
-`run` executes in the foreground and streams committed Events. Ctrl-C requests cancellation. Commands share the runtime crate rather than duplicating workflow behavior.
+`run` 在前台执行并传输已提交的事件。Ctrl-C 请求取消。命令共享运行时包而不是复制工作流行为。
 
-Workflow command exit codes are:
+工作流命令退出代码为：
 
-| Code | Meaning |
+|代码|意义|
 |---:|---|
-| `0` | Workflow completed with Reviewer approval |
-| `10` | Workflow completed with `changes_requested` |
-| `20` | Preflight or infrastructure failure prevented reliable execution |
-| `21` | A Capability Agent, contract, or workspace invariant failed |
-| `22` | The Run was cancelled |
+|`0` |工作流程已完成并获得审阅者批准 |
+|`10` |使用 `changes_requested` 完成工作流程 |
+|`20` |预检或基础设施故障阻碍了可靠的执行 |
+|`21` |能力代理、契约或工作区不变量失败 |
+|`22` |跑步被取消 |
 
-CLI argument errors retain the parser's standard non-zero behavior and never create a Run.
+CLI 参数错误保留解析器的标准非零行为并且从不创建运行。
 
-## Testing
+## 测试
 
-Automated tests cover domain transitions, Ready Set and lease compatibility, migrations, transaction rollback, recovery queries, artifact atomicity, real temporary Git repositories and worktrees, schema/invariant validation, Context hashing, and Codex JSONL parsing from fixed protocol samples.
+自动化测试涵盖域转换、Ready Set 和租赁兼容性、迁移、事务回滚、恢复查询、工件原子性、真正的临时 Git 存储库和worktree、schema/invariant 验证、上下文哈希以及来自固定协议示例的 Codex JSONL 解析。
 
-Protocol samples are parser fixtures, not an executable provider and not a product Fake Agent path. A complete happy-path run invokes real authenticated Codex for all four roles. The separate interruption/resume scenario necessarily creates additional real invocations.
+协议样本是解析器固定装置，不是可执行提供程序，也不是产品Fake Agent路径。完整的快乐路径运行将为所有四个角色调用真正经过身份验证的 Codex。单独的 interruption/resume 场景必然会创建额外的实际调用。
 
-## Security
+## 安全性
 
-- Use explicit `read-only` or `workspace-write` sandbox modes; never `danger-full-access` in S0.
-- Do not serialize credentials or environment secrets into prompts, events, or artifacts.
-- Treat repository content and agent output as untrusted data.
-- Pass process arguments without shell interpolation.
-- Restrict filesystem writes to the run worktree and Archmage data root.
-- Do not mutate the source repository's checked-out branch or any remote.
+- 使用显式 `read-only` 或 `workspace-write` 沙箱模式；S0 中从来没有 `danger-full-access`。
+- 不要将凭据或环境机密序列化为提示、事件或工件。
+- 将存储库内容和代理输出视为不可信数据。
+- 无需 shell 插值即可传递进程参数。
+- 限制文件系统写入运行worktree和Archmage数据根。
+- 不要改变源存储库的签出分支或任何远程分支。
 
-## Scope exclusions
+## 范围排除
 
-S0 excludes the Fix loop, human gates, external workflow editing, other providers, desktop UI, daemonization, automatic cleanup, remote execution, memory, RAG, marketplaces, and cloud/multi-user features.
+S0 不包括修复循环、人性门、外部工作流程编辑、其他提供程序、桌面 UI、守护进程、自动清理、远程执行、内存、RAG、市场和 cloud/multi-user 功能。
 
-## Acceptance
+## 验收
 
-The authoritative exit criteria are in [the S0 stage document](../../roadmap/stages/s0-real-codex-slice.md) and the executable manual procedure is in [the S0 acceptance runbook](../../runbooks/s0-acceptance.md).
+权威退出标准位于 [S0 阶段文档 ](../../roadmap/stages/s0-real-codex-slice.md) 中，可执行手动过程位于 [S0 验收运行手册 ](../../runbooks/s0-acceptance.md) 中。
 
-The [S0 implementation plan](../plans/2026-09-16-s0-real-codex-vertical-slice.md) specifies file ownership, task dependencies, test gates, and the implementation details above. No product implementation or real provider acceptance is claimed by this document.
+[S0 实施计划 ](../plans/2026-09-16-s0-real-codex-vertical-slice.md) 指定文件所有权、任务依赖性、测试门以及上述实施细节。本文档未声明任何产品实施或真正的提供商接受。

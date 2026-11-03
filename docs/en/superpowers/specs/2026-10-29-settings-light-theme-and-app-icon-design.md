@@ -1,80 +1,82 @@
-# 设置页、浅色主题与应用图标设计
+# Settings page, light theme and app icon design
 
-## 目标
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-settings-light-theme-and-app-icon-design.md) | English
 
-为 Archmage 增加独立设置入口和外观设置页，提供覆盖整个应用的浅色与暗色主题。浅色作为首次启动默认主题，用户选择需要跨启动保留。同时使用用户提供的法师肖像统一替换侧栏、网页和桌面应用图标。
+## target
 
-## 导航与设置页
+Add an independent settings entrance and appearance settings page to Archmage, providing light and dark themes covering the entire application. Light color is used as the default theme for first startup, and user selection needs to be retained across startups. At the same time, the sidebar, web page and desktop application icons are uniformly replaced with the mage portrait provided by the user.
 
-- 在左侧栏底部增加带齿轮图标的“设置”按钮。
-- “设置”位于现有“本地 Runtime”状态上方；Runtime 状态保留。
-- 设置作为独立 `AppView`，点击后进入独立设置页，并在侧栏显示选中状态。
-- 设置页第一版只包含“外观”区域，不预留无功能的通用、Runtime 或其他设置项。
-- 设置页使用“主题预览卡”布局：浅色和暗色各自显示缩略预览、名称和选中状态，点击整张卡片即可切换。
-- 现有 Capability 与团队编辑器的未保存离开保护继续适用于前往设置页的导航。
+## Navigation and settings page
 
-## 主题行为
+- Add a "Settings" button with a gear icon at the bottom of the left column.
+- Settings is above the existing Local Runtime state; the Runtime state remains.
+- Set as independent `AppView`. Click to enter the independent settings page and display the selected status in the sidebar.
+- The first version of the settings page only contains the "Appearance" area and does not reserve general, runtime or other setting items without functions.
+- The settings page uses the "theme preview card" layout: light and dark colors respectively display thumbnail previews, names and selected statuses, and you can switch by clicking on the entire card.
+- Existing Capability and Team Editor unsaved exit protections continue to apply to navigation to the Settings page.
 
-- 支持 `light` 和 `dark` 两个明确主题，不增加“跟随系统”选项。
-- 没有已保存选择时默认使用浅色。
-- 点击主题卡后立即更新整个应用，不需要额外保存按钮。
-- 用户选择保存在浏览器/WebView 本地存储中，下次启动恢复。
-- 本地存储不可用、读取失败或值不合法时回退到浅色，不能阻止应用启动。
-- 应用根节点通过 `data-theme="light|dark"` 暴露当前主题，供所有页面使用。
-- HTML 的 `color-scheme` 与当前主题保持一致，使原生表单控件和滚动条采用正确外观。
+## subject behavior
 
-## 视觉系统
+- Supports two explicit themes, `light` and `dark`, without adding the "Follow System" option.
+- Light color is used by default when there are no saved selections.
+- Clicking on a theme card instantly updates the entire app, no additional save button is required.
+- User selections are saved in browser/WebView local storage and restored next time.
+- Falling back to light color when local storage is unavailable, reading fails, or the value is illegal does not prevent the application from starting.
+- The application root node exposes the current theme via `data-theme="light|dark"` for use by all pages.
+- `color-scheme` for HTML Makes native form controls and scrollbars look correct, consistent with the current theme.
 
-浅色采用已确认的“柔和自然”方向：
+## visual system
 
-- 页面背景使用浅灰绿而非纯白。
-- 侧栏使用略深一层的柔和灰绿色，与主内容区形成低对比分隔。
-- 卡片使用白色或近白色，配低对比灰绿边框和轻微阴影。
-- 正文使用深墨绿色，次要文字使用中性灰绿。
-- 延续现有绿色品牌色，用于主要操作、选中状态、焦点和成功状态。
-- 危险、警告和运行状态颜色保持语义清晰，并分别为浅色和暗色校准对比度。
+Light colors follow the confirmed "soft and natural" direction:
 
-暗色主题以当前视觉为基准，不改变整体风格。实现时将页面背景、表面、输入框、边框、文字、交互状态、阴影和画布颜色归入语义化 CSS 变量，避免维护两套独立样式表或使用滤镜反色。主题覆盖新建 Run、Agent、Capability、团队管理、设置页和 Run 详情页。
+- The page background uses a light grayish green instead of pure white.
+- The sidebar uses a slightly darker soft gray-green color to form a low-contrast separation from the main content area.
+- Cards are white or near-white with a low-contrast gray-green border and a slight shadow.
+- Use dark dark green for main text and neutral gray-green for secondary text.
+- Continuation of the existing green brand color is used for main actions, selected states, focus and success states.
+- Danger, warning and operational status colors are kept semantically clear, with contrast calibrated for light and dark colors respectively.
 
-## 图标设计与产物
+The dark theme is based on the current vision and does not change the overall style. During implementation, the page background, surface, input box, border, text, interactive state, shadow and canvas color are classified into semantic CSS variables to avoid maintaining two independent sets of style sheets or using filters to invert colors. The theme covers new Run, Agent, Capability, team management, settings page and Run details page.
 
-- 使用用户提供的法师肖像作为唯一源图。
-- 采用头肩半身裁切，保留脸部、长发、衣领和胸前徽章。
-- 主体周围保留安全留白，使 macOS 圆角蒙版、Dock、Windows 任务栏和小尺寸 favicon 不裁掉关键部分。
-- 保持原图黑白线稿气质，不额外着色；图标使用纯白圆角底板，底板外部透明。
-- 圆角边缘不得出现黑色描边、阴影、灰绿色晕染或残留像素；人物构图、大小和细节保持不变。
-- 侧栏品牌标识使用图像，不再显示字母或通用方块图标。
-- 从同一主图生成 Tauri 所需的 PNG、macOS ICNS、Windows ICO 和常用尺寸资源。
-- 网页 `favicon` 使用同一图标体系，并更新页面主题色元信息。
-- Tauri 配置显式引用新的图标资源，确保开发启动、安装包、Dock/任务栏使用一致图标。
+## Icon design and products
 
-## 组件与数据边界
+- Use the user-provided mage portrait as the only source image.
+- A head-and-shoulders half-length cut retains the face, long hair, collar and chest badge.
+- Leave safe white space around the subject so that macOS corner masks, the Dock, the Windows taskbar, and small favicons don't cut off critical parts.
+- Maintain the black-and-white line drawing quality of the original image without additional coloring; the icon uses a pure white rounded base plate with a transparent exterior.
+- There should be no black strokes, shadows, gray-green blooming, or residual pixels on the rounded edges; the character composition, size, and details remain unchanged.
+- Sidebar branding uses images instead of letters or generic square icons.
+- Generate the PNG, macOS ICNS, Windows ICO and common size resources required for Tauri from the same master image.
+- The web page `favicon` uses the same icon system and updates the page theme color element information.
+- Tauri configuration explicitly references the new icon resource to ensure that development startup, installation packages, and Dock/taskbar use consistent icons.
 
-- 新增独立的主题领域模块，负责主题类型、默认值、持久化读取、写入与根节点同步。
-- 新增独立 `SettingsView`，只负责展示设置页和触发主题变更。
-- `App` 持有当前主题和当前页面状态，将主题与变更回调传给设置页。
-- 主题模块不依赖 Tauri API，保证桌面 WebView 和浏览器预览行为一致。
-- 设置页不调用 Runtime API，也不影响 Run、Agent、Capability 或 Team 数据。
+## Component and data boundaries
 
-## 错误处理
+- A new independent topic area module is added, responsible for topic type, default value, persistent reading, writing and root node synchronization.
+- Added an independent `SettingsView`, which is only responsible for displaying the settings page and triggering theme changes.
+- `App` holds the current theme and current page status, and passes the theme and change callback to the settings page.
+- The theme module does not rely on Tauri API, ensuring consistent behavior of desktop WebView and browser preview.
+- The settings page does not call the Runtime API and does not affect Run, Agent, Capability, or Team data.
 
-- 读取本地主题选择时捕获存储异常并使用浅色。
-- 写入失败时仍保留本次会话中的主题切换，不向用户展示阻断性错误。
-- 图标生成与配置校验在构建阶段完成；缺失资源应使验证失败，而不是发布后静默使用旧图标。
+## Error handling
 
-## 验证
+- Catch storage exception when reading local theme selection and use light color.
+- When writing fails, the topic switching in this session is still retained and no blocking error is displayed to the user.
+- Icon generation and configuration verification are done during the build phase; missing resources should cause verification to fail, rather than silently using the old icon after release.
 
-- 单元测试覆盖默认浅色、合法选择恢复、非法值回退和存储异常回退。
-- 组件测试覆盖设置导航、浅色/暗色卡片选中状态和切换回调。
-- 导航测试覆盖从未保存的 Capability 或 Team 编辑器前往设置页时仍触发保护。
-- 样式检查覆盖根主题选择器和关键语义变量，防止新增页面绕开主题系统。
-- 资源检查覆盖侧栏图标、favicon、PNG、ICNS、ICO 以及 Tauri 配置引用。
-- 运行完整前端测试、生产构建和 Tauri 配置/图标检查。
-- 在浅色和暗色主题下分别检查新建 Run、三个管理页、设置页和 Run 详情页的可读性、焦点状态和状态色。
+## Verify
 
-## 非目标
+- Unit tests cover default light color, legal selection recovery, illegal value fallback and storage exception fallback.
+- Component testing covers setting navigation, light/dark card selection state and switching callbacks.
+- Navigation test coverage still triggers protection when going to the settings page from an unsaved Capability or Team editor.
+- Style checking covers the root theme selector and key semantic variables to prevent new pages from bypassing the theme system.
+- Resource checks cover sidebar icons, favicon, PNG, ICNS, ICO, and Tauri configuration references.
+- Run full frontend tests, production builds and Tauri config/icon checks.
+- Check the readability, focus status, and status color of the new Run, the three management pages, the settings page, and the Run details page under the light and dark themes respectively.
 
-- 本次不增加系统主题跟随、定时主题或更多配色方案。
-- 本次不增加 Runtime、账户、通知或其他设置项。
-- 本次不改变业务数据、Runtime 接口、团队消息流或 Run 执行行为。
-- 本次不重新设计暗色主题的信息结构。
+## non-target
+
+- This time, no system theme following, timed themes or more color schemes will be added.
+- No runtime, account, notification or other settings will be added this time.
+- This time, the business data, Runtime interface, team message flow or Run execution behavior will not be changed.
+- This time we will not redesign the information structure of the dark theme.

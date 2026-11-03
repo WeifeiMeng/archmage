@@ -1,5 +1,7 @@
 # Message-Flow Teams Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-14-message-flow-teams.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let users draw directed delivery routes, including feedback loops, and run real Codex Agents until a configured Capability emits a terminal signal.

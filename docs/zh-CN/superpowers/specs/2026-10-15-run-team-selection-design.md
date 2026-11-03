@@ -1,21 +1,23 @@
-# Run Team Selection Design
+简体中文 | [English](../../../en/superpowers/specs/2026-10-15-run-team-selection-design.md)
 
-## Goal
+# Run Team 选择设计
 
-Creating a Run should require a Git repository, a goal, and one Team selection. The selected Team is the only collaboration configuration shown on the form.
+## 目标
 
-## Form
+创建 Run 必须提供 Git 仓库、目标和一个 Team 选择。所选 Team 是表单中唯一展示的协作配置。
 
-Keep the Team selector immediately above one compact, read-only preview. Show its member Capabilities and directed edges. For a message-flow Team, also identify its entry and terminal Capabilities. For a legacy Team, label its historical consultation semantics. Changing the selection updates the preview without changing the Team.
+## 表单
 
-Remove the persistent Tester, all-Capability binding, and ready-Runtime cards. Do not promise that every Run includes all four built-in Capabilities. Show a small actionable message only when no Team exists, a selected Team member has an unusable binding, or the local Runtime cannot be used. Link Team problems to Team Management and binding problems to Capability Management. Keep backend preflight as the final authority; do not add a new execution option.
+Team 选择器下方紧接一个紧凑只读预览，展示成员 Capability 与有向边。消息流 Team 还要标明入口与终止 Capability；历史 Team 标注其旧咨询语义。切换选择会更新预览，但不修改 Team。
 
-## Start behavior
+移除长期显示的 Tester、全 Capability 绑定和 Runtime Ready 卡片。不得承诺每个 Run 都包含全部四个内置 Capability。只有在没有 Team、所选 Team 成员绑定不可用或本地 Runtime 不可用时，才显示小型可操作消息。Team 问题链接到 Team 管理，绑定问题链接到 Capability 管理。后端 preflight 仍是最终权威，不新增执行选项。
 
-Only selected Team members participate in the form's binding check. A valid selected Team with a valid repository and goal can start even when an unused Capability is not configured. Do not treat connection state alone as a launch blocker; the existing backend preflight remains responsible for live validation. A new Run continues to freeze its Team graph and Capability settings at creation.
+## 启动行为
 
-When returning from Team Management, reload the Team list and Agent bindings before enabling Start. Hide cached Team details while reloading; a failed Team-list request must disable Start and offer retry rather than look like an empty Team list. Browser-only preview must not claim that Teams are still loading.
+表单绑定检查只考虑所选 Team 成员。只要所选 Team、仓库与目标有效，即使未使用的 Capability 未配置也能启动。连接状态本身不作为启动阻塞；现有后端 preflight 负责实时校验。新 Run 继续在创建时冻结 Team 图和 Capability 设置。
 
-## Verification
+从 Team 管理返回后，启用 Start 前重新加载 Team 列表与 Agent 绑定。加载期间隐藏缓存 Team 详情；Team 列表请求失败必须禁用 Start 并提供重试，不能伪装成空 Team 列表。纯浏览器预览不得声称 Team 仍在加载。
 
-Test Team preview details and selected-member binding filtering with pure TypeScript tests. Run the desktop test suite and production build. Inspect the final form for selection, empty Team, and blocked states.
+## 验证
+
+使用纯 TypeScript 测试覆盖 Team 预览详情与所选成员绑定过滤。运行桌面测试套件与生产构建，并检查选择、空 Team 与阻塞状态下的最终表单。

@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-investor-overview-deck-design.md) | English
+
 # Archmage Investor Overview Deck Design
 
 ## Objective

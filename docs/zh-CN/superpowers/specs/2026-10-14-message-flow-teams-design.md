@@ -1,35 +1,37 @@
-# Message-Flow Teams Design
+简体中文 | [English](../../../en/superpowers/specs/2026-10-14-message-flow-teams-design.md)
 
-**Status:** Approved design; implementation in progress. This supersedes the relationship and scheduling semantics in [Selectable Team Capabilities](2026-10-14-selectable-team-capabilities-design.md) for new flow teams only.
+# 消息流 Team 设计
 
-## Purpose and scope
+**状态：** 已实现。[实施计划](../plans/2026-10-14-message-flow-teams.md)记录验证历史。仅对新消息流 Team，本设计取代[可选择 Team Capability](2026-10-14-selectable-team-capabilities-design.md)中的关系与调度语义。
 
-A Team is a directed graph of selected Capabilities. Its arrows carry deliverables and feedback, not consultation permissions or prerequisites. A Capability's real Agent chooses one or more connected recipients after each execution. Each delivered message triggers one fresh execution of its recipient; messages are never implicitly joined. Cycles such as Coder → Reviewer → Coder are valid. A Team explicitly designates one entry Capability and one Capability authorized to emit the terminal signal. Users create their own Teams; no Coder–Reviewer Team is seeded.
+## 目的与范围
 
-The first version keeps the four built-in Capability types and one Agent binding per Capability configuration. It does not add arbitrary node types, editable edge conditions, a general workflow expression language, or concurrent writes to one Git worktree.
+Team 是所选 Capability 的有向图。箭头承载交付与反馈，而非咨询权限或前置条件。每次执行后，Capability 的真实 Agent 选择一个或多个已连接接收方。每条交付消息都会触发接收方的一次全新执行；消息不会隐式合并。允许 Coder → Reviewer → Coder 等循环。Team 显式指定一个入口 Capability 和一个有权发出终止信号的 Capability。用户自行创建 Team；系统不会 seed Coder–Reviewer Team。
 
-## Team configuration and canvas
+首版保留四种内置 Capability 类型和每个 Capability 配置一个 Agent 绑定。不会增加任意节点类型、可编辑边条件、通用 Workflow 表达式语言，也不允许对同一 Git worktree 并发写入。
 
-New flow Teams select at least two distinct Capabilities, an entry among them, a terminal emitter among them, and directed edges between selected Capabilities. Self-loops and duplicate directed edges are invalid; opposite directions are independent and may coexist. Every selected Capability must be reachable from the entry and must have a directed path to the terminal emitter. These are topology validity checks, not execution dependencies. A terminal emitter may also have outgoing edges, used only when it decides to continue. The entry receives the Run goal as its first message.
+## Team 配置与画布
 
-On the canvas, dragging from a node's output handle to another node's input handle creates an edge. A transient arrow follows the pointer; releasing on empty space or pressing Escape cancels. Opposite-direction edges render as distinct curved paths with separate arrowheads. Selecting an edge exposes deletion. Keyboard users can focus a source handle and then a target handle to create the same edge. Node movement remains separate from handle dragging. The member selector remains; the relationship checkbox list is removed. Entry and terminal choices are visible controls drawn from selected members. Saving shows a specific reason when a graph is invalid. Removing a member also removes its incident edges and clears its entry/terminal selection if necessary.
+新消息流 Team 至少选择两个不同 Capability，指定其中的入口和终止信号发出者，并连接有向边。自环和重复有向边无效；相反方向的边彼此独立，可同时存在。每个 Capability 必须从入口可达，且必须有通向终止发出者的路径。这些是拓扑校验，不是执行依赖。终止发出者也可拥有出边，仅在其选择继续时使用。入口收到 Run goal 作为第一条消息。
 
-## Durable flow runtime
+在画布上从输出 handle 拖到另一节点输入 handle 创建边；临时箭头跟随指针，释放到空白或按 Escape 取消。相反方向的边显示为独立曲线和箭头。选择边后可删除。键盘用户可先聚焦源 handle，再聚焦目标 handle 创建同样的边。节点移动与 handle 拖动分离。保留成员选择器，移除关系 checkbox 列表。入口和终止选项从成员中选择并清晰显示。无效图保存时给出具体原因。移除成员时同时移除关联边，必要时清空入口/终止选择。
 
-A flow Run freezes the Team graph, entry/terminal choices, selected Agent bindings and Capability guidance, repository, goal, and a step limit. It creates one initial delivery for the entry. Every delivery has an ID, source attempt (except the initial delivery), target Capability, payload artifact references, and sequence number. The queue and its state are persisted, so routing decisions and deliveries can be audited and crash recovery can identify unfinished work. Each delivery that starts causes exactly one target execution, even when another delivery to that target is already queued. Executions against the shared Git worktree are serialized; choosing several recipients enqueues separate deliveries without merging them.
+## 持久消息流 Runtime
 
-The real Agent returns a role-specific deliverable plus a structured routing decision in the same execution. `next` is a nonempty, duplicate-free subset of that node's outgoing neighbors when continuing. Only the configured terminal emitter may return `complete`; `complete` has no recipients and completes the Run after its deliverable is committed. A blocked or invalid deliverable fails the attempt under the existing contract. An invalid routing decision (unknown/nonadjacent recipient, duplicate recipient, unauthorized `complete`, or empty continuation) fails the Run explicitly; it is never silently corrected. Role-specific deliverable validation remains strict. Routing metadata is validated separately and persisted atomically with the committed attempt before new deliveries become runnable.
+消息流 Run 冻结 Team 图、入口/终止选择、Agent 绑定、Capability 指引、仓库、目标和步数上限，并为入口创建初始 delivery。每条 delivery 有 ID、源 Attempt（初始消息除外）、目标 Capability、payload Artifact 引用和 sequence。队列与状态持久化，因此路由和交付可审计，崩溃恢复也能识别未完成工作。每条开始执行的 delivery 恰好触发一次目标执行，即使同一目标已有其他排队消息。共享 Git worktree 上的执行串行；选择多个接收方会创建独立 delivery，不会合并。
 
-Each execution sees its triggering delivery, goal/repository context, and the committed artifact referenced by that delivery. Revision feedback therefore arrives as an explicit incoming message, not by rewinding an upstream node state. Existing Agent role guidance is adapted so a Coder can implement from the goal or feedback, and a Reviewer can return a revision request or completion signal without inventing absent test evidence. For a Reviewer selected as terminal emitter, `approved` must agree with `complete`; `changes_requested` must continue along at least one configured edge. A terminal emitter of another role uses the same explicit routing signal, subject to its role's normal output contract.
+真实 Agent 在同一次执行中返回角色特定 deliverable 与结构化 routing。继续时，`next` 必须是该节点出边邻居中非空、无重复的子集。只有配置的终止发出者可返回 `complete`；此时不能有接收方，并在提交 deliverable 后完成 Run。blocked 或无效 deliverable 依照现有契约使 Attempt 失败。非法路由（未知/非邻接接收方、重复接收方、无权 `complete` 或空 continue）会显式使 Run 失败，绝不静默修正。角色 deliverable 仍严格校验；routing 单独校验，并与已提交 Attempt 原子持久化后才让新 delivery 可运行。
 
-After each committed decision, the runtime consumes the next queued delivery. A successful terminal signal discards no previously committed history; outstanding queued deliveries are marked `skipped_due_terminal`, no further delivery starts, and the Run completes. A fixed, frozen default of 24 execution steps bounds cycles; reaching the limit fails the Run as `flow_step_limit_reached` with its history intact. Cancellation, interruption, and process ownership keep their existing safety behavior.
+每次执行看到触发它的 delivery、goal/repository Context 及该 delivery 引用的已提交 Artifact。因此 revision 反馈作为显式 incoming message 到达，而不是倒转上游节点状态。角色指引允许 Coder 从 goal 或反馈实现，也让 Reviewer 在不虚构缺失测试证据的情况下返回 revision 请求或完成信号。当 Reviewer 是终止发出者时，`approved` 必须与 `complete` 一致，`changes_requested` 必须沿至少一条配置边继续。其他角色作为终止发出者时使用相同显式 routing signal，并继续受其角色契约约束。
 
-For Coder → Reviewer → Coder, Coder submits a ChangeSet to Reviewer. Reviewer returns comments and routes to Coder. That delivery triggers a new Coder execution with the comments and prior artifact. Coder sends its revision to Reviewer. When Reviewer approves, it emits `complete` rather than routing back; the Run ends.
+每个已提交决策后，Runtime 消费下一条 queued delivery。成功终止不会丢弃已提交历史；其他 queued delivery 标记为 `skipped_due_terminal`，不再启动，Run 完成。冻结的默认 24 步上限约束循环；达到上限时以 `flow_step_limit_reached` 失败并保留历史。取消、中断与进程 ownership 保持现有安全行为。
 
-## Compatibility and migration
+在 Coder → Reviewer → Coder 中，Coder 向 Reviewer 提交 ChangeSet，Reviewer 返回意见并路由给 Coder。该 delivery 以意见和先前 Artifact 触发新的 Coder 执行。Coder 修订后再次交给 Reviewer；Reviewer 批准后发出 `complete`，而不是回传，Run 结束。
 
-Existing persisted Team graphs and frozen Runs retain their legacy consultation/scheduler semantics. A versioned flow-Team representation distinguishes the new mode without reinterpreting old JSON or historical events. The existing default Team remains legacy. The Team page labels legacy Teams and offers an explicit conversion/copy action into a new flow Team, asking for entry and terminal selections; conversion does not mutate the legacy Team or seed an extra Team automatically. New Team creation uses flow mode. New flow Runs use only the delivery queue; they do not also execute legacy review gates or final-Reviewer rewind logic.
+## 兼容与迁移
 
-## Verification
+已有持久化 Team 图和冻结 Run 保留 legacy 咨询/Scheduler 语义。带版本的消息流 Team 表示区分新模式，不重新解释旧 JSON 或历史 Event。现有默认 Team 保持 legacy。Team 页面标记 legacy Team，并提供显式复制/转换操作，要求重新选择入口与终止；操作不修改原 Team，也不自动 seed 新 Team。新建 Team 使用消息流模式。新消息流 Run 只使用 delivery queue，不再同时运行 legacy Review gate 或最终 Reviewer 回退逻辑。
 
-Focused tests cover canvas drag/cancel/delete and reciprocal rendering; topology validation including cycles, reachability, and terminal paths; persistence and migration; one delivery per trigger; multiple selected recipients; feedback cycles; terminal authorization and Reviewer status coherence; step-limit failure; legacy Team/Run compatibility. Deterministic tests do not stand in for a live Codex acceptance. A live acceptance uses a user-created Coder ↔ Reviewer Team with real Codex, verifies at least one feedback round and a terminal approval, and inspects persisted deliveries and artifacts.
+## 验证
+
+聚焦测试覆盖画布拖动/取消/删除、双向边渲染、包含循环/可达性/终止路径的拓扑校验、持久化与迁移、每次触发一条 delivery、多接收方、反馈循环、终止授权与 Reviewer 状态一致性、步数上限，以及 legacy Team/Run 兼容性。确定性测试不能替代真实 Codex 验收。真实验收由用户创建 Coder ↔ Reviewer Team，使用真实 Codex，验证至少一轮反馈和终止批准，并检查持久化 delivery 与 Artifact。

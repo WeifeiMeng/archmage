@@ -1,24 +1,26 @@
-# White Borderless App Icon Implementation Plan
+# 白色无边框应用程序图标实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-29-white-borderless-app-icon.md)
 
-**Goal:** Replace every Archmage application icon with the approved wizard portrait on a pure-white rounded tile with no outline, shadow, tint, or edge artifacts.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Keep `public/archmage-icon.png` as the single source of truth. Produce one visually approved transparent PNG, apply an exact rounded alpha mask outside the white tile, then regenerate the Tauri PNG, ICNS, and ICO assets from that master.
+**目标：** 将每个Archmage应用程序图标替换为纯白色圆形瓷砖上经过批准的巫师肖像，没有轮廓、阴影、色调或边缘伪影。
 
-**Tech Stack:** Built-in image editor, PNG alpha channel, FFmpeg, Tauri 2 icon generator, Vitest
+**架构：** 将 `public/archmage-icon.png` 保留为单一事实来源。生成一个视觉上认可的透明 PNG，在白色图块外部应用精确的圆形 alpha 蒙版，然后从该母版重新生成 Tauri PNG、ICNS 和 ICO 资源。
+
+**技术堆栈：** 内置图像编辑器、PNG alpha 通道、FFmpeg、Tauri 2 图标生成器、Vitest
 
 ---
 
-### Task 1: Produce and validate the white master icon
+### 任务1：制作并验证白色主图标
 
-**Files:**
-- Modify: `apps/archmage-desktop/public/archmage-icon.png`
-- Test: `apps/archmage-desktop/src/iconAssets.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/public/archmage-icon.png`
+- 测试： `apps/archmage-desktop/src/iconAssets.test.ts`
 
-- [x] **Step 1: Capture the current asset contract**
+- [x] **第1步：获取当前资产合约**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
@@ -26,44 +28,44 @@ npm test -- iconAssets.test.ts
 sips -g pixelWidth -g pixelHeight -g hasAlpha public/archmage-icon.png
 ```
 
-Expected: the icon-reference tests pass and the source PNG has an alpha channel.
+预期：图标参考测试通过并且源 PNG 具有 Alpha 通道。
 
-- [x] **Step 2: Edit the approved portrait master**
+- [x] **第二步：编辑批准的肖像大师**
 
-Use the built-in image editor with `public/archmage-icon.png` as the edit target. Change only the rounded tile from pale gray-green to pure white. Preserve the wizard portrait, crop, facial features, hair, beard, collar, medallion, and monochrome pencil style. Require no outline, border, shadow, colored tint, halo, or stray pixels, with full transparency outside the rounded tile.
+使用内置图像编辑器，以 `public/archmage-icon.png` 作为编辑目标。仅将圆形瓷砖从浅灰绿色更改为纯白色。保留巫师肖像、裁剪、面部特征、头发、胡须、衣领、徽章和单色铅笔风格。不需要轮廓、边框、阴影、彩色色调、光晕或杂散像素，圆形图块外部具有完全透明度。
 
-- [x] **Step 3: Apply a deterministic rounded alpha mask**
+- [x] **第 3 步：应用确定性圆形 alpha 蒙版**
 
-Use FFmpeg to keep the generated image inside the existing rounded-square geometry and set every pixel outside it to alpha zero. Do not alter RGB values inside the tile.
+使用 FFmpeg 将生成的图像保留在现有圆角正方形几何形状内，并将其外部的每个像素设置为 alpha 零。不要更改图块内的 RGB 值。
 
-- [x] **Step 4: Inspect the master at full and small sizes**
+- [x] **步骤 4：检查全尺寸和小尺寸的母版**
 
-Open the master and a 128-pixel preview. Confirm that the tile is visually pure white, its edge has no black outline or gray-green halo, the outside is transparent, and the portrait remains recognizable at Dock size.
+打开母版和 128 像素预览。确认图块在视觉上是纯白色的，其边缘没有黑色轮廓或灰绿色光晕，外部是透明的，并且肖像在 Dock 尺寸下仍然可识别。
 
-### Task 2: Regenerate and verify every application icon
+### 任务 2：重新生成并验证每个应用程序图标
 
-**Files:**
-- Modify: `apps/archmage-desktop/src-tauri/icons/32x32.png`
-- Modify: `apps/archmage-desktop/src-tauri/icons/128x128.png`
-- Modify: `apps/archmage-desktop/src-tauri/icons/128x128@2x.png`
-- Modify: `apps/archmage-desktop/src-tauri/icons/icon.png`
-- Modify: `apps/archmage-desktop/src-tauri/icons/icon.icns`
-- Modify: `apps/archmage-desktop/src-tauri/icons/icon.ico`
+**文件：**
+- 修改：`apps/archmage-desktop/src-tauri/icons/32x32.png`
+- 修改：`apps/archmage-desktop/src-tauri/icons/128x128.png`
+- 修改：`apps/archmage-desktop/src-tauri/icons/128x128@2x.png`
+- 修改：`apps/archmage-desktop/src-tauri/icons/icon.png`
+- 修改：`apps/archmage-desktop/src-tauri/icons/icon.icns`
+- 修改：`apps/archmage-desktop/src-tauri/icons/icon.ico`
 
-- [x] **Step 1: Generate the complete icon set from the master**
+- [x] **第1步：从master生成完整的图标集**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
 npm run tauri -- icon public/archmage-icon.png --output src-tauri/icons
 ```
 
-Expected: Tauri regenerates the standard PNG sizes plus ICNS and ICO without error.
+预期：Tauri 重新生成标准 PNG 尺寸以及 ICNS 和 ICO，不会出现错误。
 
-- [x] **Step 2: Run focused and full verification**
+- [x] **第 2 步：运行集中且全面的验证**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
@@ -74,13 +76,13 @@ cd ../..
 git diff --check
 ```
 
-Expected: 0 test failures, a successful production build, and no whitespace errors.
+预期：0 次测试失败，生产构建成功，并且没有空格错误。
 
-- [x] **Step 3: Restart and visually verify the desktop application**
+- [x] **步骤 3：重新启动并目视验证桌面应用程序**
 
-Restart the existing Tauri development process so macOS reloads the ICNS resource. Confirm that the Dock/application bar, sidebar image, and browser favicon all use the same pure-white borderless icon.
+重新启动现有的 Tauri 开发进程，以便 macOS 重新加载 ICNS 资源。确认 Dock/application 栏、侧边栏图像和浏览器图标都使用相同的纯白色无边框图标。
 
-- [x] **Step 4: Commit the replacement assets**
+- [x] **第 4 步：提交替换资产**
 
 ```bash
 git add apps/archmage-desktop/public/archmage-icon.png \

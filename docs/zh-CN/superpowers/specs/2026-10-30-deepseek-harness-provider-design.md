@@ -1,5 +1,7 @@
 # DeepSeek Harness Provider 支持设计
 
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-deepseek-harness-provider-design.md)
+
 **状态：** 已按 2026-10-30 的方案调整确认；本设计取代此前修改 DSH headless CLI 的方案。
 
 ## 目标

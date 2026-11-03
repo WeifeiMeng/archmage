@@ -1,25 +1,27 @@
-# Sidebar Brand and Navigation Localization Implementation Plan
+# 侧边栏品牌及导航本地化实施方案
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-29-sidebar-brand-and-navigation-localization.md)
 
-**Goal:** Enlarge the Archmage sidebar brand, localize its subtitle and primary navigation, and give Team management a distinct team icon.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Keep the existing sidebar component and navigation behavior intact. Change only the rendered labels and Lucide icon selection in `App.tsx`, adjust the existing brand CSS dimensions, and add a source-level contract test for the approved copy, icon, and sizes.
+**目标：** 扩大Archmage侧边栏品牌，本地化其副标题和主导航，并为团队管理提供独特的团队图标。
 
-**Tech Stack:** React 19, TypeScript, Lucide React, CSS, Vitest
+**架构：** 保持现有侧边栏组件和导航行为完整。仅更改 `App.tsx` 中渲染的标签和 Lucide 图标选择，调整现有品牌 CSS 尺寸，并为批准的副本、图标和尺寸添加源级合同测试。
+
+**技术堆栈：** React 19、TypeScript、Lucide React、CSS、Vitest
 
 ---
 
-### Task 1: Sidebar brand and navigation refresh
+### 任务1：侧边栏品牌和导航刷新
 
-**Files:**
-- Create: `apps/archmage-desktop/src/sidebarNavigation.test.ts`
-- Modify: `apps/archmage-desktop/src/App.tsx`
-- Modify: `apps/archmage-desktop/src/styles.css`
+**文件：**
+- 创建：`apps/archmage-desktop/src/sidebarNavigation.test.ts`
+- 修改：`apps/archmage-desktop/src/App.tsx`
+- 修改：`apps/archmage-desktop/src/styles.css`
 
-- [x] **Step 1: Write the failing sidebar contract test**
+- [x] **第 1 步：编写失败的侧边栏合约测试**
 
-Create `sidebarNavigation.test.ts` with:
+使用以下命令创建 `sidebarNavigation.test.ts`：
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -45,20 +47,20 @@ describe("sidebar brand and navigation", () => {
 });
 ```
 
-- [x] **Step 2: Run the focused test and verify RED**
+- [x] **步骤 2：运行重点测试并验证 RED**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
 npm test -- sidebarNavigation.test.ts
 ```
 
-Expected: both tests fail because the old English labels, shared `Share2` team icon, and compact brand sizes are still present.
+预期：两项测试均失败，因为旧的英文标签、共享 `Share2` 团队图标和紧凑的品牌尺寸仍然存在。
 
-- [x] **Step 3: Update the sidebar markup**
+- [x] **第 3 步：更新侧边栏标记**
 
-In `App.tsx`, add `UsersRound` to the Lucide imports and change the brand/navigation block to:
+在 `App.tsx` 中，将 `UsersRound` 添加到 Lucide 导入中，并将 brand/navigation 块更改为：
 
 ```tsx
 <div className="brand">
@@ -71,9 +73,9 @@ In `App.tsx`, add `UsersRound` to the Lucide imports and change the brand/naviga
 <button className={`new-run ${view === "teams" ? "active" : ""}`} onClick={() => navigate("teams")}><UsersRound size={17} />团队管理</button>
 ```
 
-- [x] **Step 4: Apply the balanced A brand dimensions**
+- [x] **步骤 4：应用平衡的 A 品牌尺寸**
 
-In `styles.css`, change only these declarations:
+在 `styles.css` 中，仅更改以下声明：
 
 ```css
 .brand-mark{width:44px;height:44px}
@@ -81,11 +83,11 @@ In `styles.css`, change only these declarations:
 .brand span{font-size:12px}
 ```
 
-Keep the existing border, radius, color, margin, and sidebar widths unchanged.
+保持现有边框、半径、颜色、边距和侧边栏宽度不变。
 
-- [x] **Step 5: Run focused and complete verification**
+- [x] **第 5 步：运行集中且完整的验证**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
@@ -96,13 +98,13 @@ cd ../..
 git diff --check
 ```
 
-Expected: all tests pass, the production build succeeds, and there are no whitespace errors.
+预期：所有测试都通过，生产构建成功，并且没有空格错误。
 
-- [x] **Step 6: Visually verify both sidebar widths**
+- [x] **第 6 步：目视验证两个侧边栏宽度**
 
-Open the local preview at the standard viewport and at a width below the `1050px` breakpoint. Confirm the 44px icon, 18px title, Chinese subtitle, four localized labels, distinct team icon, no wrapping, and unchanged selected states.
+在标准视口中以低于 `1050px` 断点的宽度打开本地预览。确认 44px 图标、18px 标题、中文字幕、四个本地化标签、清晰的团队图标、无换行以及未更改的选定状态。
 
-- [x] **Step 7: Commit the implementation**
+- [x] **第 7 步：提交实施**
 
 ```bash
 git add apps/archmage-desktop/src/App.tsx \
@@ -112,25 +114,25 @@ git add apps/archmage-desktop/src/App.tsx \
 git commit -m "Refresh sidebar brand and navigation labels"
 ```
 
-### Task 2: Emphasize the in-app wizard portrait
+### 任务2：强调应用内向导肖像
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/sidebarNavigation.test.ts`
-- Modify: `apps/archmage-desktop/src/settings.css`
+**文件：**
+- 修改：`apps/archmage-desktop/src/sidebarNavigation.test.ts`
+- 修改：`apps/archmage-desktop/src/settings.css`
 
-- [x] **Step 1: Extend the style contract test**
+- [x] **第 1 步：扩展样式契约测试**
 
-Read `settings.css` in `sidebarNavigation.test.ts` and assert that the brand image rule contains `transform: scale(1.15)` and `filter: contrast(1.18)`.
+读取 `sidebarNavigation.test.ts` 中的 `settings.css`，断言品牌形象规则包含 `transform: scale(1.15)` 和 `filter: contrast(1.18)`。
 
-- [x] **Step 2: Run the focused test and verify RED**
+- [x] **步骤 2：运行重点测试并验证 RED**
 
-Run `cd apps/archmage-desktop && npm test -- sidebarNavigation.test.ts`.
+运行 `cd apps/archmage-desktop && npm test -- sidebarNavigation.test.ts`。
 
-Expected: the new assertion fails because the image currently has no transform or contrast filter.
+预期：新断言失败，因为图像当前没有变换或对比度过滤器。
 
-- [x] **Step 3: Apply the approved image-only emphasis**
+- [x] **第 3 步：应用批准的仅图像强调**
 
-Update the existing `.brand-mark img` rule in `settings.css` to:
+将 `settings.css` 中现有的 `.brand-mark img` 规则更新为：
 
 ```css
 .brand-mark img {
@@ -143,11 +145,11 @@ Update the existing `.brand-mark img` rule in `settings.css` to:
 }
 ```
 
-Do not change the `44px` brand container or the shared PNG asset.
+请勿更改 `44px` 品牌容器或共享 PNG 资源。
 
-- [x] **Step 4: Run focused and complete verification**
+- [x] **第 4 步：运行集中且完整的验证**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
@@ -158,11 +160,11 @@ cd ../..
 git diff --check
 ```
 
-Expected: all tests pass, the production build succeeds, and there are no whitespace errors.
+预期：所有测试都通过，生产构建成功，并且没有空格错误。
 
-- [x] **Step 5: Visually verify and commit**
+- [x] **步骤 5：目视验证并提交**
 
-Inspect the light-theme sidebar and confirm that the portrait is visibly larger and higher contrast without escaping the rounded `44px` container. Commit with:
+检查浅色主题侧边栏，并确认肖像明显更大且对比度更高，而无需逃脱圆形 `44px` 容器。承诺：
 
 ```bash
 git add apps/archmage-desktop/src/settings.css \

@@ -1,5 +1,7 @@
 # S0 Real Codex Vertical Slice Implementation Plan
 
+简体中文 | [English](../../../en/superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended when delegation is authorized) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 通过一个本地 Codex Provider，让 Designer、Coder、Tester、Reviewer 四个 Capability Agent 在真实 Git Worktree 中完成可追踪、可中断恢复的协作。

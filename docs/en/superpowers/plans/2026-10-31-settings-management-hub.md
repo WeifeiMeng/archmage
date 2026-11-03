@@ -1,5 +1,7 @@
 # Settings Management Hub Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-31-settings-management-hub.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move Agent, Capability, and Team management into a full-screen Settings hub while leaving only Run navigation in the main sidebar.

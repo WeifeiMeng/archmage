@@ -1,5 +1,7 @@
 # DeepSeek Harness Provider Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-30-deepseek-harness-provider.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the current experimental DeepSeek Harness headless-CLI integration with an Archmage-owned Python SDK sidecar, so a `Run + Capability` keeps one DSH conversation for its full live Run and Agent Management can configure, discover, verify, and bind that provider.
@@ -169,7 +171,7 @@ Base the resource on the runtime-wheel plugins proven by the official JSON-RPC a
 
 - `@deepseek-ai/dsh-sdk-jsonrpc-server`;
 - `@deepseek-ai/dsh-llm-deepseek`;
-- `@deepseek-ai/dsh-sandbox-local` and `@deepseek-ai/dsh-sandbox-policy`, with `mode: !!js process.env.DSH_PERMISSION_MODE` and workspace root `DSH_CWD`;
+- `@deepseek-ai/dsh-sandbox-local` and `@deepseek-ai/dsh-sandbox-policy`, with `mode: !!js process.env. DSH_PERMISSION_MODE` and workspace root `DSH_CWD`;
 - local subprocess plus sandboxed Bash;
 - `@deepseek-ai/dsh-user-approval` with `policy: never`;
 - the agent spine with background jobs and interactive questions disabled;

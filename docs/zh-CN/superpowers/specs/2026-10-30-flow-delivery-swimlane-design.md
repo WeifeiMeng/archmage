@@ -1,5 +1,7 @@
 # Run 交付消息泳道设计
 
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-flow-delivery-swimlane-design.md)
+
 ## 背景
 
 Run 详情页目前只把 `flowDeliveries` 渲染为一组路由标签，例如 `coder 已交付 → reviewer`。运行时实际已经将每轮能力产出持久化到对应 Attempt 的 `output_json`，但 RunSnapshot 没有把这份内容投影到交付记录中，因此前端无法展示“交付了什么”。

@@ -1,31 +1,33 @@
-# Capability Topology and Management Design
+# 能力拓扑与管理设计
 
-**Status:** Approved for implementation; scope narrowed to Agent binding by follow-up decision
+简体中文 | [English](../../../en/superpowers/specs/2026-09-29-capability-topology-and-management-design.md)
 
-## Goal and scope
+**状态：** 批准实施；通过后续决定将范围缩小为代理绑定
 
-Make the four built-in capabilities visible as a collaboration topology and configurable independently of the local Agent instances that execute them. This release displays the existing, fixed topology; it does not edit edges or change scheduling. Team management with an editable canvas is a subsequent, separate stage.
+## 目标和范围
 
-This follows the existing Capability-first boundary: a Capability describes a logical responsibility, an Agent instance supplies execution, and a future Team will own a reusable topology of capabilities.
+使四个内置功能作为协作拓扑可见，并且可以独立于执行它们的本地代理实例进行配置。此版本显示现有的固定拓扑；它不会编辑边缘或更改调度。使用可编辑画布进行团队管理是后续的单独阶段。
 
-## Product decisions
+这遵循现有的能力优先边界：能力描述逻辑职责，代理实例提供执行，未来的团队将拥有可重用的能力拓扑。
 
-- Add a `Capabilities` destination beside `Runs` and `Agents`. `Agents` continues to manage local Codex instances and connection checks; move capability binding controls from `Agents` to `Capabilities` so each setting has one home.
-- Show four nodes in a fixed, left-to-right graph: Designer, Coder, Tester, Reviewer. Selecting a node opens its configuration panel. Nodes and edges cannot be added, removed, dragged, or rewired in this release.
-- Distinguish **execution dependency** from **context handoff**. Solid arrows show the scheduler chain `Designer → Coder → Tester → Reviewer`. Dashed arrows show additional data handoffs `Designer → Tester`, `Designer → Reviewer`, and `Coder → Reviewer`. Adjacent nodes also hand off context; the solid arrow represents both relations there. A legend explains this and the UI never presents a dashed arrow as an independent execution path.
-- Keep the stable keys `designer`, `coder`, `tester`, and `reviewer` immutable. A Capability conceptually combines a responsibility prompt and an Agent-instance binding. This release edits only the binding. Names and descriptions are read-only metadata; the prompt, output schema, required inputs, and topology are not editable in the UI.
-- A Run freezes both the selected Agent binding and effective capability configuration at creation. Editing a capability cannot change an active or historical Run.
-- The topology is the built-in default workflow, not a user-created Team. The later Team canvas may reuse its node/edge visual language but will have its own persisted model and design review.
+## 产品决策
 
-## Approaches considered
+- 在 `Runs` 和 `Agents` 旁边添加 `Capabilities` 目标。`Agents` 继续管理本地 Codex 实例和连接检查；将功能绑定控件从 `Agents` 移动到 `Capabilities`，以便每个设置都有一个主目录。
+- 在固定的从左到右图表中显示四个节点：设计者、编码者、测试者、审阅者。选择一个节点将打开其配置面板。在此版本中无法添加、删除、拖动或重新连接节点和边。
+- 区分**执行依赖**和**上下文切换**。实心箭头显示调度程序链 `Designer → Coder → Tester → Reviewer`。虚线箭头显示附加数据切换 `Designer → Tester`、`Designer → Reviewer` 和 `Coder → Reviewer`。相邻节点也会传递上下文；实线箭头代表那里的两种关系。有一个图例解释了这一点，并且 UI 永远不会将虚线箭头显示为独立的执行路径。
+- 保持稳定密钥 `designer`、`coder`、`tester` 和 `reviewer` 不可变。能力在概念上结合了责任提示和代理实例绑定。此版本仅编辑绑定。名称和描述是只读元数据；提示、输出架构、所需输入和拓扑在 UI 中不可编辑。
+- 运行会在创建时冻结所选代理绑定和有效功能配置。编辑功能无法更改活动或历史运行。
+- 拓扑是内置的默认工作流程，而不是用户创建的团队。稍后的团队画布可能会重用其 node/edge 视觉语言，但将拥有自己的持久模型和设计审查。
 
-1. **Recommended: fixed graph plus node configuration.** The graph truthfully visualizes today's runtime and adds a narrow configuration surface. It leaves workflow editing for Team management.
-2. A fully editable graph now would imply new scheduler, validation, persistence, and Run-snapshot semantics. It would make the first Capability page substantially larger and blur the requested later Team stage.
-3. A plain configuration table would be cheaper but would not answer the user's topology question or reveal the difference between dependency and context handoff.
+## 考虑的方法
 
-## Data and API design
+1. **推荐：固定图加节点配置。** 该图真实地可视化了当今的运行时，并添加了狭窄的配置表面。它将工作流程编辑留给团队管理。
+2. 现在，完全可编辑的图表意味着新的调度程序、验证、持久性和运行快照语义。这将使第一个“能力”页面变得更大，并模糊所请求的后续团队阶段。
+3. 简单的配置表会更便宜，但不会回答用户的拓扑问题或揭示依赖性和上下文切换之间的差异。
 
-Core owns one `CapabilityConfiguration` per stable key. The stored metadata and supplemental-instruction fields remain in the underlying model for compatibility with the already-built Run snapshot path, but the current UI does not edit them:
+## 数据和API设计
+
+每个稳定密钥核心拥有一个 `CapabilityConfiguration`。存储的元数据和补充指令字段保留在底层模型中，以便与已构建的运行快照路径兼容，但当前 UI 不会编辑它们：
 
 ```text
 key                 immutable built-in capability ID
@@ -35,38 +37,38 @@ extra_instructions  internal field, not edited in this release
 agent_instance_id   existing global binding to an enabled supported instance
 ```
 
-The current `capability_bindings` table remains the authority for Agent routing. A new migration adds capability metadata/instructions keyed by the same four IDs and seeds defaults without replacing existing bindings. Unknown keys are rejected; all four built-in rows are required. Saving one configuration validates it atomically, including the referenced Agent instance. Unsupported or disabled instances remain unbindable under the existing Agent rules. No arbitrary prompt-file or schema editing is exposed.
+当前 `capability_bindings` 表仍然具有代理路由的权限。新的迁移添加了由相同的四个 ID 和种子默认值键控的功能 metadata/instructions，而无需替换现有绑定。未知密钥被拒绝；所有四个内置行都是必需的。保存一项配置会自动验证它，包括引用的代理实例。根据现有代理规则，不受支持或禁用的实例仍然无法绑定。不会公开任意提示文件或模式编辑。
 
-The Core service returns a `CapabilityManagementSnapshot` containing the four configurations, the supported Agent choices and their connection states, and topology metadata. The topology metadata is defined once in Core alongside scheduler/context contracts rather than duplicated as an unrelated frontend truth. Tauri exposes typed read/save commands; React does not access SQLite or launch Agent processes directly. The UI sends the stored metadata unchanged and changes only `agent_instance_id`.
+核心服务返回 `CapabilityManagementSnapshot`，其中包含四种配置、支持的代理选择及其连接状态以及拓扑元数据。拓扑元数据在 Core 中与 scheduler/context 合约一起定义一次，而不是作为不相关的前端事实进行复制。Tauri 公开键入的 read/save 命令；React 不直接访问 SQLite 或启动 Agent 进程。UI 发送未更改的存储元数据，仅更改 `agent_instance_id`。
 
-At Run creation, the frozen definition stores for each capability its key, display name, description, extra instructions, built-in prompt version, and Agent binding. Historical definitions lacking these fields deserialize with the original built-in defaults. Dispatch renders the immutable base prompt plus the frozen extra instructions as separate manifest fields, so context hashes and persisted prompt snapshots reflect the exact settings used. The output JSON schema, required context inputs, and contract validation remain fixed. Existing Runs continue to render from their frozen definition, never from current global configuration.
+在创建运行时，冻结的定义会存储每个功能的键、显示名称、描述、额外指令、内置提示版本和代理绑定。缺少这些字段的历史定义会使用原始内置默认值进行反序列化。Dispatch 将不可变的基本提示加上冻结的额外指令呈现为单独的清单字段，因此上下文哈希和持久的提示快照反映了所使用的确切设置。输出 JSON 模式、所需的上下文输入和合同验证保持不变。现有运行继续根据冻结的定义进行渲染，而不是根据当前的全局配置进行渲染。
 
-## Desktop experience
+## 桌面体验
 
-The page has a topology area and a selected-node inspector:
+该页面有一个拓扑区域和一个选定节点检查器：
 
-- Each node shows its stable role, read-only display name, bound Agent name/provider, and connection state. Shared use of one Codex instance by multiple capabilities is shown naturally; the graph represents capabilities, not separate processes.
-- Solid/dashed arrow styles, labels, and a legend make the two edge meanings clear. A keyboard-accessible node list mirrors graph selection for non-pointer use. The graph remains legible at narrower window widths via horizontal scrolling rather than collapsing the edges into an ambiguous stack.
-- The inspector shows the built-in description and edits only the Agent binding. It states that the role prompt is built into the Runtime and cannot be edited here, and that binding changes affect only future Runs. It shows an explicit Save action and unsaved-change state.
-- Errors preserve the user's edits and name the failing field or binding. A failed read offers Retry. Browser-only preview may show the static topology, but saves and live Agent status require the Tauri Runtime; it must not display invented healthy connections.
-- The `Agents` page links to `Capabilities` for routing. The Run creation page continues to validate all four bindings and can link to the new management page when a binding is missing.
+- 每个节点都会显示其稳定角色、只读显示名称、绑定代理 name/provider 和连接状态。多个功能对一个 Codex 实例的共享使用是很自然的；该图代表功能，而不是单独的流程。
+- Solid/dashed 箭头样式、标签和图例使两条边缘的含义变得清晰。键盘可访问的节点列表反映了非指针使用的图形选择。通过水平滚动，图形在较窄的窗口宽度下仍保持清晰，而不是将边缘折叠成模糊的堆栈。
+- 检查器显示内置描述并仅编辑代理绑定。它指出角色提示内置于运行时中，无法在此处编辑，并且绑定更改仅影响将来的运行。它显示了显式的保存操作和未保存的更改状态。
+- 错误会保留用户的编辑并命名失败的字段或绑定。读取失败会提供重试。仅浏览器预览可能会显示静态拓扑，但保存和实时代理状态需要 Tauri Runtime；它不能显示发明的健康连接。
+- `Agents` 页面链接到 `Capabilities` 以进行路由。运行创建页面继续验证所有四个绑定，并且可以在缺少绑定时链接到新的管理页面。
 
-## Failure and consistency rules
+## 失败和一致性规则
 
-- An unknown key or unavailable Agent binding is rejected before persistence. Existing backend validation of stored metadata remains, but the UI does not offer metadata editing in this release.
-- If a configuration save fails, no partial metadata/binding update is visible. Concurrent reads see the previous or the fully saved configuration.
-- A stale editor save must not silently overwrite a newer save: update carries a revision and reports a conflict requiring refresh.
-- Deleting or disabling a bound Agent remains blocked until its capability bindings are changed.
-- Changing supplemental instructions cannot bypass the fixed output schema or required-input validation. Runtime includes the instructions in the frozen prompt snapshot and diagnostic provenance for the new Run.
+- 未知密钥或不可用的代理绑定在持久化之前会被拒绝。存储元数据的现有后端验证仍然存在，但此版本中的 UI 不提供元数据编辑。
+- 如果配置保存失败，则不会显示部分 metadata/binding 更新。并发读取会看到以前或完全保存的配置。
+- 过时的编辑器保存不得默默地覆盖较新的保存：更新包含修订并报告需要刷新的冲突。
+- 删除或禁用绑定代理将保持阻止状态，直到其功能绑定发生更改。
+- 更改补充指令无法绕过固定输出模式或所需输入验证。运行时包括冻结提示快照中的指令以及新运行的诊断来源。
 
-## Verification
+## 验证
 
-- Core migration tests: upgrade an existing schema-8 database without losing Agent bindings; seed four defaults on a fresh database; reject unknown capability keys.
-- Core service tests: validation, atomic save, revision conflict, and supported/enabled Agent binding checks.
-- Runtime tests: new Runs freeze configuration and Agent selection; later edits do not affect them; old definitions deserialize and use original defaults; rendered context/hash includes frozen extra instructions.
-- Frontend tests: graph metadata maps to four nodes and the documented edge styles; node selection, save/error/conflict behavior, and Run binding warnings.
-- Keep the final verification focused on relevant Rust tests and frontend tests/build. Real Codex connectivity is already covered by Agent management and does not need a new live probe solely for this page.
+- 核心迁移测试：升级现有的 schema-8 数据库而不丢失 Agent 绑定；在新数据库上设置四个默认值；拒绝未知的功能键。
+- 核心服务测试：验证、原子保存、修订冲突和 supported/enabled 代理绑定检查。
+- 运行时测试：新的运行冻结配置和代理选择；以后的编辑不会影响它们；旧定义反序列化并使用原始默认值；渲染的 context/hash 包含冻结的额外指令。
+- 前端测试：图形元数据映射到四个节点和记录的边缘样式；节点选择、save/error/conflict 行为和运行绑定警告。
+- 将最终验证重点放在相关 Rust 测试和前端 tests/build 上。代理管理已涵盖真正的 Codex 连接，并且不需要仅为此页面添加新的实时探针。
 
-## Next stage: Team canvas
+## 下一阶段：团队画布
 
-Team management is a separate design and implementation stage. A Team will own a named, persisted topology on an editable canvas, including its capability nodes, edges, and validation rules; a Run will select and freeze a Team version. That stage must define whether edges are scheduling dependencies, data handoffs, or both, and how cycles, missing inputs, and multiple instances are handled. None of those editing semantics are implied by this fixed graph.
+团队管理是一个单独的设计和实施阶段。团队将在可编辑画布上拥有一个命名的、持久的拓扑，包括其功能节点、边和验证规则；运行将选择并冻结团队版本。该阶段必须定义边缘是否是调度依赖性、数据切换或两者，以及如何处理周期、丢失输入和多个实例。这个固定图没有暗示这些编辑语义。

@@ -1,33 +1,35 @@
-# Bilingual Documentation System Implementation Plan
+# 双语文献系统实施方案
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-11-03-bilingual-documentation-system.md)
 
-**Goal:** Move every Archmage document into mirrored English and Simplified Chinese trees, make the repository landing page Chinese-first with an English peer, and verify complete bilingual coverage and valid links.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** `docs/en/` and `docs/zh-CN/` contain identical Markdown paths and same-language internal links. Existing documents are mirrored first, then each peer is translated without changing code, commands, status, or historical evidence. Root `README.md` and `README.en.md` form a separate bilingual pair.
+**目标：** 将每个 Archmage 文档移至镜像的英文和简体中文树中，与英文同行一起使存储库登陆页面中文优先，并验证完整的双语覆盖和有效链接。
 
-**Tech Stack:** Markdown, Git, shell utilities (`rg`, `comm`, `find`), repository source code as the authority for current behavior.
+**架构：** `docs/en/` 和 `docs/zh-CN/` 包含相同的 Markdown 路径和相同语言的内部链接。首先镜像现有文档，然后在不更改代码、命令、状态或历史证据的情况下翻译每个对等点。根 `README.md` 和 `README.en.md` 形成单独的双语对。
+
+**技术堆栈：** Markdown、Git、shell 实用程序（`rg`、`comm`、`find`）、存储库源代码作为当前行为的权限。
 
 ---
 
-### Task 1: Establish the mirrored directory layout and root README pair
+### 任务 1：建立镜像目录布局和根 README 对
 
-**Files:**
-- Move: every current `docs/**/*.md` file to `docs/en/<same-relative-path>`
-- Create: every matching `docs/zh-CN/<same-relative-path>`
-- Create: `README.en.md`
-- Modify: `README.md`
+**文件：**
+- 移动：将每个当前 `docs/**/*.md` 文件移动到 `docs/en/<same-relative-path>`
+- 创建：每个匹配的 `docs/zh-CN/<same-relative-path>`
+- 创建：`README.en.md`
+- 修改：`README.md`
 
-- [ ] **Step 1: Capture the pre-migration inventory**
+- [ ] **第 1 步：获取迁移前库存**
 
 ```bash
 rg --files docs -g '*.md' | sort > /tmp/archmage-docs-before.txt
 wc -l /tmp/archmage-docs-before.txt
 ```
 
-Expected: `72` Markdown files after this plan is added.
+预期：添加此计划后的 `72` Markdown 文件。
 
-- [ ] **Step 2: Move the current tree into `docs/en/` and mirror it**
+- [ ] **第2步：将当前树移动到`docs/en/`并镜像**
 
 ```bash
 mkdir -p docs/en docs/zh-CN
@@ -39,7 +41,7 @@ done < /tmp/archmage-docs-before.txt
 cp -R docs/en/. docs/zh-CN/
 ```
 
-Expected: both commands below produce identical path lists, and no Markdown remains directly under `docs/`.
+预期：下面的两个命令都会生成相同的路径列表，并且 `docs/` 下不会直接保留任何 Markdown。
 
 ```bash
 (cd docs/en && rg --files -g '*.md' | sort) > /tmp/archmage-en.txt
@@ -48,11 +50,11 @@ comm -3 /tmp/archmage-en.txt /tmp/archmage-zh.txt
 find docs -mindepth 1 -maxdepth 1 -type f -name '*.md'
 ```
 
-- [ ] **Step 3: Split and translate the root README**
+- [ ] **第 3 步：拆分并翻译根 README**
 
-Copy the current English project page to `README.en.md`. Add `[简体中文](README.md) | English` above its title and link it to `docs/en/README.md`. Translate the complete root `README.md` into Simplified Chinese, add `简体中文 | [English](README.en.md)` above its title, and link it to `docs/zh-CN/README.md`. Preserve all commands and current product qualifications.
+将当前英文项目页面复制到 `README.en.md`。在其标题上方添加 `[简体中文](README.md) | English` 并将其链接到 `docs/en/README.md`。将完整的根 `README.md` 翻译成简体中文，在其标题上方添加 `简体中文 | [English](README.en.md)`，并将其链接到 `docs/zh-CN/README.md`。保留所有命令和当前产品资格。
 
-- [ ] **Step 4: Verify and commit the layout**
+- [ ] **第 4 步：验证并提交布局**
 
 ```bash
 test -f README.en.md
@@ -63,26 +65,26 @@ git add README.md README.en.md docs/en docs/zh-CN
 git commit -m "docs: establish bilingual documentation layout"
 ```
 
-### Task 2: Translate indexes and current user-facing documentation
+### 任务 2：翻译索引和当前面向用户的文档
 
-**Files:**
-- Modify: `docs/{en,zh-CN}/README.md`
-- Modify: `docs/{en,zh-CN}/cli-reference.md`
-- Modify: `docs/{en,zh-CN}/guide.md`
-- Modify: `docs/{en,zh-CN}/guide-online-doctor.md`
-- Modify: `docs/{en,zh-CN}/product/*.md`
-- Modify: `docs/{en,zh-CN}/concepts/*.md`
-- Modify: `docs/{en,zh-CN}/architecture/*.md`
-- Modify: `docs/{en,zh-CN}/roadmap/**/*.md`
-- Modify: `docs/{en,zh-CN}/runbooks/*.md`
+**文件：**
+- 修改：`docs/{en,zh-CN}/README.md`
+- 修改：`docs/{en,zh-CN}/cli-reference.md`
+- 修改：`docs/{en,zh-CN}/guide.md`
+- 修改：`docs/{en,zh-CN}/guide-online-doctor.md`
+- 修改：`docs/{en,zh-CN}/product/*.md`
+- 修改：`docs/{en,zh-CN}/concepts/*.md`
+- 修改：`docs/{en,zh-CN}/architecture/*.md`
+- 修改：`docs/{en,zh-CN}/roadmap/**/*.md`
+- 修改：`docs/{en,zh-CN}/runbooks/*.md`
 
-- [ ] **Step 1: Preserve source-language copies and translate their peers**
+- [ ] **步骤 1：保留源语言副本并翻译其同行**
 
-Preserve existing Chinese prose in `zh-CN` for the CLI/current guides and desktop runbook. Preserve existing English prose in `en` for product, concepts, architecture, roadmap, and the remaining runbooks. Translate every peer completely; do not summarize.
+在 `zh-CN` 中保留现有的中文散文，以用于 CLI/current 指南和桌面操作手册。在 `en` 中保留产品、概念、架构、路线图和剩余操作手册的现有英文散文。完整翻译每个同行；不总结。
 
-- [ ] **Step 2: Add a language switcher before every title**
+- [ ] **第 2 步：在每个标题之前添加语言切换器**
 
-Use the same pattern at the correct nesting depth. For example:
+在正确的嵌套深度处使用相同的图案。例如：
 
 ```markdown
 # docs/en/architecture/overview.md
@@ -92,11 +94,11 @@ Use the same pattern at the correct nesting depth. For example:
 简体中文 | [English](../../en/architecture/overview.md)
 ```
 
-- [ ] **Step 3: Repair links for the added language directory level**
+- [ ] **步骤3：修复添加的语言目录级别的链接**
 
-Keep documentation links inside the active language tree. Add one parent level to links that target repository files outside `docs/`. Preserve commands, flags, environment variables, JSON fields, event names, file paths, dates, and verification results verbatim.
+将文档链接保留在活动语言树内。添加一个父级别以链接到 `docs/` 之外的目标存储库文件。逐字保留命令、标志、环境变量、JSON 字段、事件名称、文件路径、日期和验证结果。
 
-- [ ] **Step 4: Verify and commit current documentation**
+- [ ] **第 4 步：验证并提交当前文档**
 
 ```bash
 for root in docs/en docs/zh-CN; do
@@ -109,29 +111,29 @@ git add docs/en docs/zh-CN
 git commit -m "docs: translate current product documentation"
 ```
 
-Expected: every printed first line is a language switcher and formatting succeeds.
+预期：每个打印的第一行都是语言切换器并且格式化成功。
 
-### Task 3: Translate ADRs and acceptance records
+### 任务 3：翻译 ADR 和验收记录
 
-**Files:**
-- Modify: `docs/{en,zh-CN}/adr/0001-deliver-vertical-slices.md`
-- Modify: `docs/{en,zh-CN}/adr/0002-separate-provider-and-capability-agent.md`
-- Modify: `docs/{en,zh-CN}/adr/0003-use-explicit-context-handoffs.md`
-- Modify: `docs/{en,zh-CN}/adr/0004-use-per-run-git-worktrees.md`
-- Modify: `docs/{en,zh-CN}/adr/0005-use-real-codex-only-in-product-flow.md`
-- Modify: `docs/{en,zh-CN}/acceptance/s0/batch-a-progress.md`
-- Modify: `docs/{en,zh-CN}/acceptance/s0/batch-b-progress.md`
-- Modify: `docs/{en,zh-CN}/acceptance/s0/batch-c-progress.md`
+**文件：**
+- 修改：`docs/{en,zh-CN}/adr/0001-deliver-vertical-slices.md`
+- 修改：`docs/{en,zh-CN}/adr/0002-separate-provider-and-capability-agent.md`
+- 修改：`docs/{en,zh-CN}/adr/0003-use-explicit-context-handoffs.md`
+- 修改：`docs/{en,zh-CN}/adr/0004-use-per-run-git-worktrees.md`
+- 修改：`docs/{en,zh-CN}/adr/0005-use-real-codex-only-in-product-flow.md`
+- 修改：`docs/{en,zh-CN}/acceptance/s0/batch-a-progress.md`
+- 修改：`docs/{en,zh-CN}/acceptance/s0/batch-b-progress.md`
+- 修改：`docs/{en,zh-CN}/acceptance/s0/batch-c-progress.md`
 
-- [ ] **Step 1: Translate all ADR pairs**
+- [ ] **第 1 步：翻译所有 ADR 对**
 
-Preserve decision status, context, consequences, supersession relationships, and provider names. Do not modernize earlier decisions while translating them.
+保留决策状态、上下文、后果、取代关系和提供者名称。翻译早期决策时不要将其现代化。
 
-- [ ] **Step 2: Translate all acceptance pairs**
+- [ ] **第 2 步：翻译所有接受对**
 
-Preserve dates, commands, pass/fail wording, limitations, skipped checks, and partial completion. Translation must not upgrade evidence claims.
+保留日期、命令、pass/fail 措辞、限制、跳过的检查和部分完成。翻译不得升级证据主张。
 
-- [ ] **Step 3: Add peer switchers, verify counts, and commit**
+- [ ] **步骤 3：添加对等切换器、验证计数并提交**
 
 ```bash
 test "$(rg --files docs/en/adr -g '*.md' | wc -l | tr -d ' ')" = 5
@@ -143,26 +145,26 @@ git add docs/en/adr docs/zh-CN/adr docs/en/acceptance docs/zh-CN/acceptance
 git commit -m "docs: translate decisions and acceptance records"
 ```
 
-### Task 4: Translate all design specifications
+### 任务 4：翻译所有设计规范
 
-**Files:**
-- Modify: every mirrored `docs/{en,zh-CN}/superpowers/specs/*.md`
+**文件：**
+- 修改：每个镜像 `docs/{en,zh-CN}/superpowers/specs/*.md`
 
-- [ ] **Step 1: Translate all September specification pairs**
+- [ ] **第 1 步：翻译所有 9 月规格对**
 
-Cover every `2026-09-*.md` pair. Preserve proposed/approved status, boundaries, schemas, UI labels, and explicitly deferred work.
+覆盖每一对 `2026-09-*.md`。保留 proposed/approved 状态、边界、架构、UI 标签和显式推迟的工作。
 
-- [ ] **Step 2: Translate all October specification pairs**
+- [ ] **第 2 步：翻译所有 10 月规范对**
 
-Cover every `2026-10-*.md` pair. Preserve Team compatibility, legacy/flow semantics, provider constraints, UI details, and the difference between design approval and implementation evidence.
+覆盖每一对 `2026-10-*.md`。保留团队兼容性、legacy/flow 语义、提供者约束、UI 详细信息以及设计批准和实施证据之间的差异。
 
-- [ ] **Step 3: Translate all November specification pairs**
+- [ ] **步骤 3：翻译所有 11 月规格对**
 
-Translate the cross-provider handoff design and bilingual documentation design completely. Keep paths, JSON fields, commands, and verification rules identical.
+完整翻译跨提供商交接设计和双语文档设计。保持路径、JSON 字段、命令和验证规则相同。
 
-- [ ] **Step 4: Add depth-correct switchers and verify parity**
+- [ ] **步骤 4：添加深度正确的切换器并验证奇偶校验**
 
-Each English spec links to the same filename below `../../../zh-CN/superpowers/specs/`; each Chinese spec links to the same filename below `../../../en/superpowers/specs/`. For example, the English `2026-09-16-real-codex-vertical-slice-design.md` links to `../../../zh-CN/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md`.
+每个英文规范都链接到 `../../../zh-CN/superpowers/specs/` 下的相同文件名；每个中文规范都链接到 `../../../en/superpowers/specs/` 下的相同文件名。例如，英文 `2026-09-16-real-codex-vertical-slice-design.md` 链接到 `../../../zh-CN/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md`。
 
 ```bash
 test "$(rg --files docs/en/superpowers/specs -g '*.md' | wc -l | tr -d ' ')" = "$(rg --files docs/zh-CN/superpowers/specs -g '*.md' | wc -l | tr -d ' ')"
@@ -171,28 +173,28 @@ git add docs/en/superpowers/specs docs/zh-CN/superpowers/specs
 git commit -m "docs: translate design specifications"
 ```
 
-### Task 5: Translate all implementation plans
+### 任务5：翻译所有实施计划
 
-**Files:**
-- Modify: every mirrored `docs/{en,zh-CN}/superpowers/plans/*.md`
+**文件：**
+- 修改：每个镜像 `docs/{en,zh-CN}/superpowers/plans/*.md`
 
-- [ ] **Step 1: Translate all September plan pairs**
+- [ ] **第 1 步：翻译所有 9 月计划对**
 
-Preserve checkbox state, commands, expected results, commit messages, file paths, code blocks, dates, and recorded progress. Do not mark unchecked work complete.
+保留复选框状态、命令、预期结果、提交消息、文件路径、代码块、日期和记录的进度。不要将未经检查的工作标记为已完成。
 
-- [ ] **Step 2: Translate October 14 and 15 Team plan pairs**
+- [ ] **第 2 步：翻译 10 月 14 日和 15 日团队计划对**
 
-Preserve compatibility constraints, tests, expected failures, and progress notes.
+保留兼容性约束、测试、预期故障和进度说明。
 
-- [ ] **Step 3: Translate October 28 through 31 plan pairs**
+- [ ] **第 3 步：将 10 月 28 日转换为 31 个计划对**
 
-Preserve UI selectors, CSS class names, SDK/runtime package names, provider routes, test fixtures, acceptance evidence, and completion qualifications.
+保留 UI 选择器、CSS 类名称、SDK/runtime 包名称、提供者路线、测试装置、验收证据和完成资格。
 
-- [ ] **Step 4: Translate this November migration plan**
+- [ ] **第 4 步：翻译此 11 月迁移计划**
 
-Keep the English plan intact apart from its switcher and migrated paths. Translate every checkbox, command, expected result, commit message, and explanation into the Chinese peer.
+除了切换器和迁移路径之外，保持英语计划完好无损。将每个复选框、命令、预期结果、提交消息和解释翻译成中文对等体。
 
-- [ ] **Step 5: Add peer switchers, verify parity, and commit**
+- [ ] **步骤 5：添加对等切换器、验证奇偶校验并提交**
 
 ```bash
 test "$(rg --files docs/en/superpowers/plans -g '*.md' | wc -l | tr -d ' ')" = "$(rg --files docs/zh-CN/superpowers/plans -g '*.md' | wc -l | tr -d ' ')"
@@ -201,29 +203,29 @@ git add docs/en/superpowers/plans docs/zh-CN/superpowers/plans
 git commit -m "docs: translate implementation plans"
 ```
 
-### Task 6: Add the bilingual cross-provider handoff guide
+### 任务 6：添加双语跨提供商切换指南
 
-**Files:**
-- Create: `docs/en/architecture/cross-provider-handoff.md`
-- Create: `docs/zh-CN/architecture/cross-provider-handoff.md`
-- Modify: `docs/{en,zh-CN}/README.md`
-- Modify: `docs/{en,zh-CN}/architecture/context-and-contracts.md`
-- Modify: `docs/{en,zh-CN}/superpowers/specs/2026-10-14-message-flow-teams-design.md`
-- Modify: `docs/{en,zh-CN}/runbooks/desktop-s0.md`
+**文件：**
+- 创建：`docs/en/architecture/cross-provider-handoff.md`
+- 创建：`docs/zh-CN/architecture/cross-provider-handoff.md`
+- 修改：`docs/{en,zh-CN}/README.md`
+- 修改：`docs/{en,zh-CN}/architecture/context-and-contracts.md`
+- 修改：`docs/{en,zh-CN}/superpowers/specs/2026-10-14-message-flow-teams-design.md`
+- 修改：`docs/{en,zh-CN}/runbooks/desktop-s0.md`
 
-- [ ] **Step 1: Write the English guide from current code**
+- [ ] **第 1 步：根据当前代码编写英文指南**
 
-Document the Archmage orchestration boundary, JSON/JSON Schema common language, delivery envelope, persisted FlowDelivery, receiver context, Coder/Codex → Reviewer/DSH example, provider adapter differences, conversation/workspace boundaries, validation failures, compatibility, and code sources.
+记录 Archmage 编排边界、JSON/JSON 架构公共语言、交付信封、持久 FlowDelivery、接收方上下文、Coder/Codex → Reviewer/DSH 示例、提供程序适配器差异、conversation/workspace 边界、验证失败、兼容性和代码源。
 
-- [ ] **Step 2: Write the semantically equivalent Chinese guide**
+- [ ] **第2步：编写语义等效的中文指南**
 
-Use identical headings, JSON field names, examples, constraints, and source links. Translate prose and human-readable values without changing normative meaning.
+使用相同的标题、JSON 字段名称、示例、约束和源链接。翻译散文和人类可读的价值观而不改变规范含义。
 
-- [ ] **Step 3: Apply approved consistency corrections**
+- [ ] **步骤 3：应用批准的一致性修正**
 
-Mark Message-Flow Teams as implemented and point to its implementation plan for verification history. Replace the desktop guide's “every delivery executes real Codex” wording with target-Capability provider-neutral wording. Add same-language links to the new guide.
+将消息流团队标记为已实施，并指出其实施计划以验证历史记录。将桌面指南的“每次交付都执行真正的 Codex”措辞替换为目标能力提供商中立的措辞。在新指南中添加同语言链接。
 
-- [ ] **Step 4: Verify and commit the guide pair**
+- [ ] **步骤 4：验证并提交指南对**
 
 ```bash
 git diff --check
@@ -231,25 +233,25 @@ git add docs/en docs/zh-CN
 git commit -m "docs: add bilingual cross-provider handoff guide"
 ```
 
-### Task 7: Repair repository-wide documentation links
+### 任务 7：修复存储库范围内的文档链接
 
-**Files:**
-- Modify: any tracked Markdown file that links to a removed `docs/<old-path>.md`
-- Modify: `README.md`, `README.en.md`, and both documentation indexes as required
+**文件：**
+- 修改：任何链接到已删除 `docs/<old-path>.md` 的跟踪 Markdown 文件
+- 修改：`README.md`、`README.en.md` 以及所需的两个文档索引
 
-- [ ] **Step 1: Find stale old-layout links**
+- [ ] **第 1 步：查找陈旧的旧布局链接**
 
 ```bash
 rg -n '\]\(docs/(?!en/|zh-CN/)|\]\((?:\.\./)*docs/(?!en/|zh-CN/)' . -g '*.md' --pcre2
 ```
 
-- [ ] **Step 2: Route each stale link by prose language**
+- [ ] **步骤 2：通过散文语言路由每个过时的链接**
 
-Chinese prose links to `docs/zh-CN/...`; English prose links to `docs/en/...`. Do not create compatibility stubs at old paths.
+中文散文链接至 `docs/zh-CN/...`；英文散文链接至 `docs/en/...`。不要在旧路径上创建兼容性存根。
 
-- [ ] **Step 3: Verify no stale links remain and commit**
+- [ ] **步骤 3：验证不存在任何陈旧链接并提交**
 
-Run the Step 1 search again; expected output is empty.
+再次运行步骤1搜索；预期输出为空。
 
 ```bash
 git diff --check
@@ -257,12 +259,12 @@ git add -u README.md README.en.md docs
 git commit -m "docs: repair bilingual documentation links"
 ```
 
-### Task 8: Run final parity, switcher, link, and scope verification
+### 任务 8：运行最终奇偶校验、切换器、链路和范围验证
 
-**Files:**
-- Modify: only documentation files requiring corrections discovered by verification
+**文件：**
+- 修改：仅验证发现需要更正的文档文件
 
-- [ ] **Step 1: Prove mirror parity**
+- [ ] **第1步：证明镜像奇偶校验**
 
 ```bash
 (cd docs/en && rg --files -g '*.md' | sort) > /tmp/archmage-en-final.txt
@@ -270,21 +272,21 @@ git commit -m "docs: repair bilingual documentation links"
 comm -3 /tmp/archmage-en-final.txt /tmp/archmage-zh-final.txt
 ```
 
-Expected: no output.
+预期：无输出。
 
-- [ ] **Step 2: Prove every language switcher resolves**
+- [ ] **第 2 步：证明每个语言切换器都能解析**
 
-For every relative path in the parity list, calculate its nesting depth, confirm each first line contains the required peer link, and resolve that link to an existing file. Correct every missing or malformed switcher.
+对于奇偶校验列表中的每个相对路径，计算其嵌套深度，确认每个第一行包含所需的对等链接，并将该链接解析为现有文件。纠正每个丢失或畸形的切换器。
 
-- [ ] **Step 3: Validate all local Markdown targets and anchors**
+- [ ] **步骤 3：验证所有本地 Markdown 目标和锚点**
 
-Extract every non-HTTP, non-mailto Markdown link. Resolve it relative to its source file, confirm the target exists, and for Markdown fragments confirm the normalized heading anchor exists. Correct every broken link.
+提取每个非 HTTP、非 mailto Markdown 链接。相对于其源文件解析它，确认目标存在，并对于 Markdown 片段确认标准化标题锚点存在。更正每个损坏的链接。
 
-- [ ] **Step 4: Check semantic and structural parity**
+- [ ] **步骤 4：检查语义和结构奇偶性**
 
-Compare each pair's heading count, fenced-code count, table structure, dates, status markers, commands, paths, JSON fields, and checkbox counts. Manually review current runbooks, architecture contracts, and cross-provider guides for equivalent claims.
+比较每对的标题计数、隔离代码计数、表结构、日期、状态标记、命令、路径、JSON 字段和复选框计数。手动审查当前的运行手册、架构合同和跨提供商指南以获取等效声明。
 
-- [ ] **Step 5: Run formatting and scope checks**
+- [ ] **第 5 步：运行格式和范围检查**
 
 ```bash
 git diff --check origin/main...HEAD
@@ -292,13 +294,13 @@ git status --short
 git diff --name-only 6554406...HEAD | rg -v '^(README\.md|README\.en\.md|docs/)'
 ```
 
-Expected: formatting succeeds, the worktree is clean after commits, and this migration introduces no Runtime, schema, provider, or UI source changes.
+预期：格式化成功，worktree在提交后是干净的，并且此迁移不会引入运行时、架构、提供程序或 UI 源更改。
 
-- [ ] **Step 6: Commit verification corrections if needed**
+- [ ] **第 6 步：如果需要，提交验证更正**
 
 ```bash
 git add README.md README.en.md docs/en docs/zh-CN
 git commit -m "docs: verify bilingual documentation mirror"
 ```
 
-Do not create an empty commit when verification requires no correction.
+当验证不需要更正时，不要创建空提交。

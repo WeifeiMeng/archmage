@@ -1,36 +1,38 @@
-# 设置管理中心设计
+# Set up the admin center design
 
-## 目标
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-31-settings-management-hub-design.md) | English
 
-将“智能体管理、能力管理、团队管理”从主页面侧边栏移入设置。设置采用独立全屏布局，不显示主页面侧边栏，只提供明确的“返回主界面”入口。
+## target
 
-## 页面结构
+Move "Agent Management, Capability Management, Team Management" from the sidebar of the main page into settings. The setting adopts an independent full-screen layout, does not display the sidebar of the main page, and only provides a clear "return to the main interface" entrance.
 
-- 主界面侧边栏仅保留：新建任务、最近运行、设置、本地 Runtime 状态。
-- 进入设置后，整个工作区切换为独立设置壳层：顶部显示“返回主界面”和“设置”。
-- 设置内部左侧分类导航分为：
-  - 通用：外观
-  - 资源管理：智能体管理、能力管理、团队管理
-- 右侧内容区直接复用现有四个管理页面，不改变它们的数据读取、保存和错误展示逻辑。
+## Page structure
 
-## 导航与状态
+- The sidebar of the main interface only retains: new tasks, recent runs, settings, and local runtime status.
+- After entering the settings, the entire workspace switches to an independent settings shell: "Return to the main interface" and "Settings" are displayed at the top.
+- Setting up the internal left category navigation is divided into:
+  - General: Appearance
+  - Resource management: agent management, capability management, team management
+- The content area on the right directly reuses the existing four management pages without changing their data reading, saving and error display logic.
 
-- `settings` 继续作为主页面与设置空间的边界；设置内部增加独立的分类状态。
-- 从主侧栏进入设置时默认打开“外观”；设置内页面之间切换不重新显示主侧栏。
-- 智能体管理中的“前往能力管理”改为切换设置内部分类。
-- 新建任务页中“前往团队管理/配置 Capability”改为先进入设置，再定位对应分类。
-- 能力或团队存在未保存修改时，切换设置分类或返回主界面均沿用现有确认提示；取消后停留在当前分类。
+## Navigation and Status
 
-## 视觉原则
+- `settings` continues to serve as the boundary between the main page and the setting space; an independent classification status is added inside the setting.
+- "Appearance" is turned on by default when entering Settings from the main sidebar; switching between pages within Settings does not redisplay the main sidebar.
+- "Go to capability management" in agent management is changed to toggle settings internal classification.
+- On the new task page, "Go to team management/configuration capability" is changed to first enter settings and then locate the corresponding category.
+- When there are unsaved modifications to abilities or teams, the existing confirmation prompt will be used when switching setting categories or returning to the main interface; after canceling, the current category will remain.
 
-- 设置使用全宽独立壳层，避免主侧栏与设置分类栏同时出现。
-- 返回按钮位于左上角，分类栏保持固定宽度，管理页面占据剩余空间。
-- 沿用当前主题变量和管理页面样式，不重新设计现有表单与卡片。
+## visual principles
 
-## 验收
+- The setting uses a full-width independent shell to avoid the main sidebar and the setting category bar appearing at the same time.
+- The back button is in the upper left corner, the category bar remains fixed-width, and the admin page takes up the remaining space.
+- Inherit the current theme variables and admin page styles without redesigning existing forms and cards.
 
-- 主侧栏不再出现智能体、能力、团队入口。
-- 设置页隐藏主侧栏，并能返回新建任务主界面。
-- 四个设置分类均可访问，跨分类跳转正确。
-- 能力和团队的未保存离开确认继续生效。
-- 桌面端单元测试和前端构建通过。
+## Acceptance
+
+- Agent, ability, and team entries no longer appear in the main sidebar.
+- The settings page hides the main sidebar and returns to the new task main interface.
+- All four settings categories are accessible, and jumps across categories are correct.
+- Unsaved departure confirmations for abilities and teams remain in effect.
+- Desktop unit tests and front-end build passed.

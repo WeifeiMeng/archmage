@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-30-team-management-design.md) | English
+
 # Team Management and Review-Gated Topology Design
 
 **Status:** Approved direction, implementation scope for the first runnable Team release

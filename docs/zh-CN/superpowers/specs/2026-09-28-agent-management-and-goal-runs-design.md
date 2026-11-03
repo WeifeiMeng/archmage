@@ -1,25 +1,27 @@
-# Agent Management and Goal-Driven Runs Design
+# 代理管理和目标驱动的运行设计
 
-**Status:** Approved for implementation planning
+简体中文 | [English](../../../en/superpowers/specs/2026-09-28-agent-management-and-goal-runs-design.md)
 
-## Goal
+**状态：** 批准实施规划
 
-Make Archmage goal-driven at the product boundary and make local Agent routing visible. A user creates a Run with a repository and a goal, while a dedicated Agent management page shows which local Agent instances are usable and which instance executes each logical capability.
+## 目标
 
-## Product decisions
+让Archmage在产品边界上实现目标驱动，并使本地代理路由可见。用户创建带有存储库和目标的运行，而专用代理管理页面显示哪些本地代理实例可用以及哪个实例执行每个逻辑功能。
 
-- A Run form asks only for a Git repository and a nonblank goal.
-- The user does not predeclare test commands or an acceptance plan.
-- The Tester capability receives the testing task and independently decides how to inspect and test the work.
-- Capability routing is global. There is no per-Run Agent override.
-- Run creation freezes the current capability-to-Agent bindings so history remains truthful after settings change.
-- The storage model supports multiple instances of the same Provider kind from the start.
-- The first UI creates one default instance per supported Provider kind and keeps additional instances behind an advanced action.
-- S1 implements a real Codex Adapter only. Claude, OpenClaw, and Hermes appear as known but unsupported Adapter kinds and never report a fake healthy state.
+## 产品决策
 
-## Domain model
+- 运行表单仅要求提供 Git 存储库和非空目标。
+- 用户不预先声明测试命令或验收计划。
+- 测试人员能力接收测试任务并独立决定如何检查和测试工作。
+- 能力路由是全局的。没有每次运行代理覆盖。
+- 运行创建会冻结当前功能到代理的绑定，以便历史记录在设置更改后保持真实。
+- 存储模型从一开始就支持同一 Provider 类型的多个实例。
+- 第一个 UI 为每个受支持的提供程序类型创建一个默认实例，并在高级操作后面保留其他实例。
+- S1 仅实现真正的 Codex 适配器。Claude、OpenClaw 和 Hermes 似乎是已知但不受支持的适配器类型，并且从不报告虚假的健康状态。
 
-Archmage keeps the existing separation between physical Providers and logical capabilities.
+## 领域模型
+
+Archmage 保持物理提供者和逻辑能力之间现有的分离。
 
 ```text
 Provider Adapter       Agent Instance                 Capability Binding
@@ -30,124 +32,124 @@ openclaw (unsupported) connection status            <- tester
 hermes (unsupported)   last verification            <- reviewer
 ```
 
-An Agent instance is a persisted local configuration:
+Agent 实例是持久的本地配置：
 
-- stable ID;
-- Provider kind;
-- user-facing name;
-- optional executable override;
-- optional model override;
-- enabled flag;
-- last connectivity state, time, version, and safe error summary.
+- 稳定的身份证；
+- 提供者种类；
+- 面向用户的名称；
+- 可选的可执行覆盖；
+- 可选模型覆盖；
+- 启用标志；
+- 上次连接状态、时间、版本和安全错误摘要。
 
-The Adapter registry is compile-time product metadata. It distinguishes `supported`, `not_configured`, and `unsupported` without creating fake Provider implementations.
+适配器注册表是编译时产品元数据。它区分 `supported`、`not_configured` 和 `unsupported`，而无需创建虚假的 Provider 实现。
 
-Each capability binding points to an Agent instance ID, not merely to a Provider kind. The initial migration creates `codex-default` and binds `designer`, `coder`, `tester`, and `reviewer` to it.
+每个功能绑定都指向一个代理实例 ID，而不仅仅是指向一个提供者类型。初始迁移创建 `codex-default` 并将 `designer`、`coder`、`tester` 和 `reviewer` 与其绑定。
 
-## Connectivity semantics
+## 连接语义
 
-The management page separates local discovery from a real connectivity check:
+管理页面将本地发现与实际连接检查分开：
 
-- discovery verifies the configured executable, version, required `codex exec` flags, and Git availability;
-- “Verify connection” runs the existing bounded read-only real Codex probe;
-- a discovered CLI that has not completed the online probe is shown as “CLI available, connection unverified”;
-- a successful probe records `ready`, the checked version, timestamp, and Codex thread ID;
-- a failed probe records `failed` and a sanitized diagnostic summary;
-- full diagnostic files remain private under the Archmage data root and are not placed in model prompts or UI payloads.
+- discovery 验证配置的可执行文件、版本、所需的 `codex exec` 标志和 Git 可用性；
+- “验证连接”运行现有的有界只读真实Codex探针；
+- 发现的未完成在线探测的 CLI 显示为“CLI 可用，连接未验证”；
+- 成功的探测记录 `ready`、检查的版本、时间戳和 Codex 线程 ID；
+- 失败的探测器记录 `failed` 和经过清理的诊断摘要；
+- 完整的诊断文件在Archmage数据根下保持私有，并且不会放置在模型提示或 UI 负载中。
 
-Changing executable or model configuration invalidates the previous online verification and returns the instance to `unverified`.
+更改可执行文件或模型配置会使之前的在线验证无效，并将实例返回到 `unverified`。
 
-## Run binding snapshot
+## 运行绑定快照
 
-`RunRequest` contains only:
+`RunRequest` 仅包含：
 
 ```text
 repository: absolute path
 goal: nonblank string
 ```
 
-Before provisioning a worktree, Runtime resolves all built-in capabilities to enabled supported Agent instances. It rejects missing, disabled, unsupported, or locally undiscoverable bindings with a capability-specific preflight error.
+在配置worktree之前，运行时会解析所有内置功能以启用受支持的代理实例。它会拒绝丢失、禁用、不受支持或本地不可发现的绑定以及特定于功能的预检错误。
 
-The frozen Run definition stores, for every node:
+对于每个节点，冻结的运行定义存储：
 
-- capability key;
-- Agent instance ID and display name;
-- Provider kind;
-- executable path used at Run creation;
-- model override, if any.
+- 能力键；
+- 代理实例 ID 和显示名称；
+- 提供者种类；
+- 运行创建时使用的可执行路径；
+- 模型覆盖（如果有）。
 
-Node dispatch uses this frozen snapshot. Later edits in Agent management do not alter active or historical Runs.
+节点调度使用此冻结快照。稍后在代理管理中进行的编辑不会更改活动或历史运行。
 
-## Tester semantics
+## 测试者语义
 
-Tester receives the goal, design, implementation summary, canonical ChangeSet, and workspace. It may inspect the project and run relevant commands through the normal Codex workspace sandbox. Runtime does not generate, freeze, or inject check commands.
+测试人员接收目标、设计、实施摘要、规范变更集和工作区。它可以检查项目并通过正常的 Codex 工作区沙箱运行相关命令。运行时不会生成、冻结或注入检查命令。
 
-Tester returns a strict structured result containing:
+测试器返回严格结构化的结果，其中包含：
 
-- overall `passed`, `failed`, or `blocked` status;
-- human-readable summary;
-- commands it chose to run, with exit codes and concise outcomes;
-- limitations or unverified areas.
+- 总体 `passed`、`failed` 或 `blocked` 状态；
+- 人类可读的摘要；
+- 它选择运行的命令，带有退出代码和简洁的结果；
+- 限制或未经验证的领域。
 
-The structured result and private Codex diagnostics form the S1 evidence. Existing `CheckRunner` and `check_runs` storage remain available as lower-level infrastructure but are no longer part of the built-in Run path. This avoids a destructive migration while removing the predeclared-check product constraint.
+结构化结果和私人 Codex 诊断形成了 S1 证据。现有的 `CheckRunner` 和 `check_runs` 存储仍然可用作较低级别的基础设施，但不再是内置运行路径的一部分。这避免了破坏性迁移，同时消除了预先声明的检查产品约束。
 
-Reviewer receives the Tester result. A failed or blocked Tester result cannot be approved.
+审核者收到测试者结果。失败或被阻止的测试仪结果无法获得批准。
 
-## Desktop experience
+## 桌面体验
 
-The sidebar gains two stable destinations:
+侧边栏获得两个稳定的目的地：
 
-- `Runs`: new Run form and Run history;
-- `Agents`: local connections and capability routing.
+- `Runs`：新的运行形式和运行历史记录；
+- `Agents`：本地连接和功能路由。
 
-The Agents page contains:
+代理页面包含：
 
-1. A summary showing how many supported instances are ready, unverified, or failed.
-2. A Codex instance card with name, executable, optional model, discovered version, connection state, last checked time, save action, and real “Verify connection” action.
-3. Unsupported Claude, OpenClaw, and Hermes cards clearly labeled “Not supported yet”.
-4. A capability routing table for Designer, Coder, Tester, and Reviewer. Each row selects a persisted compatible instance and saves globally.
-5. An advanced “Add Codex instance” action. The initial page still starts with only `codex-default`.
+1. 显示有多少受支持的实例已就绪、未验证或失败的摘要。
+2. Codex 实例卡，其中包含名称、可执行文件、可选模型、发现版本、连接状态、上次检查时间、保存操作和真正的“验证连接”操作。
+3. 不支持的 Claude、OpenClaw 和 Hermes 卡明确标记为“尚不支持”。
+4. 设计者、编码者、测试者和审阅者的能力路由表。每行选择一个持久兼容实例并全局保存。
+5. 高级“添加 Codex 实例”操作。初始页面仍然仅以 `codex-default` 开头。
 
-The new Run form removes all acceptance-command controls and enables Start when repository, goal, environment, and global capability bindings are valid.
+新的“运行”表单删除了所有接受命令控件，并在存储库、目标、环境和全局功能绑定有效时启用“启动”。
 
-Run inspection displays the frozen Agent name and Provider kind for every node so users can answer which Agent performed historical work.
+运行检查会显示每个节点的冻结代理名称和提供程序类型，以便用户可以回答哪个代理执行了历史工作。
 
-## API boundary
+## API边界
 
-Core adds an Agent service used by both Tauri and future CLI surfaces:
+Core 添加了 Tauri 和未来 CLI 界面使用的代理服务：
 
-- `agent_management_snapshot()`
-- `save_agent_instance(input)`
-- `verify_agent_instance(id)`
-- `bind_capability(capability, instance_id)`
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
+- Archmage代币00000X
 
-Tauri exposes typed commands with the same responsibilities. React never invokes Codex directly or reads SQLite.
+Tauri 公开了具有相同职责的键入命令。React 从不直接调用 Codex 或读取 SQLite。
 
-## Failure behavior
+## 失败行为
 
-- Unsupported Adapter kinds cannot be saved as runnable instances or bound to capabilities.
-- Deleting or disabling a bound instance is rejected until its bindings are changed.
-- A failed verification is durable and visible but does not fabricate authentication details.
-- Run creation reports the exact missing or unusable capability binding.
-- Connectivity or invocation failure after Run creation remains a persisted node/Run failure with private diagnostics.
-- Existing historical Run definitions containing checks remain readable through backward-compatible deserialization, but new Runs never require or create them.
+- 不受支持的适配器类型无法保存为可运行实例或绑定到功能。
+- 在更改绑定实例之前，删除或禁用绑定实例将被拒绝。
+- 失败的验证是持久且可见的，但不会伪造身份验证详细信息。
+- 运行创建报告确切的缺失或不可用的功能绑定。
+- 创建运行后的连接或调用失败仍然是带有专用诊断的持久 node/Run 故障。
+- 包含检查的现有历史运行定义通过向后兼容的反序列化保持可读，但新的运行从不需要或创建它们。
 
-## Testing strategy
+## 测试策略
 
-- migration and Store tests cover default Codex instance creation, multiple same-kind instances, and binding integrity;
-- Agent service tests cover discovery status, connectivity result persistence, and binding validation;
-- Runtime tests prove repository plus goal is sufficient and bindings are frozen per Run;
-- contract tests prove autonomous Tester output and Reviewer rejection after failed/blocked testing;
-- frontend tests cover goal-only request serialization and Agent state presentation;
-- the existing ignored real-Codex tests are extended with one explicit Agent verification test;
-- final verification uses focused Rust tests, frontend tests/build, workspace tests, and one opt-in real Codex probe when credentials are available.
+- 迁移和存储测试涵盖默认 Codex 实例创建、多个同类实例和绑定完整性；
+- Agent服务测试涵盖发现状态、连接结果持久化、绑定验证等；
+- 运行时测试证明存储库加上目标就足够了，并且每次运行都会冻结绑定；
+- 合同测试证明 failed/blocked 测试后自主测试器输出和审核器拒绝；
+- 前端测试涵盖仅目标请求序列化和代理状态呈现；
+- 现有被忽略的真实 Codex 测试通过一项显式代理验证测试进行了扩展；
+- 最终验证使用重点 Rust 测试、前端 tests/build、工作区测试以及在凭证可用时选择加入真实 Codex 探针。
 
-## Non-goals
+## 非目标
 
-- real Claude, OpenClaw, or Hermes invocation;
-- automatic Provider selection or fallback routing;
-- per-Run capability overrides;
-- secrets or login flows inside Archmage;
-- workflow editing;
-- removing the legacy CheckRunner tables and APIs;
-- pretending an offline executable check proves authentication.
+- 真正的 Claude、OpenClaw 或 Hermes 调用；
+- 自动提供商选择或后备路由；
+- 每次运行能力覆盖；
+- Archmage 内部的秘密或登录流程；
+- 工作流程编辑；
+- 删除旧版 CheckRunner 表和 API；
+- 假装离线可执行检查证明身份验证。

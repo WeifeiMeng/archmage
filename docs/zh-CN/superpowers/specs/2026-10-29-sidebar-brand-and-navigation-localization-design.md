@@ -1,5 +1,7 @@
 # 侧栏品牌与导航中文化设计
 
+简体中文 | [English](../../../en/superpowers/specs/2026-10-29-sidebar-brand-and-navigation-localization-design.md)
+
 ## 目标
 
 增强左上角品牌区域的识别度，并将侧栏主要导航统一改为自然、简洁的中文表达。此次改造仅影响侧栏，不修改各管理页面的标题、说明或数据结构。

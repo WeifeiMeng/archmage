@@ -1,5 +1,7 @@
 # Sidebar Brand and Navigation Localization Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-29-sidebar-brand-and-navigation-localization.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enlarge the Archmage sidebar brand, localize its subtitle and primary navigation, and give Team management a distinct team icon.

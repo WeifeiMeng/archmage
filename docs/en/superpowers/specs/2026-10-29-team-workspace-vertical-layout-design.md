@@ -1,25 +1,27 @@
-# 团队工作区纵向布局设计
+# Vertical layout design of team workspace
 
-## 目标
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-team-workspace-vertical-layout-design.md) | English
 
-将团队管理页中的“团队设置”和“消息流画布”从左右双栏改为上下单列排列，让两块内容都使用完整页面宽度。
+## target
 
-## 布局
+Change the arrangement of "Team Settings" and "Message Flow Canvas" in the team management page from two columns on the left and right to a single column on the top and bottom, so that both pieces of content use the full page width.
 
-- “团队设置”位于上方，保持内容自然高度。
-- “消息流画布”位于下方，占满可用宽度。
-- 两块面板沿用现有间距、边框、背景和圆角，不改变页面其他区域。
-- 画布内部继续保留现有横向编辑区域和溢出滚动能力，不改变节点、连线及键盘交互。
+## Layout
 
-## 范围
+- Team Settings sits above, keeping the content at its natural height.
+- The Message Flow Canvas is below, taking up the available width.
+- The two panels inherit the existing spacing, borders, background, and rounded corners, leaving the rest of the page unchanged.
+- The existing horizontal editing area and overflow scrolling capabilities will continue to be retained inside the canvas, and nodes, connections, and keyboard interactions will not be changed.
 
-- 仅修改团队管理页工作区布局样式。
-- 不修改团队数据、保存逻辑、组件顺序或消息流行为。
-- 不修改 Run 详情页。
-- 移动端继续保持单列布局。
+## range
 
-## 验证
+- Only modify the team management page workspace layout style.
+- Does not modify team data, save logic, component order, or message flow behavior.
+- The Run details page is not modified.
+- The mobile version continues to maintain a single column layout.
 
-- 增加样式回归检查，确保工作区使用单列网格。
-- 运行桌面前端完整测试和生产构建。
-- 检查代码差异，确认没有超出团队管理页布局范围。
+## Verify
+
+- Added style regression check to ensure the workspace uses a single column grid.
+- Run full test and production builds of the desktop frontend.
+- Check the code differences to confirm that they do not exceed the scope of the team management page layout.

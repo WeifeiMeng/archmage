@@ -1,40 +1,42 @@
-# CLI Installation and Reference Implementation Plan
+# CLI安装及参考实施方案
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-09-18-cli-install-and-reference.md)
 
-**Goal:** Install the current development CLI as a normal `archmage` command and publish a concise, truthful command manual.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Use Cargo's native path installation rather than adding a custom installer, build hook, alias, or symlink. Keep `docs/cli-reference.md` as the canonical user-facing command reference; README and the broader development guide link to it while retaining deeper contributor material.
+**目标：** 将当前的开发 CLI 安装为普通的 `archmage` 命令，并发布简洁、真实的命令手册。
 
-**Tech Stack:** Cargo, Rust CLI, Markdown, shell-based acceptance checks
+**架构：** 使用 Cargo 的本机路径安装，而不是添加自定义安装程序、构建挂钩、别名或符号链接。保留 `docs/cli-reference.md` 作为规范的面向用户的命令参考；自述文件和更广泛的开发指南链接到它，同时保留更深入的贡献者材料。
+
+**技术堆栈：** Cargo、Rust CLI、Markdown、基于 shell 的验收检查
 
 ---
 
-## File map
+## 文件图
 
-- Create `docs/cli-reference.md`: canonical installation and command manual.
-- Modify `README.md`: point first-time users to installation and the command manual.
-- Modify `docs/guide.md`: remove stale worktree instructions, use installed-command examples, and delegate command semantics to the canonical manual.
-- Modify `docs/README.md`: add the command manual to the recommended reading order.
+- 创建 `docs/cli-reference.md`：规范安装和命令手册。
+- 修改 `README.md`：将首次用户指向安装和命令手册。
+- 修改 `docs/guide.md`：删除过时的worktree指令，使用已安装的命令示例，并将命令语义委托给规范手册。
+- 修改`docs/README.md`：将命令手册添加到推荐阅读顺序中。
 
-### Task 1: Create the canonical CLI manual
+### 任务 1：创建规范的 CLI 手册
 
-**Files:**
-- Create: `docs/cli-reference.md`
+**文件：**
+- 创建：`docs/cli-reference.md`
 
-- [ ] **Step 1: Verify the manual is currently absent**
+- [ ] **第 1 步：验证当前是否缺少手册**
 
-Run:
+运行：
 
 ```bash
 test -f docs/cli-reference.md
 ```
 
-Expected: exit status `1` because the canonical manual does not exist yet.
+预期：退出状态 `1`，因为规范手册尚不存在。
 
-- [ ] **Step 2: Write the complete manual**
+- [ ] **第2步：编写完整的手册**
 
-Create `docs/cli-reference.md` with these exact sections and semantics:
+使用这些确切的部分和语义创建 `docs/cli-reference.md`：
 
 ```markdown
 # Archmage CLI 命令手册
@@ -78,76 +80,76 @@ Create `docs/cli-reference.md` with these exact sections and semantics:
 覆盖 command not found、Codex 不在 PATH、离线成功在线失败、Workflow 未实现和敏感诊断文件处理。
 ```
 
-The actual prose must be complete Chinese documentation, not the outline text above. Every command must be copyable from the repository root.
+实际的散文必须是完整的中文文档，而不是上面的提纲文本。每个命令都必须可以从存储库根目录复制。
 
-- [ ] **Step 3: Check required truths are present**
+- [ ] **第 3 步：检查所需的事实是否存在**
 
-Run:
+运行：
 
 ```bash
 rg -n 'cargo install --path crates/archmage-cli --locked --force --root|doctor --offline|真实调用 Codex|尚未实现|退出码 20|cargo uninstall --root' docs/cli-reference.md
 ```
 
-Expected: every pattern appears at least once.
+预期：每个模式至少出现一次。
 
-- [ ] **Step 4: Commit the manual**
+- [ ] **第 4 步：提交手册**
 
 ```bash
 git add docs/cli-reference.md
 git commit -m "docs: add canonical CLI command reference"
 ```
 
-### Task 2: Route users to the canonical manual
+### 任务 2：将用户引导至规范手册
 
-**Files:**
-- Modify: `README.md`
-- Modify: `docs/README.md`
-- Modify: `docs/guide.md`
+**文件：**
+- 修改：`README.md`
+- 修改：`docs/README.md`
+- 修改：`docs/guide.md`
 
-- [ ] **Step 1: Record the stale entry points before editing**
+- [ ] **步骤 1：编辑前记录过时的入口点**
 
-Run:
+运行：
 
 ```bash
 rg -n 'current usage guide|进入开发 Worktree|cargo run -p archmage-cli -- doctor' README.md docs/README.md docs/guide.md
 ```
 
-Expected: README routes users only to the broad guide, and `docs/guide.md` still refers to the deleted `s0-runtime-fencing` worktree and Cargo-run examples.
+预期：README 仅将用户引导至广泛指南，并且 `docs/guide.md` 仍指已删除的 `s0-runtime-fencing` worktree和 Cargo 运行示例。
 
-- [ ] **Step 2: Update the entry points**
+- [ ] **第 2 步：更新入口点**
 
-Make these focused changes:
+做出这些有针对性的改变：
 
-- README: add `cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"`, then link `docs/cli-reference.md` as the first CLI reference.
-- Documentation index: put `cli-reference.md` before the broader current-version guide.
-- Current-version guide: update the date to 2026-09-18, state that content describes `main`, remove the deleted worktree instructions, add the one-time install command, use `archmage doctor` examples, and link the canonical manual. Keep contributor-only test commands and internal architecture details in this guide.
+- 自述文件：添加 `cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"`，然后将 `docs/cli-reference.md` 链接为第一个 CLI 参考。
+- 文档索引：将 `cli-reference.md` 放在更广泛的当前版本指南之前。
+- 当前版本指南：将日期更新为 2026-09-18，声明内容描述 `main`，删除已删除的worktree指令，添加一次性安装命令，使用 `archmage doctor` 示例，并链接规范手册。在本指南中保留仅限贡献者的测试命令和内部架构详细信息。
 
-- [ ] **Step 3: Verify links and stale paths**
+- [ ] **步骤 3：验证链接和过时路径**
 
-Run:
+运行：
 
 ```bash
 rg -n 'cli-reference.md|cargo install --path crates/archmage-cli --locked --force --root' README.md docs/README.md docs/guide.md
 ! rg -n 's0-runtime-fencing|\.worktrees/s0-runtime-fencing' README.md docs/README.md docs/guide.md
 ```
 
-Expected: all three entry documents link or route to the manual, and no deleted worktree path remains.
+预期：所有三个条目文档都链接或路由到手册，并且不保留已删除的worktree路径。
 
-- [ ] **Step 4: Commit the entry-point updates**
+- [ ] **第 4 步：提交入口点更新**
 
 ```bash
 git add README.md docs/README.md docs/guide.md
 git commit -m "docs: route CLI users through installed command"
 ```
 
-### Task 3: Install and verify the command
+### 任务 3：安装并验证命令
 
-**Files:**
-- No repository file changes expected.
+**文件：**
+- 预计不会发生存储库文件更改。
 
-- [ ] **Step 1: Run repository quality checks**
+- [ ] **第 1 步：运行存储库质量检查**
 
-Run:
+运行：
 
 ```bash
 cargo fmt --all --check
@@ -156,21 +158,21 @@ cargo clippy --workspace --all-targets -- -D warnings
 git diff --check
 ```
 
-Expected: every command exits `0`; real Codex tests remain explicitly ignored by the normal test suite.
+预期：每个命令退出 `0`；真正的 Codex 测试仍然被普通测试套件明确忽略。
 
-- [ ] **Step 2: Install the current binary**
+- [ ] **步骤 2：安装当前的二进制文件**
 
-Run:
+运行：
 
 ```bash
 cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 ```
 
-Expected: Cargo reports installation of executable `archmage` from package `archmage-cli v0.1.0` at `$HOME/.local/bin/archmage`.
+预期：Cargo 报告安装了来自 `archmage-cli v0.1.0` 包 `$HOME/.local/bin/archmage` 的可执行 `archmage`。
 
-- [ ] **Step 3: Verify command resolution and basic behavior**
+- [ ] **步骤 3：验证命令解析和基本行为**
 
-Run:
+运行：
 
 ```bash
 command -v archmage
@@ -178,35 +180,35 @@ archmage --version
 archmage --help
 ```
 
-Expected: `command -v` resolves `$HOME/.local/bin/archmage`, version is `archmage 0.1.0`, and help lists `doctor`, `run`, `status`, `logs`, `resume`, and `cancel`.
+预期：`command -v` 解析 `$HOME/.local/bin/archmage`，版本为 `archmage 0.1.0`，帮助列表 `doctor`、`run`、`status`、`logs`、`resume` 和`cancel`。
 
-- [ ] **Step 4: Verify offline Doctor without using the normal data directory**
+- [ ] **步骤4：不使用普通数据目录验证离线Doctor**
 
-Run:
+运行：
 
 ```bash
 ARCHMAGE_HOME="$(mktemp -d)/data" archmage doctor --offline
 ```
 
-Expected: exit `0`, `authentication` is `not_verified_offline`, and database `schema_version` is `5`.
+预期：退出 `0`，`authentication` 为 `not_verified_offline`，数据库 `schema_version` 为 `5`。
 
-- [ ] **Step 5: Verify unavailable Workflow behavior remains honest**
+- [ ] **步骤 5：验证不可用的工作流行为是否保持诚实**
 
-Run:
+运行：
 
 ```bash
 archmage run --repo "$PWD" --goal "CLI documentation verification" --check "cargo test"
 ```
 
-Expected: exit `20` and `workflow command is not implemented in this batch`.
+预期：退出 `20` 和 `workflow command is not implemented in this batch`。
 
-- [ ] **Step 6: Record final repository state**
+- [ ] **第 6 步：记录最终存储库状态**
 
-Run:
+运行：
 
 ```bash
 git status --short
 git log -3 --oneline
 ```
 
-Expected: clean worktree containing the design, plan, manual, and entry-point commits.
+预期：包含设计、计划、手册和入口点提交的干净worktree。

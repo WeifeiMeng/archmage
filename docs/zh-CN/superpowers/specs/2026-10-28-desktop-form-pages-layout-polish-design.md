@@ -1,149 +1,151 @@
-# Desktop Form Pages Layout Polish Design
+# 桌面表单页面布局波兰设计
 
-**Status:** Approved visual direction; ready for implementation planning.
+简体中文 | [English](../../../en/superpowers/specs/2026-10-28-desktop-form-pages-layout-polish-design.md)
 
-## Scope
+**状态：** 批准的视觉方向；准备实施计划。
 
-Polish the New Run, Agent Management, and Capability Management pages using the same spatial and visual principles approved for Team Management. The pages should feel like one product without forcing different tasks into identical layouts.
+## 适用范围
 
-Run Detail is explicitly out of scope. This work does not change Runtime behavior, APIs, persistence, validation, navigation, or business semantics.
+使用团队管理批准的相同空间和视觉原则完善“新运行”、“座席管理”和“能力管理”页面。这些页面应该感觉像是一个产品，而不会将不同的任务强制到相同的布局中。
 
-The companion Team Management design is documented in `2026-10-28-team-management-layout-polish-design.md`.
+运行详细信息明确超出范围。这项工作不会改变运行时行为、API、持久性、验证、导航或业务语义。
 
-## Shared layout language
+配套的团队管理设计记录在 `2026-10-28-team-management-layout-polish-design.md` 中。
 
-All four management/form pages use an adaptive command-Hero system:
+## 共享布局语言
 
-- The Hero combines page identity with useful page-level controls or state. It is not a presentation-only title block.
-- A restrained green-tinted surface, compact title scale, subtle decoration, consistent border radius, and shared spacing establish visual continuity.
-- Page-level actions live in the Hero. Object-level actions remain near the object they affect.
-- Status is expressed as compact metrics, pills, or summaries rather than long prose.
-- The main workspace uses available horizontal space on wide windows and collapses to a clear single-column reading order on narrower windows.
-- Existing dark surfaces, green accent, typography, focus treatment, and semantic controls remain the visual foundation.
+所有四个 management/form 页面都使用自适应命令英雄系统：
 
-Shared CSS patterns may be introduced for the command Hero, summary metrics, page panels, section headings, and responsive breakpoints. Page-specific classes remain appropriate when a component has unique behavior. This is a focused consolidation, not a new general-purpose design system.
+- Hero 将页面标识与有用的页面级控件或状态结合起来。它不是仅用于演示的标题块。
+- 内敛的绿色表面、紧凑的标题比例、微妙的装饰、一致的边框半径和共享的间距建立了视觉连续性。
+- 页面级操作位于 Hero 中。对象级操作保留在它们影响的对象附近。
+- 状态以简洁的指标、药丸或摘要来表达，而不是长篇散文。
+- 主工作区使用宽窗口上的可用水平空间，并在较窄的窗口上折叠为清晰的单列阅读顺序。
+- 现有的深色表面、绿色强调、版式、焦点处理和语义控制仍然是视觉基础。
 
-## New Run
+可以为命令 Hero、摘要指标、页面面板、部分标题和响应断点引入共享 CSS 模式。当组件具有独特的行为时，特定于页面的类仍然适用。这是一个有针对性的整合，而不是一个新的通用设计系统。
 
-### Hero
+## 新跑
 
-The Hero contains `TEAM RUN`, the page title, concise guidance, and a Runtime readiness summary. The summary reflects the existing environment state:
+### 英雄
 
-- checking: environment check in progress;
-- ready: Runtime and supporting data are available;
-- failed: environment check failed;
-- preview: browser-only interface preview.
+Hero 包含 `TEAM RUN`、页面标题、简明指南和运行时准备情况摘要。摘要反映了现有的环境状态：
 
-The Hero does not invent new health checks. It projects state already held by the page.
+- 正在检查：环境检查正在进行中；
+- 就绪：运行时和支持数据可用；
+- failed：环境检查失败；
+- 预览：仅浏览器界面预览。
 
-### Task and team workspace
+英雄并没有发明新的健康检查。它项目状态已经由页面保存。
 
-The form becomes a two-column workspace on wide screens:
+### 任务和团队工作空间
 
-- The left task panel contains the repository picker and goal field.
-- The right team panel contains the team selector, existing `RunTeamPreview`, readiness or binding issues, and the Start Run action.
+该表单在宽屏幕上成为两列工作区：
 
-Repository/environment errors stay near the task or Hero context. Missing teams, failed team loading, and binding issues stay in the team panel. The existing recovery actions remain available.
+- 左侧任务面板包含存储库选择器和目标字段。
+- 右侧团队面板包含团队选择器、现有 `RunTeamPreview`、准备情况或绑定问题以及“开始运行”操作。
 
-The Start Run button remains the single primary action and keeps the existing `canStart` logic. The right panel states that a Run freezes the selected Team and Capability configuration.
+Repository/environment 错误停留在任务或 Hero 上下文附近。缺少团队、团队加载失败和绑定问题仍保留在团队面板中。现有的恢复操作仍然可用。
 
-On narrower screens, task definition precedes team selection and start controls in one column.
+“开始运行”按钮仍然是单个主要操作，并保留现有的 `canStart` 逻辑。右侧面板表明运行会冻结选定的团队和功能配置。
 
-## Agent Management
+在较窄的屏幕上，任务定义先于团队选择并在一列中启动控件。
 
-### Hero and health summary
+## 代理管理
 
-The Hero contains the page identity, `添加 Codex 实例`, and four compact metrics:
+### 英雄和健康状况总结
 
-- verified and ready;
-- enabled but unverified;
-- enabled with failed connection;
-- total supported instances.
+Hero 包含页面标识 `添加 Codex 实例` 和四个紧凑指标：
 
-The metrics derive from the existing management snapshot and do not create new Agent states. `添加 Codex 实例` remains the page-level action because it creates a new object.
+- 已验证并准备就绪；
+- 已启用但未经验证；
+- 连接失败时启用；
+- 支持的实例总数。
 
-### Instance workspace
+这些指标源自现有管理快照，不会创建新的代理状态。`添加 Codex 实例` 仍然是页面级操作，因为它创建了一个新对象。
 
-The page moves directly from the Hero into a concise `本地连接` section and the existing responsive instance-card grid. The redundant large section gap is removed.
+### 实例工作区
 
-Each Agent card keeps object-level actions locally: save configuration, inspect CLI, verify connection, and delete. Unsupported adapters retain their distinct read-only cards. The new-instance editor continues to appear in the grid.
+该页面直接从 Hero 移动到简洁的 `本地连接` 部分和现有的响应式实例卡网格。多余的大断面间隙被去除。
 
-The Capability routing handoff becomes a compact next-step panel at the bottom rather than a second large section. It retains the existing `打开 Capability 管理` navigation.
+每个代理卡在本地保存对象级操作：保存配置、检查 CLI、验证连接和删除。不受支持的适配器保留其独特的只读卡。新实例编辑器继续出现在网格中。
 
-Loading, load error, connection error, dirty state, disabled state, bound-instance restrictions, and delete confirmation behavior remain unchanged.
+功能路由切换成为底部的一个紧凑的下一步面板，而不是第二大部分。它保留了现有的 `打开 Capability 管理` 导航。
 
-## Capability Management
+加载、加载错误、连接错误、脏状态、禁用状态、绑定实例限制和删除确认行为保持不变。
 
-### Hero and summary
+## 能力管理
 
-The Hero contains the page identity, Reload action, and compact totals for:
+### 英雄与总结
 
-- fixed Capabilities;
-- valid Agent bindings;
-- configured Skills;
-- configured Tools.
+英雄包含页面标识、重新加载操作和紧凑总计：
 
-The totals derive from the existing snapshot. The page continues to distinguish browser preview, loading, and load-error states without inventing data.
+- 固定能力；
+- 有效的代理绑定；
+- 配置技能；
+- 配置的工具。
 
-### Master-detail workspace
+总数源自现有快照。该页面继续区分浏览器预览、加载和加载错误状态，而无需发明数据。
 
-On wide screens, the page becomes a stable master-detail layout:
+### 主从工作区
 
-- The left rail lists Designer, Coder, Tester, and Reviewer vertically. Each item shows its Agent connection summary and Skill/Tool counts.
-- The right editor shows the selected Capability's identity, description, Agent binding, extra instructions, Skills, Tools, advisory text, feedback, and Save action.
+在宽屏幕上，页面变成稳定的主从布局：
 
-This replaces the current horizontal four-card selector followed by a full-width editor. The left rail remains visible while editing so switching context does not require scrolling back upward.
+- 左侧栏垂直列出设计者、编码者、测试者和审阅者。每个项目都显示其代理连接摘要和 Skill/Tool 计数。
+- 右侧编辑器显示所选功能的身份、描述、代理绑定、额外说明、技能、工具、咨询文本、反馈和保存操作。
 
-Skills and Tools use two parallel sections on wide screens and stack on narrower screens. Their existing row editing, limits, labels, removal controls, and guidance text remain intact.
+这取代了当前的水平四卡选择器，后跟全角编辑器。编辑时左栏保持可见，因此切换上下文不需要向上滚动。
 
-Reload remains a page-level action in the Hero. Save remains an object-level action at the bottom of the editor. Dirty-switch and dirty-refresh confirmations, revision conflict feedback, Agent availability validation, and the statement that changes affect only new Runs remain unchanged.
+技能和工具在宽屏幕上使用两个平行部分，并在较窄的屏幕上堆叠。他们现有的行编辑、限制、标签、删除控件和指导文本保持不变。
 
-At medium widths the master-detail workspace becomes one column, with the Capability selector rendered as a compact two-column grid above the editor. At narrow widths it may fall back to one column when needed for readable labels.
+重新加载仍然是 Hero 中的页面级操作。保存仍然是编辑器底部的对象级操作。脏切换和脏刷新确认、修订冲突反馈、代理可用性验证以及更改仅影响新运行的声明保持不变。
 
-## State and data flow
+在中等宽度下，主从工作区变成一列，功能选择器在编辑器上方呈现为紧凑的两列网格。在宽度较窄的情况下，当需要可读标签时，它可能会回落到一列。
 
-The redesign only changes markup grouping and presentation:
+## 状态和数据流
 
-- React state, API calls, effects, confirmation dialogs, and existing derived values remain the sources of truth.
-- Shared presentation components may receive already-derived labels and counts; they do not fetch data or own business state.
-- Existing child components, including `RunTeamPreview`, Agent cards, and Capability guidance rows, retain their behavior unless a small markup adjustment is required for layout.
-- Navigation between Agent and Capability management remains owned by `App`.
+重新设计仅更改标记分组和表示：
 
-## Accessibility
+- React 状态、API 调用、效果、确认对话框和现有的派生值仍然是事实的来源。
+- 共享的表示组件可能会接收已经派生的标签和计数；他们不获取数据或拥有自己的业务状态。
+- 现有的子组件（包括 `RunTeamPreview`、代理卡和功能指导行）将保留其行为，除非布局需要进行小的标记调整。
+- 代理和功能管理之间的导航仍归 `App` 所有。
 
-- Preserve semantic headings, labels, inputs, selects, textareas, buttons, checkboxes, and status/alert roles.
-- Page-level status summaries must include text, not color alone.
-- Maintain visible focus indicators and logical keyboard order after visual reflow.
-- Responsive visual order must match DOM and keyboard order.
-- Icon-only controls require accessible names and visible tooltips.
-- Disabled, failed, and read-only states must retain sufficient contrast.
+## 无障碍
 
-## Error and transient states
+- 保留语义标题、标签、输入、选择、文本区域、按钮、复选框和 status/alert 角色。
+- 页面级状态摘要必须包含文本，而不仅仅是颜色。
+- 视觉回流后保持可见的焦点指示器和逻辑键盘顺序。
+- 响应式视觉顺序必须与 DOM 和键盘顺序匹配。
+- 仅图标控件需要可访问的名称和可见的工具提示。
+- 禁用、失败和只读状态必须保留足够的对比度。
 
-Loading, preview, empty, dirty, busy, failed, success, and validation states must fit the new panels without layout shifts that hide controls. Existing messages and recovery actions remain semantically unchanged. Global errors continue to use the application error banner.
+## 错误和瞬态
 
-No optimistic state, new toast system, or new error transformation is introduced.
+加载、预览、空、脏、忙、失败、成功和验证状态必须适合新面板，而不会发生隐藏控件的布局变化。现有消息和恢复操作在语义上保持不变。全局错误继续使用应用程序错误横幅。
 
-## Implementation boundary
+没有引入乐观状态、新的 Toast 系统或新的错误转换。
 
-Expected files include:
+## 实施边界
 
-- `App.tsx` and `styles.css` for New Run;
-- `AgentManagement.tsx` and `agents.css` for Agent Management;
-- `CapabilityManagement.tsx` and `capabilities.css` for Capability Management;
-- `TeamManagement.tsx` and `teams.css` for the previously approved Team Management design;
-- focused frontend tests for affected structure and behavior.
+预期的文件包括：
 
-Run Workbench and Run Detail markup/styles are not redesigned. Changes to shared selectors must be scoped so Run Detail retains its current layout.
+- 新运行的 `App.tsx` 和 `styles.css`；
+- `AgentManagement.tsx` 和 `agents.css` 用于代理管理；
+- `CapabilityManagement.tsx` 和 `capabilities.css` 用于能力管理；
+- `TeamManagement.tsx` 和 `teams.css` 用于先前批准的团队管理设计；
+- 针对受影响的结构和行为进行集中前端测试。
 
-## Verification
+Run Workbench 和 Run Detail markup/styles 未重新设计。对共享选择器的更改必须限定范围，以便运行详细信息保留其当前布局。
 
-- Update or add focused tests for all controls that move: repository selection, team selection, recovery links, Start Run, adding and editing Agents, Agent verification/deletion, Capability switching, Reload, Skill/Tool editing, and Save actions.
-- Run the desktop frontend test suite and production build.
-- Inspect all four redesigned pages at wide, medium, and narrow widths.
-- Check New Run in ready, failed, preview, no-team, load-failure, and binding-issue states.
-- Check Agent Management with ready, unverified, failed, unsupported, adding, busy, and load-error states.
-- Check Capability Management in preview, loading, error, dirty, unavailable-binding, conflict, success, and normal states.
-- Verify keyboard focus order, accessible names, visible focus, and that no control depends only on hover.
-- Confirm Run Detail is visually unchanged.
-- Run `git diff --check` before delivery.
+## 验证
+
+- 更新或添加所有移动控件的重点测试：存储库选择、团队选择、恢复链接、开始运行、添加和编辑代理、代理 verification/deletion、功能切换、重新加载、Skill/Tool 编辑和保存操作。
+- 运行桌面前端测试套件和生产版本。
+- 以宽、中、窄宽度检查所有四个重新设计的页面。
+- 检查“新运行”的就绪、失败、预览、无团队、加载失败和绑定问题状态。
+- 检查代理管理的就绪、未验证、失败、不支持、添加、忙碌和加载错误状态。
+- 检查预览、加载、错误、脏、不可用绑定、冲突、成功和正常状态下的能力管理。
+- 验证键盘焦点顺序、可访问名称、可见焦点，以及没有控件仅依赖于悬停。
+- 确认运行详细信息在视觉上没有变化。
+- 交付前运行 `git diff --check`。

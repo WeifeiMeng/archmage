@@ -1,40 +1,42 @@
-# Agent 管理按 Provider 分组设计
+# Agent management is designed by Provider grouping
 
-## 目标
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-agent-provider-grouping-design.md) | English
 
-让 Agent 管理页的添加入口与 Provider 建立直接归属关系，降低顶部操作的视觉权重，并让 Codex 与 DeepSeek Harness 的实例管理能力保持对等。
+## target
 
-## 页面结构
+Let the adding entry of the Agent management page establish a direct ownership relationship with the Provider, reduce the visual weight of the top operations, and maintain parity between the instance management capabilities of Codex and DeepSeek Harness.
 
-- 顶部 Hero 删除 `LOCAL AGENT CONNECTIONS` 眉题和全局“添加 Agent 实例”操作。
-- Hero 保留页面标题、说明和实例状态统计。
-- 本地连接区域固定展示两个受支持 Provider 分组：Codex 和 DeepSeek Harness；分组不因实例为空而消失。
-- 每个分组包含名称、简短说明、低强调添加按钮和该 Provider 的实例列表。
-- 未支持的 Provider 继续显示在受支持分组之后，并保持“尚未支持”状态。
+## Page structure
 
-## 添加交互
+- Top Hero removes the `LOCAL AGENT CONNECTIONS` header and the global "Add Agent Instance" action.
+- Hero retains page titles, descriptions, and instance status statistics.
+- The local connection area permanently displays two supported Provider groups: Codex and DeepSeek Harness; the group does not disappear when the instance is empty.
+- Each group contains a name, a short description, a low-emphasis add button, and a list of instances of that Provider.
+- Unsupported providers continue to appear after the supported group and remain "Not yet supported".
 
-- Codex 分组提供“添加 Codex”按钮，DeepSeek Harness 分组提供“添加 DeepSeek Harness”按钮。
-- 点击按钮后，新实例表单显示在对应分组中，Provider 类型由入口确定，不再显示 Provider 下拉框。
-- 同一时间最多展开一个新实例表单；点击另一个 Provider 的添加按钮会切换表单，点击当前按钮或取消会收起表单。
-- 创建成功后关闭表单并刷新实例列表；保存、验证、删除等既有行为不变。
+## Add interaction
 
-## 视觉层级
+- The Codex group provides an "Add Codex" button, and the DeepSeek Harness group provides an "Add DeepSeek Harness" button.
+- After clicking the button, the new instance form is displayed in the corresponding group, the Provider type is determined by the entrance, and the Provider drop-down box is no longer displayed.
+- At most one new instance form can be expanded at the same time; clicking the add button of another Provider will switch the form, and clicking the current button or cancel will close the form.
+- After successful creation, close the form and refresh the instance list; existing behaviors such as saving, verification, and deletion remain unchanged.
 
-- Provider 添加按钮使用普通次级按钮样式，不使用 Hero 强调色样式。
-- Provider 分组标题承担页面的主要分类层级，实例卡片保持现有编辑和状态展示结构。
-- 空 Provider 分组显示简短空状态，确保用户仍能找到添加入口。
+## visual hierarchy
 
-## 测试与验收
+- Provider adds buttons using the normal secondary button style and not the Hero accent color style.
+- The Provider group title assumes the main classification level of the page, and the instance card maintains the existing editing and status display structure.
+- Empty Provider groups display a brief empty state to ensure users can still find the entry point to add.
 
-- 页面不再渲染 `LOCAL AGENT CONNECTIONS` 或 Hero 全局添加按钮。
-- Codex 和 DeepSeek Harness 分组及各自添加入口始终存在。
-- 两个入口分别打开绑定到正确 Provider 的新实例表单。
-- 同一时间只显示一个新实例表单，取消和创建成功会关闭表单。
-- 现有桌面端测试与生产构建保持通过。
+## Testing and Acceptance
 
-## 非目标
+- The page no longer renders the `LOCAL AGENT CONNECTIONS` or Hero global add button.
+- Codex and DeepSeek Harness groupings and their respective addition entries are always present.
+- Both portals open new instance forms bound to the correct Provider.
+- Only one new instance form is displayed at the same time. Successful cancellation and creation will close the form.
+- Existing desktop tests and production builds remain passing.
 
-- 不修改 Agent 数据模型、Rust 服务、Provider 执行逻辑或数据库结构。
-- 不改变未支持 Provider 的可用状态。
-- 不重新设计现有 Agent 实例编辑表单。
+## non-target
+
+- No modifications are made to the Agent data model, Rust services, Provider execution logic, or database structures.
+- Do not change the available status of unsupported providers.
+- Existing Agent instance edit forms are not redesigned.

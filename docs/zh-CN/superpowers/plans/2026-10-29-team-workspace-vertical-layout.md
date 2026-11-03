@@ -1,24 +1,26 @@
-# Team Workspace Vertical Layout Implementation Plan
+# 团队工作空间垂直布局实施方案
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-29-team-workspace-vertical-layout.md)
 
-**Goal:** Stack Team settings above the message-flow canvas so both panels use the full Team Management content width.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Keep the existing React component order and behavior unchanged. Convert only the `.team-workspace` CSS grid from a two-column desktop layout to one column, and extend the existing CSS regression test to lock that layout in place.
+**目标：** 在消息流画布上方堆叠团队设置，以便两个面板都使用完整的团队管理内容宽度。
 
-**Tech Stack:** React 19, CSS Grid, TypeScript, Vitest, Vite
+**架构：** 保持现有的 React 组件顺序和行为不变。仅将 `.team-workspace` CSS 网格从两列桌面布局转换为一列，并扩展现有 CSS 回归测试以将该布局锁定到位。
+
+**技术堆栈：** React 19、CSS Grid、TypeScript、Vitest、Vite
 
 ---
 
-### Task 1: Stack the Team workspace panels
+### 任务 1：堆叠团队工作区面板
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/teamsStyle.test.ts`
-- Modify: `apps/archmage-desktop/src/teams.css:7`
+**文件：**
+- 修改：`apps/archmage-desktop/src/teamsStyle.test.ts`
+- 修改：`apps/archmage-desktop/src/teams.css:7`
 
-- [x] **Step 1: Write the failing layout regression test**
+- [x] **第 1 步：编写失败的布局回归测试**
 
-Add this case to `apps/archmage-desktop/src/teamsStyle.test.ts`:
+将此案例添加到 `apps/archmage-desktop/src/teamsStyle.test.ts`：
 
 ```ts
 it("stacks Team settings above the message-flow canvas", () => {
@@ -27,29 +29,29 @@ it("stacks Team settings above the message-flow canvas", () => {
 });
 ```
 
-- [x] **Step 2: Run the focused test and verify it fails**
+- [x] **第 2 步：运行重点测试并验证其是否失败**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop && npm test -- teamsStyle.test.ts
 ```
 
-Expected: the new case fails because `.team-workspace` still declares two desktop columns.
+预期：新案例失败，因为 `.team-workspace` 仍然声明两个桌面列。
 
-- [x] **Step 3: Implement the single-column workspace**
+- [x] **步骤 3：实现单列工作区**
 
-Replace the `.team-workspace` rule in `apps/archmage-desktop/src/teams.css` with:
+将 `apps/archmage-desktop/src/teams.css` 中的 `.team-workspace` 规则替换为：
 
 ```css
 .team-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 14px; align-items: start; }
 ```
 
-Do not change `TeamManagement.tsx`, canvas behavior, or Run detail styles.
+请勿更改 `TeamManagement.tsx`、画布行为或运行详细信息样式。
 
-- [x] **Step 4: Run focused and complete verification**
+- [x] **第 4 步：运行集中且完整的验证**
 
-Run:
+运行：
 
 ```bash
 cd apps/archmage-desktop
@@ -59,9 +61,9 @@ npm run build
 git diff --check
 ```
 
-Expected: the focused test passes, all frontend tests pass, the production build succeeds, and `git diff --check` reports no errors.
+预期：重点测试通过，所有前端测试通过，生产构建成功，并且 `git diff --check` 报告没有错误。
 
-- [x] **Step 5: Commit the implementation**
+- [x] **步骤 5：提交实施**
 
 ```bash
 git add apps/archmage-desktop/src/teams.css apps/archmage-desktop/src/teamsStyle.test.ts docs/superpowers/plans/2026-10-29-team-workspace-vertical-layout.md

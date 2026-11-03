@@ -1,5 +1,7 @@
 # 团队工作区纵向布局设计
 
+简体中文 | [English](../../../en/superpowers/specs/2026-10-29-team-workspace-vertical-layout-design.md)
+
 ## 目标
 
 将团队管理页中的“团队设置”和“消息流画布”从左右双栏改为上下单列排列，让两块内容都使用完整页面宽度。

@@ -1,26 +1,28 @@
-# Run Detail Toolbar Cleanup Implementation Plan
+# 运行详细工具栏清理实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-30-run-detail-toolbar.md)
 
-**Goal:** Replace the Run detail header actions with the approved grouped toolbar and remove the redundant frozen-team-topology panel.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Extract the three header controls into a focused presentational React component with its own CSS and rendering tests. Keep all existing callbacks and Run state decisions in `App.tsx`; the page only delegates display to the new component and stops rendering the duplicate topology panel.
+**目标：** 使用批准的分组工具栏替换运行详细信息标题操作，并删除多余的冻结团队拓扑面板。
 
-**Tech Stack:** React 19, TypeScript, Lucide React, CSS, Vitest, React DOM server rendering.
+**架构：** 将三个标头控件提取到一个具有自己的 CSS 和渲染测试的集中展示的 React 组件中。将所有现有回调和运行状态决策保留在 `App.tsx` 中；该页面仅将显示委托给新组件，并停止渲染重复的拓扑面板。
+
+**技术堆栈：** React 19、TypeScript、Lucide React、CSS、Vitest、React DOM 服务器渲染。
 
 ---
 
-### Task 1: Add the grouped Run header toolbar
+### 任务 1：添加分组的运行标题工具栏
 
-**Files:**
-- Create: `apps/archmage-desktop/src/RunHeaderActions.tsx`
-- Create: `apps/archmage-desktop/src/RunHeaderActions.css`
-- Create: `apps/archmage-desktop/src/RunHeaderActions.test.tsx`
-- Modify: `apps/archmage-desktop/src/App.tsx:1-45,334-342`
+**文件：**
+- 创建：`apps/archmage-desktop/src/RunHeaderActions.tsx`
+- 创建：`apps/archmage-desktop/src/RunHeaderActions.css`
+- 创建：`apps/archmage-desktop/src/RunHeaderActions.test.tsx`
+- 修改：`apps/archmage-desktop/src/App.tsx:1-45,334-342`
 
-- [ ] **Step 1: Write the failing component tests**
+- [ ] **第 1 步：编写失败的组件测试**
 
-Create `RunHeaderActions.test.tsx` with static-render tests that verify the grouped toolbar label, all three active-Run actions, disabled workspace behavior, and omission of the cancel action for an inactive Run:
+使用静态渲染测试创建 `RunHeaderActions.test.tsx`，以验证分组的工具栏标签、所有三个活动运行操作、禁用的工作区行为以及省略非活动运行的取消操作：
 
 ```tsx
 import { renderToStaticMarkup } from "react-dom/server";
@@ -50,15 +52,15 @@ describe("Run header actions", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [ ] **步骤 2：运行测试并验证 RED**
 
-Run: `cd apps/archmage-desktop && npm test -- RunHeaderActions.test.tsx`
+运行： `cd apps/archmage-desktop && npm test -- RunHeaderActions.test.tsx`
 
-Expected: FAIL because `./RunHeaderActions` does not exist.
+预期：失败，因为 `./RunHeaderActions` 不存在。
 
-- [ ] **Step 3: Implement the toolbar component**
+- [ ] **第3步：实现工具栏组件**
 
-Create `RunHeaderActions.tsx`:
+创建 `RunHeaderActions.tsx`：
 
 ```tsx
 import { FolderOpen, RefreshCw, Square } from "lucide-react";
@@ -79,7 +81,7 @@ export function RunHeaderActions({ workspaceAvailable, cancellable, onRefresh, o
 }
 ```
 
-Create `RunHeaderActions.css` with higher-specificity Run-header selectors so it safely overrides the legacy base styles regardless of CSS import order:
+使用更高特异性的运行标头选择器创建 `RunHeaderActions.css`，以便无论 CSS 导入顺序如何，它都可以安全地覆盖旧的基本样式：
 
 ```css
 .run-header .header-actions {
@@ -113,7 +115,7 @@ Create `RunHeaderActions.css` with higher-specificity Run-header selectors so it
 .run-header .header-actions .danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-bg) 72%, var(--danger) 28%); }
 ```
 
-Update `App.tsx` to import `RunHeaderActions`, remove toolbar-only icon imports, and replace the inline `.header-actions` JSX with:
+更新 `App.tsx` 以导入 `RunHeaderActions`，删除仅工具栏图标导入，并将内联 `.header-actions` JSX 替换为：
 
 ```tsx
 <RunHeaderActions
@@ -125,28 +127,28 @@ Update `App.tsx` to import `RunHeaderActions`, remove toolbar-only icon imports,
 />
 ```
 
-- [ ] **Step 4: Run the component tests and verify GREEN**
+- [ ] **步骤 4：运行组件测试并验证绿色**
 
-Run: `cd apps/archmage-desktop && npm test -- RunHeaderActions.test.tsx`
+运行： `cd apps/archmage-desktop && npm test -- RunHeaderActions.test.tsx`
 
-Expected: 2 tests pass.
+预期：2 项测试通过。
 
-- [ ] **Step 5: Commit the toolbar implementation**
+- [ ] **第 5 步：提交工具栏实施**
 
 ```bash
 git add apps/archmage-desktop/src/App.tsx apps/archmage-desktop/src/RunHeaderActions.tsx apps/archmage-desktop/src/RunHeaderActions.css apps/archmage-desktop/src/RunHeaderActions.test.tsx
 git commit -m "style: group Run header actions"
 ```
 
-### Task 2: Remove the duplicate frozen topology panel
+### 任务 2：删除重复的冻结拓扑面板
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/App.tsx:340-343`
-- Create: `apps/archmage-desktop/src/RunDetailLayout.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src/App.tsx:340-343`
+- 创建：`apps/archmage-desktop/src/RunDetailLayout.test.ts`
 
-- [ ] **Step 1: Write the failing layout regression test**
+- [ ] **第 1 步：编写失败的布局回归测试**
 
-Create `RunDetailLayout.test.ts` using the repository's existing source-layout test pattern:
+使用存储库现有的源布局测试模式创建 `RunDetailLayout.test.ts`：
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -164,63 +166,63 @@ describe("Run detail layout", () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [ ] **步骤 2：运行测试并验证 RED**
 
-Run: `cd apps/archmage-desktop && npm test -- RunDetailLayout.test.ts`
+运行： `cd apps/archmage-desktop && npm test -- RunDetailLayout.test.ts`
 
-Expected: FAIL because `App.tsx` still contains the frozen topology heading and direct edge rendering.
+预期：失败，因为 `App.tsx` 仍包含冻结的拓扑标题和直接边缘渲染。
 
-- [ ] **Step 3: Remove only the duplicate panel**
+- [ ] **第 3 步：仅删除重复的面板**
 
-Delete this JSX from `RunWorkbench`:
+从 `RunWorkbench` 中删除此 JSX：
 
 ```tsx
 {snapshot.team && <section className="panel team-run-panel"><div className="panel-title"><div><span>冻结的团队拓扑</span><small>{snapshot.team.name} · v{snapshot.team.revision}</small></div></div><div className="team-run-edges">{snapshot.team.graph.edges.map((edge) => <span key={`${edge.from}-${edge.to}`}>{edge.from} → {edge.to}</span>)}</div></section>}
 ```
 
-Keep the following `FlowProgress` / `ConsultationProgress` branch unchanged.
+保持以下 `FlowProgress` / `ConsultationProgress` 分支不变。
 
-- [ ] **Step 4: Run the layout test and verify GREEN**
+- [ ] **步骤 4：运行布局测试并验证绿色**
 
-Run: `cd apps/archmage-desktop && npm test -- RunDetailLayout.test.ts`
+运行： `cd apps/archmage-desktop && npm test -- RunDetailLayout.test.ts`
 
-Expected: 1 test passes.
+预期：1 次测试通过。
 
-- [ ] **Step 5: Commit the topology cleanup**
+- [ ] **步骤 5：提交拓扑清理**
 
 ```bash
 git add apps/archmage-desktop/src/App.tsx apps/archmage-desktop/src/RunDetailLayout.test.ts
 git commit -m "style: remove duplicate Run topology panel"
 ```
 
-### Task 3: Verify the complete desktop change
+### 任务 3：验证完整的桌面更改
 
-**Files:**
-- Verify only; no planned source changes.
+**文件：**
+- 仅验证；没有计划的源更改。
 
-- [ ] **Step 1: Run all desktop tests**
+- [ ] **第 1 步：运行所有桌面测试**
 
-Run: `cd apps/archmage-desktop && npm test`
+运行： `cd apps/archmage-desktop && npm test`
 
-Expected: all Vitest files pass with zero failures.
+预期：所有 Vitest 文件均通过且零失败。
 
-- [ ] **Step 2: Build the desktop frontend**
+- [ ] **第 2 步：构建桌面前端**
 
-Run: `cd apps/archmage-desktop && npm run build`
+运行： `cd apps/archmage-desktop && npm run build`
 
-Expected: TypeScript and Vite complete with exit code 0.
+预期：TypeScript 和 Vite 完成，退出代码为 0。
 
-- [ ] **Step 3: Inspect the live Run detail page**
+- [ ] **第 3 步：检查实时运行详细信息页面**
 
-Open the active Run detail page in the Tauri development app and verify:
+打开 Tauri 开发应用程序中活动的运行详细信息页面并验证：
 
-- “刷新 / 工作区 / 取消” stay on one line in one grouped surface.
-- “取消” remains visibly destructive but subordinate to the Run title.
-- The frozen topology panel is absent.
-- Team name/version, capability progress, progress messages, timeline, and inspector remain visible.
+- “刷新/工作区/取消”在一个分组表面中停留在一行上。
+- “取消”仍然具有明显的破坏性，但从属于“运行”标题。
+- 冻结拓扑面板不存在。
+- 团队 name/version、功能进度、进度消息、时间表和检查员仍然可见。
 
-- [ ] **Step 4: Record final repository state**
+- [ ] **步骤 4：记录最终存储库状态**
 
-Run: `git status --short && git log -3 --oneline`
+运行： `git status --short && git log -3 --oneline`
 
-Expected: only the user's pre-existing untracked files remain; the two implementation commits are at `HEAD`.
+预期：仅保留用户预先存在的未跟踪文件；两个实现提交位于 `HEAD`。

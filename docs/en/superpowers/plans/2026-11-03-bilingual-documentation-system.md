@@ -1,5 +1,7 @@
 # Bilingual Documentation System Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-11-03-bilingual-documentation-system.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move every Archmage document into mirrored English and Simplified Chinese trees, make the repository landing page Chinese-first with an English peer, and verify complete bilingual coverage and valid links.

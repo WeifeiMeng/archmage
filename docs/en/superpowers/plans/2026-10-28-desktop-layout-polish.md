@@ -1,5 +1,7 @@
 # Desktop Layout Polish Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-28-desktop-layout-polish.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Redesign Team Management, New Run, Agent Management, and Capability Management around the approved command-Hero and adaptive workspace layouts while preserving all existing behavior and leaving Run Detail unchanged.

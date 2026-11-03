@@ -1,39 +1,41 @@
-# Run 详情页操作区整理设计
+# Organize and design the operation area of Run details page
 
-## 目标
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-run-detail-toolbar-design.md) | English
 
-降低 Run 详情页右上角操作区的视觉噪声，并移除与能力进度重复的团队拓扑展示，让页面优先呈现任务标题、节点状态和实际运行信息。
+## target
 
-## 页头操作区
+Reduce the visual noise in the operation area in the upper right corner of the Run details page, and remove the team topology display that overlaps with the ability progress, allowing the page to prioritize task titles, node status, and actual running information.
 
-- 采用分组工具栏，将“刷新”“工作区”“取消”放入同一个紧凑容器。
-- 三个按钮保持统一高度、图标尺寸、字号和单行文本，避免中文换行。
-- “刷新”和“工作区”使用中性样式；“取消”通过分隔线、危险色文字和浅危险色背景表达破坏性，但不使用高饱和实心按钮。
-- 继续使用 Lucide 图标，并保留可见文字、键盘焦点和 disabled 状态。
-- 运行结束后沿用当前行为，不显示“取消”；其余按钮位置保持稳定。
+## Header operating area
 
-## 页面内容精简
+- Use grouped toolbars to put "Refresh", "Workspace" and "Cancel" into the same compact container.
+- The three buttons maintain the same height, icon size, font size and single line of text to avoid Chinese line breaks.
+- "Refresh" and "Workspace" use neutral styles; "Cancel" expresses destructiveness through dividers, dangerous text, and a light dangerous background, but does not use a highly saturated solid button.
+- Continue to use the Lucide icon and retain visible text, keyboard focus, and disabled state.
+- After the run is completed, the current behavior is retained and "Cancel" is not displayed; the positions of the other buttons remain stable.
 
-- 从 Run 详情页移除“冻结的团队拓扑”面板及其边标签。
-- 不修改或删除 Run 快照中的冻结团队数据。
-- 团队名称和版本继续在页头元信息中展示。
-- 能力进度、交付消息或审阅进度、运行时间线和节点检查器保持现有行为。
+## Streamlined page content
 
-## 响应式与视觉状态
+- Remove the "Frozen Team Topology" panel and its edge labels from the Run details page.
+- Frozen team data in Run snapshots is not modified or deleted.
+- The team name and version continue to be displayed in the header meta information.
+- Capability progress, delivery messages or review progress, run timelines, and node inspectors maintain existing behavior.
 
-- 操作组不换行，页头内容区域允许收缩，避免长标题把单个按钮文字挤成两行。
-- 保留最小 38 像素视觉高度和足够的点击区域；按钮之间使用边界分隔而不是额外外边距。
-- hover、active、focus-visible、disabled 和危险态均需可区分；减少动态效果时不依赖动画表达状态。
+## Responsiveness and visual states
 
-## 验证
+- The operation group does not wrap, and the header content area is allowed to shrink to prevent a long title from squeezing a single button text into two lines.
+- Maintain a minimum visual height of 38 pixels and sufficient click area; use border separation between buttons rather than extra margins.
+- Hover, active, focus-visible, disabled and dangerous states all need to be distinguishable; do not rely on animation to express the state when reducing dynamic effects.
 
-- 组件测试确认活动 Run 显示三个操作、非活动 Run 隐藏“取消”。
-- 组件测试确认 Run 详情不再渲染“冻结的团队拓扑”。
-- 桌面端测试与生产构建通过。
-- 在浅色主题下人工检查长标题场景，确认按钮文字不换行、危险操作层级适中、移除拓扑后内容顺序连续。
+## Verify
 
-## 非目标
+- Component testing confirms that active Run shows three actions, inactive Run hides "Cancel".
+- Component testing confirms that Run details no longer render "frozen team topology".
+- Desktop testing and production build passed.
+- Manually check the long title scene under the light theme to confirm that the button text does not wrap, the level of dangerous operations is moderate, and the content sequence is continuous after the topology is removed.
 
-- 不改变刷新、打开工作区或取消 Run 的业务行为。
-- 不修改团队配置、消息流、冻结快照或运行调度逻辑。
-- 不重新设计能力节点、交付消息、时间线或节点检查器。
+## non-target
+
+- Does not change the business behavior of refreshing, opening a workspace, or canceling a Run.
+- Does not modify team configurations, message flows, freeze snapshots, or run scheduling logic.
+- No redesign of capability nodes, delivery messages, timelines, or node inspectors.

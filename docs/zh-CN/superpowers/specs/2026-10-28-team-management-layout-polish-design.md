@@ -1,91 +1,93 @@
-# Team Management Layout Polish Design
+# 团队管理布局 波兰设计
 
-**Status:** Approved visual direction; ready for implementation planning.
+简体中文 | [English](../../../en/superpowers/specs/2026-10-28-team-management-layout-polish-design.md)
 
-## Goal
+**状态：** 批准的视觉方向；准备实施计划。
 
-Make Team Management denser, clearer, and more visually cohesive without changing its persistence, validation, canvas, or team-editing behavior. The existing page spends too much vertical space on a presentation-only header and then lists related controls in separate full-width rows. The revised page turns the header into a functional command area and uses the available horizontal space to show team configuration beside the message-flow canvas.
+## 目标
 
-The chosen direction is the refined **Command Hero** layout. It preserves the current dark visual language and green accent while bringing the canvas into the initial viewport on typical desktop windows.
+使团队管理更密集、更清晰、视觉上更具凝聚力，而无需改变其持久性、验证、画布或团队编辑行为。现有页面在仅演示的标题上花费了太多垂直空间，然后在单独的全角行中列出了相关控件。修改后的页面将标题变成功能命令区域，并使用可用的水平空间在消息流画布旁边显示团队配置。
 
-## Information architecture
+选择的方向是精致的**指挥英雄**布局。它保留了当前的深色视觉语言和绿色口音，同时将画布带入典型桌面窗口的初始视口中。
 
-The page has three levels:
+## 信息架构
 
-1. A compact command Hero contains the page identity, short guidance, team selection, team status, and global actions.
-2. A two-column workspace contains team configuration on the left and the message-flow canvas on the right.
-3. A slim footer contains contextual feedback and the primary Save action.
+该页面分为三个级别：
 
-This arrangement groups controls by purpose instead of rendering each group as a separate full-width band.
+1. 一个紧凑的命令英雄包含页面标识、简短指导、团队选择、团队状态和全局操作。
+2. 两列工作区包含左侧的团队配置和右侧的消息流画布。
+3. 纤细的页脚包含上下文反馈和主要的保存操作。
 
-## Command Hero
+这种安排按目的对控件进行分组，而不是将每个组呈现为单独的全宽度带。
 
-The Hero remains the visual anchor, but its content becomes operational:
+## 指挥英雄
 
-- The left side shows `TEAM MANAGEMENT`, the `团队管理` title, and one short explanatory sentence.
-- The upper-right side contains `创建团队` and icon-only `刷新` actions. The refresh button keeps an accessible label and tooltip.
-- The lower row contains the current-team selector and a read-only summary of the selected team, such as capability count and graph mode.
-- The selector continues to distinguish `消息流` and `历史咨询` teams.
-- The Hero uses a restrained green-tinted gradient and subtle decorative rings. Decoration must not reduce contrast or capture pointer events.
+英雄仍然是视觉锚点，但其内容变得可操作：
 
-The header no longer uses a full-width divider or a large empty area below the description.
+- 左侧显示 `TEAM MANAGEMENT`、`团队管理` 标题和一个简短的解释性句子。
+- 右上角包含 `创建团队` 和仅图标 `刷新` 操作。刷新按钮保留可访问的标签和工具提示。
+- 下一行包含当前团队选择器和所选团队的只读摘要，例如能力计数和图表模式。
+- 选择器继续区分 `消息流` 和 `历史咨询` 团队。
+- 英雄采用内敛的绿色渐变和微妙的装饰环。装饰不得降低对比度或捕获指针事件。
 
-## Workspace
+标题不再使用全角分隔符或描述下方的大空白区域。
 
-On wide screens, the workspace is a two-column grid of approximately 42% configuration and 58% canvas. Both columns begin at the same vertical position.
+## 工作空间
 
-### Configuration panel
+在宽屏幕上，工作区是一个两列网格，其中大约有 42% 的配置和 58% 的画布。两列都从相同的垂直位置开始。
 
-The left panel contains:
+### 配置面板
 
-- The team-name field and, for a historical team, the `复制为消息流` action on the same row.
-- A `团队能力` heading, concise help text, and a selected-count badge.
-- Capability choices in a two-column grid. Each choice is a full clickable card with a clear selected state, rather than a small checkbox floating inside a large empty row.
-- Entry and terminal selectors in a compact two-column row for editable flow teams.
+左侧面板包含：
 
-For historical teams, disabled fields remain visually legible and the compatibility explanation is integrated into the panel instead of occupying a separate full-width notice. The copy action remains prominent enough to be discovered.
+- 团队名称字段和历史团队的 `复制为消息流` 操作位于同一行。
+- `团队能力` 标题、简洁的帮助文本和选定计数徽章。
+- 两列网格中的功能选择。每个选择都是一个完全可点击的卡片，具有清晰的选择状态，而不是一个漂浮在大空行内的小复选框。
+- 紧凑的两列行中的入口和终端选择器，用于可编辑流程团队。
 
-### Canvas panel
+对于历史团队来说，禁用的字段在视觉上仍然清晰易读，并且兼容性说明已集成到面板中，而不是占用单独的全角通知。复制行为仍然很明显，足以被发现。
 
-The right panel contains:
+### 画布面板
 
-- A `消息流画布` heading and a compact node/route summary.
-- The existing interactive canvas, node dragging, connection creation, edge selection, deletion, and keyboard behavior without semantic changes.
-- Connection guidance directly below the canvas, with transient linking or selected-edge controls appearing in the same panel.
+右侧面板包含：
 
-The canvas should fill its column while retaining the existing 1000-by-360 internal coordinate system and horizontal overflow behavior when the available width is too small.
+- `消息流画布` 标题和紧凑的 node/route 摘要。
+- 现有的交互式画布、节点拖动、连接创建、边缘选择、删除和键盘行为，无需语义更改。
+- 画布正下方的连接指导，瞬时链接或选定边缘控件出现在同一面板中。
 
-## Feedback and save behavior
+画布应填充其列，同时保留现有的 1000×360 内部坐标系以及可用宽度太小时的水平溢出行为。
 
-The existing validation issue or status message appears in a slim footer beneath the workspace. `保存团队` remains the only primary action and stays aligned to the lower right on wide screens.
+## 反馈并保存行为
 
-Busy, disabled, dirty, validation-error, success, and API-error behavior remain unchanged. The redesign must not hide the reason Save is unavailable. Existing confirmation dialogs for switching, creating, refreshing, copying, or leaving with unsaved changes remain unchanged.
+现有验证问题或状态消息显示在工作区下方的细长页脚中。`保存团队` 仍然是唯一的主要操作，并在宽屏幕上与右下角保持对齐。
 
-## Responsive behavior
+忙碌、禁用、脏、验证错误、成功和 API 错误行为保持不变。重新设计不得隐藏“保存”不可用的原因。用于切换、创建、刷新、复制或保留未保存更改的现有确认对话框保持不变。
 
-- At wide desktop widths, configuration and canvas use the two-column workspace.
-- At medium widths, the workspace becomes a single column with configuration above the canvas. The Hero selector row may also wrap, but actions remain grouped.
-- On narrow widths, capability cards remain at least two per row when readable and fall back to one per row when needed. Endpoint selectors become one column.
-- No control may overflow the page or depend on hover for discovery.
+## 反应行为
 
-## Accessibility
+- 在宽桌面宽度下，配置和画布使用两列工作区。
+- 在中等宽度下，工作区变成单列，配置位于画布上方。英雄选择器行也可能会换行，但操作仍保持分组。
+- 在窄宽度上，功能卡在可读时每行至少保留两张，并在需要时回落到每行一张。端点选择器成为一列。
+- 任何控件都不能溢出页面或依赖悬停来发现。
 
-- Preserve visible focus styles for all inputs, selects, buttons, capability cards, canvas nodes, and connection handles.
-- Icon-only Refresh has an accessible name and visible tooltip.
-- Capability cards use the existing checkbox input as their semantic control; styling the label must not remove keyboard or screen-reader behavior.
-- Disabled historical-team controls maintain sufficient text and border contrast.
-- Decorative Hero elements are hidden from assistive technology.
+## 无障碍
 
-## Implementation boundary
+- 保留所有输入、选择、按钮、功能卡、画布节点和连接句柄的可见焦点样式。
+- 仅图标刷新具有可访问的名称和可见的工具提示。
+- 能力卡使用现有的复选框输入作为其语义控制；标签样式不得消除键盘或屏幕阅读器行为。
+- 禁用的历史团队控件可保持足够的文本和边框对比度。
+- 辅助技术隐藏了装饰英雄元素。
 
-The change is limited to `TeamManagement.tsx`, `teams.css`, and focused frontend tests if the structural markup requires them. It does not alter APIs, models, graph validation, persistence, Runtime behavior, team semantics, or canvas geometry.
+## 实施边界
 
-Markup may be split into small presentational sections only if that makes the layout easier to understand; no reusable design-system abstraction is required for this page-only change.
+如果结构标记需要，更改仅限于 `TeamManagement.tsx`、`teams.css` 和重点前端测试。它不会改变 API、模型、图形验证、持久性、运行时行为、团队语义或画布几何形状。
 
-## Verification
+只有当布局更容易理解时，标记才可以被分割成小的表示部分；此仅页面更改不需要可重用的设计系统抽象。
 
-- Update or add frontend tests for the current-team selector, create/refresh actions, historical-team copy action, capability toggles, endpoint selectors, and Save availability after the markup changes.
-- Run the desktop frontend test suite and production build.
-- Inspect the page in an editable flow team and a read-only historical team at wide, medium, and narrow viewport widths.
-- Verify keyboard focus order, icon-button labeling, canvas drag/link behavior, and horizontal canvas overflow.
-- Run `git diff --check` before delivery.
+## 验证
+
+- 更新或添加当前团队选择器、create/refresh 操作、历史团队复制操作、功能切换、端点选择器和标记更改后保存可用性的前端测试。
+- 运行桌面前端测试套件和生产版本。
+- 在宽、中和窄视口宽度下检查可编辑流程团队和只读历史团队中的页面。
+- 验证键盘焦点顺序、图标按钮标签、画布 drag/link 行为和水平画布溢出。
+- 交付前运行 `git diff --check`。

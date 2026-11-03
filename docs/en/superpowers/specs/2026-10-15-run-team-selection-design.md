@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-15-run-team-selection-design.md) | English
+
 # Run Team Selection Design
 
 ## Goal

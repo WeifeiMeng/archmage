@@ -1,35 +1,37 @@
-# Settings Management Hub Implementation Plan
+# 设置管理中心实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-31-settings-management-hub.md)
 
-**Goal:** Move Agent, Capability, and Team management into a full-screen Settings hub while leaving only Run navigation in the main sidebar.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Keep the existing `AppView` values and dirty-exit guards, but treat every non-Run view as part of the Settings space. A focused `SettingsShell` owns the Settings header and internal category navigation; existing management components remain unchanged and are rendered as its content.
+**目标：** 将代理、功能和团队管理移至全屏设置中心，同时仅在主侧边栏中保留运行导航。
 
-**Tech Stack:** React 19, TypeScript, Vitest, existing CSS theme variables.
+**架构：** 保留现有的 `AppView` 值和脏出口防护，但将每个非运行视图视为设置空间的一部分。重点突出的 `SettingsShell` 拥有“设置”标题和内部类别导航；现有的管理组件保持不变并呈现为其内容。
+
+**技术堆栈：** React 19、TypeScript、Vitest、现有 CSS 主题变量。
 
 ---
 
-### Task 1: Add the Settings shell contract
+### 任务 1：添加 Settings shell 合约
 
-**Files:**
-- Create: `apps/archmage-desktop/src/SettingsShell.test.tsx`
-- Create: `apps/archmage-desktop/src/SettingsShell.tsx`
-- Modify: `apps/archmage-desktop/src/settings.css`
+**文件：**
+- 创建：`apps/archmage-desktop/src/SettingsShell.test.tsx`
+- 创建：`apps/archmage-desktop/src/SettingsShell.tsx`
+- 修改：`apps/archmage-desktop/src/settings.css`
 
-- [x] **Step 1: Write the failing shell test**
+- [x] **第 1 步：编写失败的 shell 测试**
 
-Render `SettingsShell` with `activeView="agents"` and assert that it contains “返回主界面”, all four category labels, an active navigation state, and its child content.
+使用 `activeView="agents"` 渲染 `SettingsShell` 并断言它包含“返回主界面”、所有四个类别标签、活动导航状态及其子内容。
 
-- [x] **Step 2: Run the focused test and verify RED**
+- [x] **步骤 2：运行重点测试并验证 RED**
 
-Run: `npm test -- SettingsShell.test.tsx`
+运行： `npm test -- SettingsShell.test.tsx`
 
-Expected: FAIL because `SettingsShell` does not exist.
+预期：失败，因为 `SettingsShell` 不存在。
 
-- [x] **Step 3: Implement the minimal Settings shell**
+- [x] **第 3 步：实现最小的 Settings shell**
 
-Create a component with this public shape:
+创建具有此公共形状的组件：
 
 ```ts
 type SettingsShellProps = {
@@ -40,72 +42,72 @@ type SettingsShellProps = {
 };
 ```
 
-Render a top bar with a back button, a categorized internal navigation rail, and a flexible content area. Add responsive CSS that collapses the rail into a horizontal category bar on narrow windows.
+渲染一个带有后退按钮、分类的内部导航栏和灵活的内容区域的顶部栏。添加响应式 CSS，将栏杆折叠成窄窗口上的水平类别栏。
 
-- [x] **Step 4: Run the focused test and verify GREEN**
+- [x] **第 4 步：运行重点测试并验证绿色**
 
-Run: `npm test -- SettingsShell.test.tsx`
+运行： `npm test -- SettingsShell.test.tsx`
 
-Expected: PASS.
+预期：通过。
 
-### Task 2: Route management pages through Settings
+### 任务 2：通过“设置”路由管理页面
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/sidebarNavigation.test.ts`
-- Modify: `apps/archmage-desktop/src/App.tsx`
+**文件：**
+- 修改：`apps/archmage-desktop/src/sidebarNavigation.test.ts`
+- 修改：`apps/archmage-desktop/src/App.tsx`
 
-- [x] **Step 1: Write failing navigation assertions**
+- [x] **第 1 步：编写失败的导航断言**
 
-Update `sidebarNavigation.test.ts` to assert that `App.tsx` no longer contains the three management buttons in the main sidebar and that it uses `SettingsShell` for non-Run views.
+更新 `sidebarNavigation.test.ts` 以断言 `App.tsx` 不再包含主侧栏中的三个管理按钮，并且它对非运行视图使用 `SettingsShell`。
 
-- [x] **Step 2: Run the focused test and verify RED**
+- [x] **步骤 2：运行重点测试并验证 RED**
 
-Run: `npm test -- sidebarNavigation.test.ts`
+运行： `npm test -- sidebarNavigation.test.ts`
 
-Expected: FAIL while the old main-sidebar buttons remain.
+预期：失败，而旧的主侧边栏按钮仍然存在。
 
-- [x] **Step 3: Implement Settings-space routing**
+- [x] **第三步：实现设置-空间路由**
 
-In `App.tsx`:
+在 `App.tsx` 中：
 
-- Render the main sidebar only when `view === "runs"`.
-- Wrap `settings`, `agents`, `capabilities`, and `teams` content with `SettingsShell`.
-- Route the shell back button through `navigate("runs", null)` so dirty guards remain effective.
-- Route internal category changes through `navigate(nextView)`.
-- Replace direct `setView("capabilities")` and `setView("teams")` management links with `navigate(...)`.
-- Keep the close-window dirty refs and existing confirmation messages unchanged.
+- 仅当 `view === "runs"` 时渲染主侧边栏。
+- 使用 `SettingsShell` 包装 `settings`、`agents`、`capabilities` 和 `teams` 内容。
+- 将外壳后退按钮穿过 `navigate("runs", null)`，以便脏防护装置保持有效。
+- 通过 `navigate(nextView)` 路由内部类别更改。
+- 将直接 `setView("capabilities")` 和 `setView("teams")` 管理链接替换为 `navigate(...)`。
+- 保持关闭窗口脏引用和现有确认消息不变。
 
-Keep the existing Run workspace layout unchanged; the standalone `SettingsShell` supplies its own full-width layout.
+保持现有的Run工作区布局不变；独立的 `SettingsShell` 提供自己的全宽布局。
 
-- [x] **Step 4: Run navigation and dirty-guard tests**
+- [x] **第 4 步：运行导航和脏防护测试**
 
-Run: `npm test -- sidebarNavigation.test.ts model.test.ts teamGraph.test.ts`
+运行： `npm test -- sidebarNavigation.test.ts model.test.ts teamGraph.test.ts`
 
-Expected: PASS.
+预期：通过。
 
-### Task 3: Regression verification
+### 任务3：回归验证
 
-**Files:**
-- Modify only if verification exposes a defect in files already listed above.
+**文件：**
+- 仅当验证暴露上面已列出的文件中的缺陷时才进行修改。
 
-- [x] **Step 1: Run the desktop test suite**
+- [x] **第 1 步：运行桌面测试套件**
 
-Run: `npm test`
+运行： `npm test`
 
-Expected: all tests PASS.
+预期：所有测试均通过。
 
-- [x] **Step 2: Build the desktop frontend**
+- [x] **第 2 步：构建桌面前端**
 
-Run: `npm run build`
+运行： `npm run build`
 
-Expected: TypeScript and Vite build complete successfully.
+预期：TypeScript 和 Vite 构建成功完成。
 
-- [x] **Step 3: Review the final diff**
+- [x] **第 3 步：查看最终差异**
 
-Run: `git diff --check && git status --short`
+运行： `git diff --check && git status --short`
 
-Expected: no whitespace errors; only the planned files plus the user's pre-existing untracked files are present.
+预期：没有空格错误；仅存在计划文件以及用户预先存在的未跟踪文件。
 
-- [x] **Step 4: Commit the implementation**
+- [x] **第 4 步：提交实施**
 
-Commit message: `feat: move management pages into settings`
+提交消息： `feat: move management pages into settings`

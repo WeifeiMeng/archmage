@@ -1,29 +1,31 @@
-# 侧栏品牌与导航中文化设计
+# Sidebar Branding and Navigation Chinese Culture Design
 
-## 目标
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-sidebar-brand-and-navigation-localization-design.md) | English
 
-增强左上角品牌区域的识别度，并将侧栏主要导航统一改为自然、简洁的中文表达。此次改造仅影响侧栏，不修改各管理页面的标题、说明或数据结构。
+## target
 
-## 品牌区域
+Enhance the recognition of the brand area in the upper left corner, and change the main navigation in the sidebar to natural and concise Chinese expressions. This transformation only affects the sidebar and does not modify the title, description or data structure of each management page.
 
-- 品牌图标由 `36px` 放大到 `44px`，圆角和现有图片资源保持不变。
-- 品牌容器内的图片使用 `scale(1.15)` 放大，抵消标准应用图标自带的透明安全边距；容器仍保持 `44px`。
-- 品牌图片使用 `contrast(1.18)` 提高线稿明暗对比。缩放和对比度只作用于 App 左上角，不修改 Dock、favicon 或安装包图标资源。
-- “Archmage”标题字号由 `15px` 放大到 `18px`。
-- 英文副标题“Agent Workbench”改为中文“智能体工作台”，字号使用 `12px`。
-- 图标、标题与副标题保持垂直居中，在 `264px` 标准侧栏和 `220px` 窄侧栏下均不得换行或溢出。
+## brand area
 
-## 导航文案与图标
+- The brand icon is enlarged from `36px` to `44px`, while the rounded corners and existing image assets remain unchanged.
+- The image inside the brand container is enlarged using `scale(1.15)` to offset the transparent safety margins that come with standard app icons; the container still maintains `44px`.
+- Brand images use `contrast(1.18)` to improve the contrast between light and dark in line art. Zoom and contrast only apply to the upper left corner of the app and do not modify the Dock, favicon or installation package icon resources.
+- The "Archmage" title font size is enlarged from `15px` to `18px`.
+- The English subtitle "Agent Workbench" is changed to the Chinese "Agent Workbench", and the font size is `12px`.
+- The icon, title, and subtitle remain vertically centered and must not wrap or overflow under either the `264px` standard sidebar or the `220px` narrow sidebar.
 
-- “新建 Run”改为“新建任务”，继续使用加号图标。
-- “Agent 管理”改为“智能体管理”，继续使用机器人图标。
-- “Capability 管理”改为“能力管理”，继续使用连接关系图标。
-- “团队管理”保留中文文案，图标由连接关系图标改为双人团队图标，使其与能力管理形成明确区分。
-- 导航按钮的交互、选中态、间距与跳转行为保持不变。
+## Navigation copy and icons
 
-## 验证
+- Change "New Run" to "New Task" and continue to use the plus icon.
+- "Agent Management" is changed to "Agent Management" and the robot icon continues to be used.
+- "Capability Management" is changed to "Capability Management", and the connection relationship icon continues to be used.
+- “Team Management” retains the Chinese copy, and the icon is changed from a connection relationship icon to a two-person team icon to clearly distinguish it from capability management.
+- Navigation button interaction, selection, spacing, and jump behavior remain unchanged.
 
-- 静态渲染测试覆盖四个中文导航文案、中文品牌副标题和团队图标。
-- 样式契约测试覆盖品牌图片的 `scale(1.15)` 与 `contrast(1.18)`。
-- 在浅色主题下检查标准侧栏和窄侧栏，确认品牌区域无换行、图标比例协调、导航选中态不受影响。
-- 运行完整测试和生产构建，确认无回归。
+## Verify
+
+- The static rendering test covers four Chinese navigation copywriting, Chinese brand subtitles and team icons.
+- Style contract testing covers `scale(1.15)` and `contrast(1.18)` for brand images.
+- Check the standard sidebar and narrow sidebar under the light theme to confirm that there are no line breaks in the brand area, the icon proportions are coordinated, and the navigation selected state is not affected.
+- Run full test and production builds to confirm there are no regressions.

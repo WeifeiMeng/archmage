@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-14-selectable-team-capabilities-design.md) | English
+
 # Selectable Team Capabilities Design
 
 **Status:** Approved direction for implementation on `main`.

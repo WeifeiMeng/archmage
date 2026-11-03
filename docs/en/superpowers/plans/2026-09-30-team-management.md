@@ -1,5 +1,7 @@
 # Review-Gated Team Management Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-09-30-team-management.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let a Run select a saved Team whose fixed four-Capability graph causes real, concurrent downstream consultations and bounded feedback revisions.

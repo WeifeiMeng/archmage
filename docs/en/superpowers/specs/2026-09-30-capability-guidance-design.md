@@ -1,3 +1,5 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-30-capability-guidance-design.md) | English
+
 # Capability Guidance Design
 
 **Status:** Approved for implementation on `main`.

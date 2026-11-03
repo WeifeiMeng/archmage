@@ -1,5 +1,7 @@
 # Run 详情页操作区整理设计
 
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-run-detail-toolbar-design.md)
+
 ## 目标
 
 降低 Run 详情页右上角操作区的视觉噪声，并移除与能力进度重复的团队拓扑展示，让页面优先呈现任务标题、节点状态和实际运行信息。

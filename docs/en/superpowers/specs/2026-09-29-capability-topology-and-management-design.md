@@ -1,5 +1,7 @@
 # Capability Topology and Management Design
 
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-29-capability-topology-and-management-design.md) | English
+
 **Status:** Approved for implementation; scope narrowed to Agent binding by follow-up decision
 
 ## Goal and scope

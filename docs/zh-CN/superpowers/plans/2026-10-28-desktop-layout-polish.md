@@ -1,42 +1,44 @@
-# Desktop Layout Polish Implementation Plan
+# 桌面布局抛光实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+简体中文 | [English](../../../en/superpowers/plans/2026-10-28-desktop-layout-polish.md)
 
-**Goal:** Redesign Team Management, New Run, Agent Management, and Capability Management around the approved command-Hero and adaptive workspace layouts while preserving all existing behavior and leaving Run Detail unchanged.
+> **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 
-**Architecture:** Introduce one small presentational `ManagementHero` primitive for shared page identity, page-level actions, and summaries. Keep business state and API calls in their existing owners, derive compact summaries through pure exported functions, and restructure each page's markup plus scoped CSS without changing Runtime contracts.
+**目标：** 围绕批准的命令英雄和自适应工作区布局重新设计团队管理、新运行、代理管理和能力管理，同时保留所有现有行为并保持运行详细信息不变。
 
-**Tech Stack:** React 19, TypeScript, CSS, Lucide React, Vitest 5, React DOM server rendering, Vite 8.
+**架构：** 引入一个小型表示 `ManagementHero` 原语，用于共享页面标识、页面级操作和摘要。将业务状态和 API 调用保留在其现有所有者中，通过纯导出函数导出紧凑的摘要，并在不更改运行时契约的情况下重组每个页面的标记和作用域 CSS。
+
+**技术堆栈：** React 19、TypeScript、CSS、Lucide React、Vitest 5、React DOM 服务器渲染、Vite 8。
 
 ---
 
-## File map
+## 文件地图
 
-- Create `apps/archmage-desktop/src/ManagementHero.tsx`: shared presentational Hero and metric markup.
-- Create `apps/archmage-desktop/src/ManagementHero.test.tsx`: SSR assertions for semantic Hero content.
-- Create `apps/archmage-desktop/src/managementLayout.ts`: pure display-summary helpers for environment, Agent, Capability, and Team state.
-- Create `apps/archmage-desktop/src/managementLayout.test.ts`: test-first coverage for all summary helpers.
-- Modify `apps/archmage-desktop/src/App.tsx`: replace only New Run markup with the approved Hero and two-panel workspace.
-- Modify `apps/archmage-desktop/src/styles.css`: shared Hero primitives and scoped New Run layout; preserve Run Detail selectors.
-- Modify `apps/archmage-desktop/src/AgentManagement.tsx`: command Hero, metrics, compact connection heading, and routing handoff.
-- Modify `apps/archmage-desktop/src/agents.css`: approved Agent density and responsive card layout.
-- Modify `apps/archmage-desktop/src/CapabilityManagement.tsx`: command Hero, derived totals, and master-detail workspace.
-- Modify `apps/archmage-desktop/src/capabilities.css`: vertical Capability rail, editor grid, parallel guidance sections, and breakpoints.
-- Modify `apps/archmage-desktop/src/TeamManagement.tsx`: command Hero, integrated legacy state, configuration/canvas workspace, accessible refresh action.
-- Modify `apps/archmage-desktop/src/teams.css`: approved Team split workspace, capability cards, canvas panel, and responsive layout.
+- 创建 `apps/archmage-desktop/src/ManagementHero.tsx`：共享演示英雄和指标标记。
+- 创建 `apps/archmage-desktop/src/ManagementHero.test.tsx`：语义 Hero 内容的 SSR 断言。
+- 创建 `apps/archmage-desktop/src/managementLayout.ts`：环境、代理、能力和团队状态的纯显示摘要帮助程序。
+- 创建 `apps/archmage-desktop/src/managementLayout.test.ts`：所有摘要助手的测试优先覆盖率。
+- 修改 `apps/archmage-desktop/src/App.tsx`：仅将 New Run 标记替换为批准的 Hero 和两面板工作区。
+- 修改 `apps/archmage-desktop/src/styles.css`：共享 Hero 原语和作用域 New Run 布局；保留运行详细信息选择器。
+- 修改 `apps/archmage-desktop/src/AgentManagement.tsx`：命令 Hero、指标、紧凑连接标题和路由切换。
+- 修改 `apps/archmage-desktop/src/agents.css`：批准的代理密度和响应式卡片布局。
+- 修改 `apps/archmage-desktop/src/CapabilityManagement.tsx`：命令 Hero、派生总计和主从工作区。
+- 修改 `apps/archmage-desktop/src/capabilities.css`：垂直功能轨、编辑器网格、平行引导部分和断点。
+- 修改 `apps/archmage-desktop/src/TeamManagement.tsx`：命令 Hero、集成旧状态、configuration/canvas 工作区、可访问的刷新操作。
+- 修改 `apps/archmage-desktop/src/teams.css`：批准的团队拆分工作区、功能卡、画布面板和响应式布局。
 
-### Task 1: Shared command Hero and summary helpers
+### 任务 1：共享命令 Hero 和摘要助手
 
-**Files:**
-- Create: `apps/archmage-desktop/src/ManagementHero.tsx`
-- Create: `apps/archmage-desktop/src/ManagementHero.test.tsx`
-- Create: `apps/archmage-desktop/src/managementLayout.ts`
-- Create: `apps/archmage-desktop/src/managementLayout.test.ts`
-- Modify: `apps/archmage-desktop/src/styles.css`
+**文件：**
+- 创建：`apps/archmage-desktop/src/ManagementHero.tsx`
+- 创建：`apps/archmage-desktop/src/ManagementHero.test.tsx`
+- 创建：`apps/archmage-desktop/src/managementLayout.ts`
+- 创建：`apps/archmage-desktop/src/managementLayout.test.ts`
+- 修改：`apps/archmage-desktop/src/styles.css`
 
-- [ ] **Step 1: Write failing SSR tests for the shared Hero**
+- [ ] **第 1 步：为共享 Hero 编写失败的 SSR 测试**
 
-Create `ManagementHero.test.tsx` with a test that renders:
+使用呈现的测试创建 `ManagementHero.test.tsx`：
 
 ```tsx
 renderToStaticMarkup(
@@ -50,31 +52,31 @@ renderToStaticMarkup(
 );
 ```
 
-Assert the output contains `management-hero`, `management-hero-actions`, `page-metric ready`, the heading, description, action, label, and value.
+断言输出包含 `management-hero`、`management-hero-actions`、`page-metric ready`、标题、描述、操作、标签和值。
 
-- [ ] **Step 2: Run the Hero test and verify RED**
+- [ ] **第 2 步：运行 Hero 测试并验证 RED**
 
-Run:
+运行：
 
 ```bash
 npm test -- ManagementHero.test.tsx
 ```
 
-Expected: FAIL because `ManagementHero.tsx` does not exist.
+预期：失败，因为 `ManagementHero.tsx` 不存在。
 
-- [ ] **Step 3: Implement the minimal shared Hero**
+- [ ] **第 3 步：实现最小共享 Hero**
 
-Create typed `ManagementHero` and `PageMetric` components. `ManagementHero` renders a semantic `<header className="management-hero">`, a copy block, optional actions, and optional summary. `PageMetric` renders text labels and accepts `tone?: "default" | "ready" | "warning" | "failed"`.
+创建类型化 `ManagementHero` 和 `PageMetric` 组件。`ManagementHero` 呈现语义 `<header className="management-hero">`、复制块、可选操作和可选摘要。`PageMetric` 呈现文本标签并接受 `tone?: "default" | "ready" | "warning" | "failed"`。
 
-- [ ] **Step 4: Run the Hero test and verify GREEN**
+- [ ] **第 4 步：运行 Hero 测试并验证绿色**
 
-Run `npm test -- ManagementHero.test.tsx`.
+运行 `npm test -- ManagementHero.test.tsx`。
 
-Expected: one test file passes with no warnings.
+预期：一个测试文件通过且没有警告。
 
-- [ ] **Step 5: Write failing pure-summary tests**
+- [ ] **步骤 5：编写失败的纯总结测试**
 
-Create `managementLayout.test.ts` with focused assertions:
+使用集中断言创建 `managementLayout.test.ts`：
 
 ```ts
 expect(environmentSummary("ready")).toEqual({ label: "本地 Runtime", value: "已就绪", detail: "Agent 与团队配置可用", tone: "ready" });
@@ -89,17 +91,17 @@ expect(capabilityMetrics(snapshot)).toEqual({ capabilities: 4, bound: 3, skills:
 expect(teamSummary(teamGraph)).toEqual({ capabilities: 4, routes: 3, modeLabel: "消息流" });
 ```
 
-Use minimal typed fixtures from `model.ts`.
+使用 `model.ts` 中的最小类型固定装置。
 
-- [ ] **Step 6: Run the summary tests and verify RED**
+- [ ] **第 6 步：运行摘要测试并验证 RED**
 
-Run `npm test -- managementLayout.test.ts`.
+运行 `npm test -- managementLayout.test.ts`。
 
-Expected: FAIL because `managementLayout.ts` does not exist.
+预期：失败，因为 `managementLayout.ts` 不存在。
 
-- [ ] **Step 7: Implement the summary helpers**
+- [ ] **第 7 步：实现摘要助手**
 
-Create pure functions:
+创建纯函数：
 
 ```ts
 export type EnvironmentState = "checking" | "ready" | "failed" | "preview";
@@ -109,50 +111,50 @@ export function capabilityMetrics(snapshot: CapabilityManagementSnapshot): Capab
 export function teamSummary(graph: TeamGraph): TeamMetricData;
 ```
 
-Count only supported Codex instances for Agent totals, valid enabled Codex bindings for Capability bound totals, and current nodes/edges for Team totals.
+仅计算代理总数的受支持 Codex 实例、功能绑定总数的有效启用 Codex 绑定以及团队总数的当前 nodes/edges。
 
-- [ ] **Step 8: Run shared tests and full frontend tests**
+- [ ] **第 8 步：运行共享测试和完整前端测试**
 
-Run:
+运行：
 
 ```bash
 npm test -- ManagementHero.test.tsx managementLayout.test.ts
 npm test
 ```
 
-Expected: shared tests pass and the baseline remains 17 existing tests plus the new tests.
+预期：共享测试通过，基线仍然是 17 个现有测试加上新测试。
 
-- [ ] **Step 9: Add shared Hero CSS**
+- [ ] **第 9 步：添加共享 Hero CSS**
 
-Add scoped rules for `.management-hero`, `.management-hero-copy`, `.management-hero-actions`, `.management-hero-summary`, `.page-metric`, and tone classes. Use the approved green-tinted gradient, compact title, 14–16px radius, and a `max-width: 780px` wrap breakpoint. Do not alter `.run-header` or other Run Detail selectors.
+添加 `.management-hero`、`.management-hero-copy`、`.management-hero-actions`、`.management-hero-summary`、`.page-metric` 和音调类别的范围规则。使用批准的绿色渐变、紧凑标题、14–16 像素半径和 `max-width: 780px` 换行断点。请勿更改 `.run-header` 或其他运行详细信息选择器。
 
-- [ ] **Step 10: Commit the shared foundation**
+- [ ] **第 10 步：提交共享基础**
 
 ```bash
 git add apps/archmage-desktop/src/ManagementHero.tsx apps/archmage-desktop/src/ManagementHero.test.tsx apps/archmage-desktop/src/managementLayout.ts apps/archmage-desktop/src/managementLayout.test.ts apps/archmage-desktop/src/styles.css
 git commit -m "Add shared management page layout primitives"
 ```
 
-### Task 2: Redesign New Run without touching Run Detail
+### 任务 2：重新设计新运行而不触及运行详细信息
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/App.tsx`
-- Modify: `apps/archmage-desktop/src/styles.css`
-- Test: `apps/archmage-desktop/src/managementLayout.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src/App.tsx`
+- 修改：`apps/archmage-desktop/src/styles.css`
+- 测试： `apps/archmage-desktop/src/managementLayout.test.ts`
 
-- [ ] **Step 1: Extend the environment-summary test with the unimplemented checking and failed states**
+- [ ] **步骤 1：使用未实现的检查和失败状态扩展环境摘要测试**
 
-Task 1 implements the approved `ready` and `preview` cases plus a neutral fallback. Add exact assertions for `checking` and `failed`, including tone and detail text.
+任务 1 实施已批准的 `ready` 和 `preview` 案例以及中性回退。为 `checking` 和 `failed` 添加准确的断言，包括语气和详细文本。
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [ ] **步骤 2：运行重点测试并验证 RED**
 
-Run `npm test -- managementLayout.test.ts`.
+运行 `npm test -- managementLayout.test.ts`。
 
-Expected: FAIL because the neutral fallback does not yet return the required `正在检查` and `检查失败` presentation.
+预期：失败，因为中立回退尚未返回所需的 `正在检查` 和 `检查失败` 表示。
 
-- [ ] **Step 3: Complete the minimal environment presentation helper**
+- [ ] **第3步：完成最小环境演示助手**
 
-Return these values:
+返回这些值：
 
 ```ts
 checking: { value: "正在检查", detail: "正在读取本地 Agent 与团队配置", tone: "default" }
@@ -161,215 +163,215 @@ failed: { value: "检查失败", detail: "处理错误后可重新检查", tone:
 preview: { value: "浏览器预览", detail: "请在桌面窗口启动 Run", tone: "warning" }
 ```
 
-- [ ] **Step 4: Restructure only the New Run branch in `App.tsx`**
+- [ ] **步骤 4：仅重构 `App.tsx` 中的 New Run 分支**
 
-Import `ManagementHero`, `PageMetric`, and `environmentSummary`. Replace the existing New Run header/form-card with:
+导入 `ManagementHero`、`PageMetric` 和 `environmentSummary`。将现有的 New Run header/form-card 替换为：
 
-- `ManagementHero` showing environment state;
-- `.new-run-grid`;
-- `.new-run-task-panel` containing repository and goal;
-- `.new-run-team-panel` containing team selector, `RunTeamPreview`, existing issue blocks, frozen-configuration note, and Start Run.
+- `ManagementHero` 显示环境状态；
+- `.new-run-grid`；
+- `.new-run-task-panel` 包含存储库和目标；
+- `.new-run-team-panel` 包含团队选择器、`RunTeamPreview`、现有问题块、冻结配置注释和开始运行。
 
-Keep `canStart`, `chooseRepository`, `startRun`, error recovery callbacks, labels, IDs, and values unchanged.
+保持 `canStart`、`chooseRepository`、`startRun`、错误恢复回调、标签、ID 和值不变。
 
-- [ ] **Step 5: Add scoped New Run CSS**
+- [ ] **步骤 5：添加范围内的 New Run CSS**
 
-Replace the old `10vh` presentation spacing with `.new-run-view` top padding around 32px. Add the 58/42 grid, compact panel headings, responsive single-column breakpoint, and local issue spacing. Keep `.run-view`, `.run-header`, `.run-grid`, `.panel`, timeline, and inspector behavior unchanged.
+将旧的 `10vh` 演示间距替换为 `.new-run-view` 顶部填充（32 像素左右）。添加 58/42 网格、紧凑面板标题、响应式单列断点和本地问题间距。保持 `.run-view`、`.run-header`、`.run-grid`、`.panel`、时间线和检查器行为不变。
 
-- [ ] **Step 6: Verify New Run and regression build**
+- [ ] **第 6 步：验证新运行和回归构建**
 
-Run:
+运行：
 
 ```bash
 npm test
 npm run build
 ```
 
-Expected: all tests pass; TypeScript and Vite build exit 0.
+预期：所有测试均通过；TypeScript 和 Vite 构建退出 0。
 
-- [ ] **Step 7: Commit New Run**
+- [ ] **第 7 步：提交新运行**
 
 ```bash
 git add apps/archmage-desktop/src/App.tsx apps/archmage-desktop/src/styles.css apps/archmage-desktop/src/managementLayout.test.ts apps/archmage-desktop/src/managementLayout.ts
 git commit -m "Polish new Run layout"
 ```
 
-### Task 3: Redesign Agent Management
+### 任务 3：重新设计代理管理
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/AgentManagement.tsx`
-- Modify: `apps/archmage-desktop/src/agents.css`
-- Test: `apps/archmage-desktop/src/managementLayout.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src/AgentManagement.tsx`
+- 修改：`apps/archmage-desktop/src/agents.css`
+- 测试： `apps/archmage-desktop/src/managementLayout.test.ts`
 
-- [ ] **Step 1: Add failing Agent metric edge-case tests**
+- [ ] **步骤 1：添加失败的代理指标边缘情况测试**
 
-Assert disabled instances do not increase verified/unverified/failed counts, unsupported adapters do not increase total supported instances, and enabled ready/unverified/failed Codex instances are counted correctly.
+断言禁用的实例不会增加 verified/unverified/failed 计数，不受支持的适配器不会增加支持的实例总数，并且启用的 ready/unverified/failed Codex 实例计数正确。
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [ ] **步骤 2：运行重点测试并验证 RED**
 
-Run `npm test -- managementLayout.test.ts`.
+运行 `npm test -- managementLayout.test.ts`。
 
-Expected: FAIL until disabled and unsupported filtering matches the design.
+预期：失败，直到禁用和不受支持的过滤与设计匹配。
 
-- [ ] **Step 3: Implement minimal Agent metric filtering**
+- [ ] **步骤 3：实施最小代理指标过滤**
 
-Filter `snapshot.instances` by `providerKind === "codex"`; count state buckets only when `enabled` is true; use the supported filtered length for `总实例`.
+通过 `providerKind === "codex"` 筛选 `snapshot.instances`；仅当 `enabled` 为 true 时才对状态桶进行计数；使用 `总实例` 支持的过滤长度。
 
-- [ ] **Step 4: Restructure Agent Management markup**
+- [ ] **步骤 4：重构代理管理标记**
 
-Use `ManagementHero` with `添加 Codex 实例` in `actions` and four `PageMetric` items in `summary`. Keep the `adding` toggle and all card callbacks unchanged. Retain a compact `本地连接` heading before `.agent-grid`. Replace the large routing heading with `.agent-routing-handoff` containing the existing navigation callback.
+将 `ManagementHero` 与 `actions` 中的 `添加 Codex 实例` 以及 `summary` 中的四个 `PageMetric` 项一起使用。保持 `adding` 切换和所有卡回调不变。在 `.agent-grid` 之前保留紧凑的 `本地连接` 标题。将大路由标题替换为包含现有导航回调的 `.agent-routing-handoff`。
 
-- [ ] **Step 5: Update Agent CSS**
+- [ ] **第 5 步：更新代理 CSS**
 
-Remove obsolete `.agents-header` and summary-card rules. Reduce top/section spacing, preserve two-column supported cards, keep unsupported/new cards, style the compact routing handoff, and retain the existing one-column breakpoint.
+删除过时的 `.agents-header` 和摘要卡规则。减少 top/section 间距，保留两列支持的卡，保留 unsupported/new 卡，设计紧凑的路由切换，并保留现有的一列断点。
 
-- [ ] **Step 6: Run tests and build**
+- [ ] **第 6 步：运行测试并构建**
 
-Run `npm test && npm run build` from `apps/archmage-desktop`.
+从 `apps/archmage-desktop` 运行 `npm test && npm run build`。
 
-Expected: all tests pass and build exits 0.
+预期：所有测试均通过并且构建退出 0。
 
-- [ ] **Step 7: Commit Agent Management**
+- [ ] **第 7 步：提交代理管理**
 
 ```bash
 git add apps/archmage-desktop/src/AgentManagement.tsx apps/archmage-desktop/src/agents.css apps/archmage-desktop/src/managementLayout.ts apps/archmage-desktop/src/managementLayout.test.ts
 git commit -m "Polish Agent management layout"
 ```
 
-### Task 4: Redesign Capability Management as master-detail
+### 任务 4：将能力管理重新设计为主从结构
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/CapabilityManagement.tsx`
-- Modify: `apps/archmage-desktop/src/capabilities.css`
-- Test: `apps/archmage-desktop/src/managementLayout.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src/CapabilityManagement.tsx`
+- 修改：`apps/archmage-desktop/src/capabilities.css`
+- 测试： `apps/archmage-desktop/src/managementLayout.test.ts`
 
-- [ ] **Step 1: Add failing Capability metric tests**
+- [ ] **步骤 1：添加失败的能力指标测试**
 
-Use a snapshot with four configurations, one missing instance, one disabled instance, and repeated Skill/Tool guidance. Assert total Capabilities, only valid enabled Codex bindings, and exact Skill/Tool sums.
+使用具有四种配置、一种缺失实例、一种禁用实例和重复 Skill/Tool 指导的快照。断言总功能、仅有效启用的 Codex 绑定以及准确的 Skill/Tool 总和。
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [ ] **步骤 2：运行重点测试并验证 RED**
 
-Run `npm test -- managementLayout.test.ts`.
+运行 `npm test -- managementLayout.test.ts`。
 
-Expected: FAIL until valid-binding rules and totals match the approved summary.
+预期：失败，直到有效的约束规则和总数与批准的摘要匹配。
 
-- [ ] **Step 3: Implement minimal Capability totals**
+- [ ] **第 3 步：实施最小能力总计**
 
-For each configuration, resolve its bound instance and count it only when enabled and Codex-backed. Sum `skills.length` and `tools.length` across configurations.
+对于每个配置，解析其绑定实例并仅在启用且受 Codex 支持时对其进行计数。跨配置求和 `skills.length` 和 `tools.length`。
 
-- [ ] **Step 4: Restructure Capability markup**
+- [ ] **第4步：重构能力标记**
 
-Use `ManagementHero` with Reload in `actions` and four summary metrics. Wrap `.capability-list` and `.cap-editor` in `.capability-workspace`. Keep list buttons and all selection/dirty confirmation logic unchanged. Wrap Skills and Tools guidance blocks in `.cap-guidance-grid` while preserving every existing row input, limit, label, add, and remove callback.
+将 `ManagementHero` 与 `actions` 中的重新加载和四个摘要指标结合使用。将 `.capability-list` 和 `.cap-editor` 包裹在 `.capability-workspace` 中。保持列表按钮和所有 selection/dirty 确认逻辑不变。将技能和工具指导块封装在 `.cap-guidance-grid` 中，同时保留每个现有行输入、限制、标签、添加和删除回调。
 
-Apply the same Hero shell to preview and loading/error states, with summary omitted when no snapshot exists.
+将相同的 Hero shell 应用于预览和 loading/error 状态，当不存在快照时，将省略摘要。
 
-- [ ] **Step 5: Update Capability CSS**
+- [ ] **第 5 步：更新功能 CSS**
 
-Make `.capability-workspace` a `240px minmax(0, 1fr)` grid. Make `.capability-list` a vertical rail and remove the old four-column card layout. Remove `.cap-editor` top margin, create two-column `.cap-guidance-grid`, and add medium-width stacked workspace/two-column selector plus narrow one-column selector breakpoints.
+将 `.capability-workspace` 设为 `240px minmax(0, 1fr)` 网格。将 `.capability-list` 设为垂直导轨并删除旧的四列卡片布局。删除 `.cap-editor` 上边距，创建两列 `.cap-guidance-grid`，并添加中等宽度的堆叠 workspace/two-column 选择器和窄的一列选择器断点。
 
-- [ ] **Step 6: Run tests and build**
+- [ ] **第 6 步：运行测试并构建**
 
-Run `npm test && npm run build`.
+运行 `npm test && npm run build`。
 
-Expected: all tests pass and build exits 0.
+预期：所有测试均通过并且构建退出 0。
 
-- [ ] **Step 7: Commit Capability Management**
+- [ ] **第 7 步：提交能力管理**
 
 ```bash
 git add apps/archmage-desktop/src/CapabilityManagement.tsx apps/archmage-desktop/src/capabilities.css apps/archmage-desktop/src/managementLayout.ts apps/archmage-desktop/src/managementLayout.test.ts
 git commit -m "Polish Capability management layout"
 ```
 
-### Task 5: Redesign Team Management around the approved Command Hero
+### 任务 5：围绕批准的指挥英雄重新设计团队管理
 
-**Files:**
-- Modify: `apps/archmage-desktop/src/TeamManagement.tsx`
-- Modify: `apps/archmage-desktop/src/teams.css`
-- Test: `apps/archmage-desktop/src/managementLayout.test.ts`
+**文件：**
+- 修改：`apps/archmage-desktop/src/TeamManagement.tsx`
+- 修改：`apps/archmage-desktop/src/teams.css`
+- 测试： `apps/archmage-desktop/src/managementLayout.test.ts`
 
-- [ ] **Step 1: Add failing Team summary tests**
+- [ ] **第 1 步：添加失败的团队摘要测试**
 
-Assert flow and legacy graphs produce exact capability/route counts and `消息流`/`历史咨询` mode labels, including an empty new flow graph.
+断言流和旧图生成精确的 capability/route 计数和 `消息流`/`历史咨询` 模式标签，包括空的新流程图。
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [ ] **步骤 2：运行重点测试并验证 RED**
 
-Run `npm test -- managementLayout.test.ts`.
+运行 `npm test -- managementLayout.test.ts`。
 
-Expected: FAIL until empty and legacy summaries are handled.
+预期：在处理空和旧摘要之前失败。
 
-- [ ] **Step 3: Implement the Team summary helper**
+- [ ] **步骤 3：实施团队摘要助手**
 
-Return `graph.nodes.length`, `graph.edges.length`, and mode label without changing graph validation.
+返回 `graph.nodes.length`、`graph.edges.length` 和模式标签，而不更改图形验证。
 
-- [ ] **Step 4: Restructure Team Management markup**
+- [ ] **步骤 4：重组团队管理标记**
 
-Use `ManagementHero` with Create and icon-only Refresh actions. Give Refresh `aria-label="刷新团队"` and `title="刷新团队"`. Put the current-team selector and Team summary in the Hero summary region. Build `.team-workspace` with:
+将 `ManagementHero` 与“创建”和“仅图标刷新”操作结合使用。刷新 `aria-label="刷新团队"` 和 `title="刷新团队"`。将当前团队选择器和团队摘要放入英雄摘要区域。使用以下命令构建 `.team-workspace`：
 
-- `.team-config-panel`: name/copy row, integrated legacy explanation, selected-count badge, capability-card grid, entry/terminal selectors;
-- `.team-canvas-panel`: heading/summary, existing `TeamCanvas`, selected-edge state, and guidance.
+- `.team-config-panel`：name/copy 行、集成旧版解释、选定计数徽章、功能卡网格、entry/terminal 选择器；
+- `.team-canvas-panel`： heading/summary、现有 `TeamCanvas`、选定边缘状态和指导。
 
-Keep all create, choose, reload, copy, save, dirty, confirmation, graph-editing, and validation logic unchanged.
+保持所有创建、选择、重新加载、复制、保存、脏、确认、图形编辑和验证逻辑不变。
 
-- [ ] **Step 5: Update Team CSS**
+- [ ] **第 5 步：更新团队 CSS**
 
-Add the approved 42/58 workspace, compact capability cards with full-label selected state, integrated legacy notice, canvas panel, footer, and responsive single-column behavior. Preserve the internal 1000×360 canvas dimensions, overflow, node positions, edge hit targets, and focus styles.
+添加经批准的 42/58 工作区、具有全标签选定状态的紧凑功能卡、集成旧通知、画布面板、页脚和响应式单列行为。保留内部 1000×360 画布尺寸、溢出、节点位置、边缘命中目标和焦点样式。
 
-- [ ] **Step 6: Run tests and build**
+- [ ] **第 6 步：运行测试并构建**
 
-Run `npm test && npm run build`.
+运行 `npm test && npm run build`。
 
-Expected: all tests pass and build exits 0.
+预期：所有测试均通过并且构建退出 0。
 
-- [ ] **Step 7: Commit Team Management**
+- [ ] **第 7 步：进行团队管理**
 
 ```bash
 git add apps/archmage-desktop/src/TeamManagement.tsx apps/archmage-desktop/src/teams.css apps/archmage-desktop/src/managementLayout.ts apps/archmage-desktop/src/managementLayout.test.ts
 git commit -m "Polish Team management layout"
 ```
 
-### Task 6: Cross-page verification and cleanup
+### 任务6：跨页面验证和清理
 
-**Files:**
-- Modify only files needed to correct issues found by verification.
+**文件：**
+- 仅修改纠正验证发现的问题所需的文件。
 
-- [ ] **Step 1: Run full automated verification**
+- [ ] **第 1 步：运行全自动验证**
 
-From `apps/archmage-desktop` run:
+从 `apps/archmage-desktop` 运行：
 
 ```bash
 npm test
 npm run build
 ```
 
-From the repository root run:
+从存储库根目录运行：
 
 ```bash
 git diff --check HEAD~4..HEAD
 git status --short
 ```
 
-Expected: all tests pass, build exits 0, diff check emits no output, and the working tree is clean after final fixes are committed.
+预期：所有测试都通过，构建退出 0，差异检查不发出输出，并且提交最终修复后worktree是干净的。
 
-- [ ] **Step 2: Inspect the four redesigned pages**
+- [ ] **第 2 步：检查四个重新设计的页面**
 
-Run the desktop development build in the available environment and inspect wide, medium, and narrow layouts for:
+在可用环境中运行桌面开发构建并检查宽、中和窄布局：
 
-- New Run ready/preview and issue placement;
-- Agent ready/unverified/unsupported/add-instance states;
-- Capability normal/dirty/unavailable-binding states;
-- Team editable-flow and read-only-legacy states.
+- 新运行 ready/preview 并发行安置；
+- 代理 ready/unverified/unsupported/add-instance 表示；
+- 能力 normal/dirty/unavailable-binding 状态；
+- 团队可编辑流程和只读旧状态。
 
-Confirm Run Detail markup and layout remain unchanged.
+确认运行详细信息标记和布局保持不变。
 
-- [ ] **Step 3: Verify accessibility interactions**
+- [ ] **第 3 步：验证可访问性交互**
 
-Keyboard through each page. Confirm logical focus order, visible focus, checkbox/select semantics, icon-only Refresh name/tooltip, and no hover-only control.
+键盘浏览每一页。确认逻辑焦点顺序、可见焦点、checkbox/select 语义、仅图标刷新 name/tooltip，并且没有仅悬停控件。
 
-- [ ] **Step 4: Commit any verification fixes**
+- [ ] **第 4 步：提交所有验证修复**
 
 ```bash
 git add apps/archmage-desktop/src
 git commit -m "Polish responsive management page details"
 ```
 
-Skip this commit when verification required no changes.
+当验证不需要更改时跳过此提交。

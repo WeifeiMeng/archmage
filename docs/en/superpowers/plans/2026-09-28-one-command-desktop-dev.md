@@ -1,5 +1,7 @@
 # One-command Desktop Development Implementation Plan
 
+[简体中文](../../../zh-CN/superpowers/plans/2026-09-28-one-command-desktop-dev.md) | English
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add one executable repository-root script that checks prerequisites, installs missing frontend dependencies, and starts the complete Tauri desktop development application.

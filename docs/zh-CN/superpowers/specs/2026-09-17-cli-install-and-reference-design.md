@@ -1,20 +1,22 @@
-# CLI Installation and Reference Design
+# CLI 安装和参考设计
 
-**Status:** Proposed for implementation
+简体中文 | [English](../../../en/superpowers/specs/2026-09-17-cli-install-and-reference-design.md)
 
-## Goal
+**状态：** 建议实施
 
-Make the development build available as a normal `archmage` command and provide one truthful command reference that clearly separates working functionality from planned commands.
+## 目标
 
-## Installation contract
+使开发版本可作为正常的 `archmage` 命令使用，并提供一个真实的命令参考，将工作功能与计划命令明确区分开来。
 
-Archmage uses Cargo's standard local package installation:
+## 安装合同
+
+Archmage 使用 Cargo 的标准本地包安装：
 
 ```bash
 cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"
 ```
 
-This installs the binary into `$HOME/.local/bin`, which is already part of the target development environment's `PATH`. It keeps installation explicit without modifying shell startup files. A successful installation must be verified with:
+这会将二进制文件安装到 `$HOME/.local/bin` 中，该文件已经是目标开发环境 `PATH` 的一部分。它使安装保持明确，而无需修改 shell 启动文件。必须通过以下方式验证安装是否成功：
 
 ```bash
 command -v archmage
@@ -22,36 +24,36 @@ archmage --version
 archmage --help
 ```
 
-`cargo build` remains side-effect free with respect to the user's `PATH`; it only produces `target/debug/archmage`. Archmage will not add a post-build hook, shell alias, or repository-relative symlink. Reinstalling after source changes is explicit.
+`cargo build` 相对于用户的 `PATH` 保持无副作用；它只产生 `target/debug/archmage`。Archmage 不会添加构建后挂钩、shell 别名或存储库相关符号链接。源更改后重新安装是明确的。
 
-## Documentation contract
+## 文件合同
 
-Create `docs/cli-reference.md` as the canonical CLI manual. It contains:
+创建 `docs/cli-reference.md` 作为规范 CLI 手册。它包含：
 
-- prerequisites and one-time installation;
-- upgrade/reinstall and uninstall commands;
-- data-directory behavior and `ARCHMAGE_HOME`;
-- exact semantics and examples for `doctor --offline` and `doctor`;
-- a concise output-field guide;
-- a clearly separated section for `run`, `status`, `logs`, `resume`, and `cancel`, all marked unavailable until the Runtime workflow is wired;
-- common errors, exit status meaning, and safe diagnostics handling.
+- 先决条件和一次性安装；
+- upgrade/reinstall 和卸载命令；
+- 数据目录行为和 `ARCHMAGE_HOME`；
+- `doctor --offline` 和 `doctor` 的确切语义和示例；
+- 简洁的输出字段指南；
+- `run`、`status`、`logs`、`resume` 和 `cancel` 的清晰分隔部分，在连接运行时工作流程之前，所有部分都标记为不可用；
+- 常见错误、退出状态含义以及安全诊断处理。
 
-The repository README and current usage guide link to the canonical manual instead of duplicating a competing command reference.
+存储库自述文件和当前使用指南链接到规范手册，而不是复制竞争命令参考。
 
-## Verification
+## 验证
 
-Implementation acceptance requires:
+实施验收要求：
 
-1. all workspace tests pass;
-2. `cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"` succeeds;
-3. the resolved `archmage` binary reports the current package version and help;
-4. `archmage doctor --offline` succeeds against a disposable data directory;
-5. documentation contains no example claiming that the incomplete workflow commands run successfully;
-6. formatting and `git diff --check` pass.
+1. 所有工作空间测试均通过；
+2. `cargo install --path crates/archmage-cli --locked --force --root "$HOME/.local"` 成功；
+3. 解析后的 `archmage` 二进制文件报告当前包版本和帮助；
+4. `archmage doctor --offline` 对一次性数据目录成功；
+5. 文档中没有任何示例声称不完整的工作流命令成功运行；
+6. 格式化并通过 `git diff --check`。
 
-## Non-goals
+## 非目标
 
-- Packaging a signed desktop or platform installer.
-- Homebrew, npm, or release-binary distribution.
-- Making incomplete Workflow commands appear operational.
-- Automatically changing shell startup files or global `PATH` configuration.
+- 打包签名的桌面或平台安装程序。
+- Homebrew、npm 或发布二进制发行版。
+- 使不完整的工作流程命令显得可操作。
+- 自动更改 shell 启动文件或全局 `PATH` 配置。
