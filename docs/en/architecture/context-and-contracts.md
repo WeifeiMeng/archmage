@@ -2,6 +2,8 @@
 
 # Context and Contracts
 
+For the concrete Codex/DeepSeek Harness boundary, envelope, session semantics, and failure ownership, see [Cross-provider Capability handoff](cross-provider-handoff.md).
+
 ## Context binding
 
 A Capability declares what it needs. A workflow node declares where each input comes from.

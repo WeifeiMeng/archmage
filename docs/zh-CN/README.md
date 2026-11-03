@@ -21,9 +21,10 @@ Team 组成更新：[可选择的 Capability 与关系](superpowers/specs/2026-1
 5. [术语表](concepts/glossary.md)
 6. [协作模型](concepts/collaboration-model.md)
 7. [架构概览](architecture/overview.md)
-8. [交付路线图](roadmap/README.md)
-9. [S0：真实 Codex 垂直切片](roadmap/stages/s0-real-codex-slice.md)
-10. [桌面 Runtime 实施计划](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
+8. [跨 Provider 的 Capability 交付](architecture/cross-provider-handoff.md)
+9. [交付路线图](roadmap/README.md)
+10. [S0：真实 Codex 垂直切片](roadmap/stages/s0-real-codex-slice.md)
+11. [桌面 Runtime 实施计划](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
 
 ## 文档层级
 

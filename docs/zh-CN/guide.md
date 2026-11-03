@@ -81,6 +81,7 @@ archmage cancel <run-id>
 - 多能力不等于必须启动多个长期 Agent 实例；底层支持多个 Codex 实例，首版默认创建一个 `codex-default`；
 - Agent 在 Capability 管理页按能力全局绑定，不支持 Run 级临时覆盖；Runtime 内置职责及输出契约固定，角色补充提示词和 Skill/Tool 指引可配置；
 - 新建团队使用消息流模式：至少选择两个能力，显式选择入口及可发出完成信号的能力，并在画布上连接有向边；允许 Coder → Reviewer → Coder 这样的反馈环。每次交付触发目标 Capability 所绑定真实 Agent 的一次执行；Agent 通过结构化结果选择一个或多个已连接的下游，终止节点可选择完成。执行串行，循环最多 24 次，待处理消息会在终止时标记为跳过；
+- 跨 Provider 的边交付经过校验的 JSON artifact，不共享 Provider 对话历史。Codex/DSH 边界详见[跨 Provider 的 Capability 交付](architecture/cross-provider-handoff.md)；
 - 默认团队和既有团队仍使用历史咨询模式：边触发只读咨询、下游认可门禁和最多三轮修改。旧团队可以显式复制为消息流团队，原团队不会被改变；
 - Run 启动时冻结所选团队、能力配置及具体 Agent 绑定，后续修改全局设置不会改变历史 Run；
 - 每个节点有独立 Codex thread/result 与显式 Context/Handoff；

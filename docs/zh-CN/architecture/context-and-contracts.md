@@ -2,6 +2,8 @@
 
 # 上下文与契约
 
+Codex/DeepSeek Harness 的具体边界、输出信封、session 语义和失败归属见[跨 Provider 的 Capability 交付](cross-provider-handoff.md)。
+
 ## 上下文绑定
 
 Capability 声明自己需要什么，Workflow 节点声明每项输入来自哪里。

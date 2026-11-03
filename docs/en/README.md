@@ -21,9 +21,10 @@ Current Team increment: [Message-flow Teams](superpowers/specs/2026-10-14-messag
 5. [Glossary](concepts/glossary.md)
 6. [Collaboration model](concepts/collaboration-model.md)
 7. [Architecture overview](architecture/overview.md)
-8. [Delivery roadmap](roadmap/README.md)
-9. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
-10. [Desktop runtime implementation plan](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
+8. [Cross-provider Capability handoff](architecture/cross-provider-handoff.md)
+9. [Delivery roadmap](roadmap/README.md)
+10. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
+11. [Desktop runtime implementation plan](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
 
 ## Documentation layers
 

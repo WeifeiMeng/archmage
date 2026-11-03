@@ -2,6 +2,8 @@
 
 # 消息流 Team 设计
 
+跨 Provider 的实际运行语义见[跨 Provider 的 Capability 交付](../../architecture/cross-provider-handoff.md)。
+
 **状态：** 已实现。[实施计划](../plans/2026-10-14-message-flow-teams.md)记录验证历史。仅对新消息流 Team，本设计取代[可选择 Team Capability](2026-10-14-selectable-team-capabilities-design.md)中的关系与调度语义。
 
 ## 目的与范围

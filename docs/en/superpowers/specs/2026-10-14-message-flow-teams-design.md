@@ -2,6 +2,8 @@
 
 # Message-Flow Teams Design
 
+Operational cross-Provider semantics are documented in [Cross-provider Capability handoff](../../architecture/cross-provider-handoff.md).
+
 **Status:** Implemented. The [implementation plan](../plans/2026-10-14-message-flow-teams.md) records verification history. This supersedes the relationship and scheduling semantics in [Selectable Team Capabilities](2026-10-14-selectable-team-capabilities-design.md) for new flow teams only.
 
 ## Purpose and scope
