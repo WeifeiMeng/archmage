@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-agent-provider-grouping-design.md) | English
+
 # Agent management is designed by Provider grouping
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-agent-provider-grouping-design.md) | English
 
 ## target
 

@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)
+
 # S0 Real Codex Vertical Slice Implementation Plan
 
-简体中文 | [English](../../../en/superpowers/plans/2026-09-16-s0-real-codex-vertical-slice.md)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended when delegation is authorized) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

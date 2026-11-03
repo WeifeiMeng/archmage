@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-17-cli-install-and-reference-design.md) | English
+
 # CLI Installation and Reference Design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-09-17-cli-install-and-reference-design.md) | English
 
 **Status:** Proposed for implementation
 

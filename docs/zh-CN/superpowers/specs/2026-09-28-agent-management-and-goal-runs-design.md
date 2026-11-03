@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-09-28-agent-management-and-goal-runs-design.md)
+
 # 代理管理和目标驱动的运行设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-09-28-agent-management-and-goal-runs-design.md)
 
 **状态：** 批准实施规划
 

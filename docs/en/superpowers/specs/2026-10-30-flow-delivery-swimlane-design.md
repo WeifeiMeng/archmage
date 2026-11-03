@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-flow-delivery-swimlane-design.md) | English
+
 # Run delivery message swim lane design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-flow-delivery-swimlane-design.md) | English
 
 ## background
 

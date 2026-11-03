@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md) | English
+
 # Real Codex Vertical Slice Design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md) | English
 
 **Status:** Approved
 

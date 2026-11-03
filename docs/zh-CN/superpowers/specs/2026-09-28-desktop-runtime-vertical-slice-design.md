@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md)
+
 # 桌面运行时垂直切片设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md)
 
 **状态：** 批准实施规划
 

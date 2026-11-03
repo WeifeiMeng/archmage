@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/plans/2026-09-30-capability-guidance.md) | English
+
 # Capability Guidance Implementation Plan
 
-[简体中文](../../../zh-CN/superpowers/plans/2026-09-30-capability-guidance.md) | English
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

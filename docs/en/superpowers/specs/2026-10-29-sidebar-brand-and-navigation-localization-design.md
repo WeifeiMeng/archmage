@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-sidebar-brand-and-navigation-localization-design.md) | English
+
 # Sidebar Branding and Navigation Chinese Culture Design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-sidebar-brand-and-navigation-localization-design.md) | English
 
 ## target
 

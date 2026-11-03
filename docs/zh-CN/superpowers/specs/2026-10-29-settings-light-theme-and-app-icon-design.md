@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-29-settings-light-theme-and-app-icon-design.md)
+
 # 设置页、浅色主题与应用图标设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-29-settings-light-theme-and-app-icon-design.md)
 
 ## 目标
 

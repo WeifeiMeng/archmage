@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-28-team-management-layout-polish-design.md) | English
+
 # Team Management Layout Polish Design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-28-team-management-layout-polish-design.md) | English
 
 **Status:** Approved visual direction; ready for implementation planning.
 

@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-28-desktop-form-pages-layout-polish-design.md)
+
 # 桌面表单页面布局波兰设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-28-desktop-form-pages-layout-polish-design.md)
 
 **状态：** 批准的视觉方向；准备实施计划。
 

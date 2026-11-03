@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-29-sidebar-brand-and-navigation-localization-design.md)
+
 # 侧栏品牌与导航中文化设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-29-sidebar-brand-and-navigation-localization-design.md)
 
 ## 目标
 

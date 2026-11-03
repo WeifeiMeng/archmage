@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-run-detail-toolbar-design.md) | English
+
 # Organize and design the operation area of Run details page
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-30-run-detail-toolbar-design.md) | English
 
 ## target
 

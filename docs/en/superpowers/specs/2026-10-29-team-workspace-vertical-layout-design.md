@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-team-workspace-vertical-layout-design.md) | English
+
 # Vertical layout design of team workspace
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-team-workspace-vertical-layout-design.md) | English
 
 ## target
 

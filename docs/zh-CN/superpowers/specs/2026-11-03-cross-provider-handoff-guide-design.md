@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-11-03-cross-provider-handoff-guide-design.md)
+
 # 跨提供商切换指南设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-11-03-cross-provider-handoff-guide-design.md)
 
 **状态：** 已批准用于文档实施。
 

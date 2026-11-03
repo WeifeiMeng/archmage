@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/plans/2026-09-30-capability-guidance.md)
+
 # 能力指导实施计划
 
-简体中文 | [English](../../../en/superpowers/plans/2026-09-30-capability-guidance.md)
 
 > **对于代理工人：** 所需的子技能：使用超能力：执行计划来逐个任务地实施该计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 

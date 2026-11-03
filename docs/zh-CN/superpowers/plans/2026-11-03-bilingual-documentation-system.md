@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/plans/2026-11-03-bilingual-documentation-system.md)
+
 # 双语文献系统实施方案
 
-简体中文 | [English](../../../en/superpowers/plans/2026-11-03-bilingual-documentation-system.md)
 
 > **面向执行 Agent：** 必需子技能：使用 superpowers:subagent-driven-development （推荐）或 superpowers:executing-plans 来逐个任务地实施此计划。步骤使用复选框 (`- [ ]`) 语法进行跟踪。
 

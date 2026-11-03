@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-28-desktop-form-pages-layout-polish-design.md) | English
+
 # Desktop Form Pages Layout Polish Design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-28-desktop-form-pages-layout-polish-design.md) | English
 
 **Status:** Approved visual direction; ready for implementation planning.
 

@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-11-03-bilingual-documentation-system-design.md)
+
 # 双语文献系统设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-11-03-bilingual-documentation-system-design.md)
 
 **状态：** 批准实施规划。
 

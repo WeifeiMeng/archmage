@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-run-detail-toolbar-design.md)
+
 # Run 详情页操作区整理设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-30-run-detail-toolbar-design.md)
 
 ## 目标
 

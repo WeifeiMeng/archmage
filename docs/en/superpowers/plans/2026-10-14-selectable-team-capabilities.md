@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-14-selectable-team-capabilities.md) | English
+
 # Selectable Team Capabilities Implementation Plan
 
-[简体中文](../../../zh-CN/superpowers/plans/2026-10-14-selectable-team-capabilities.md) | English
 
 **Status:** Implemented. Deterministic tests and builds pass; live Codex acceptance remains a separate manual exercise.
 

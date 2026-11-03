@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
+
 # Real Codex 垂直切片设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-09-16-real-codex-vertical-slice-design.md)
 
 **状态：** 已批准
 

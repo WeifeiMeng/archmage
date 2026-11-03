@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md) | English
+
 # Desktop Runtime Vertical Slice Design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-09-28-desktop-runtime-vertical-slice-design.md) | English
 
 **Status:** Approved for implementation planning
 

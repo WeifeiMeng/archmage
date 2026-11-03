@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-agent-provider-grouping-design.md)
+
 # Agent 管理按 Provider 分组设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-30-agent-provider-grouping-design.md)
 
 ## 目标
 

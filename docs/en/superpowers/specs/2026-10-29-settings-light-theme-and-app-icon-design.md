@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-settings-light-theme-and-app-icon-design.md) | English
+
 # Settings page, light theme and app icon design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-29-settings-light-theme-and-app-icon-design.md) | English
 
 ## target
 

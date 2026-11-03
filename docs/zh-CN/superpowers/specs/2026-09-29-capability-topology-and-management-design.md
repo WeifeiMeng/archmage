@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-09-29-capability-topology-and-management-design.md)
+
 # 能力拓扑与管理设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-09-29-capability-topology-and-management-design.md)
 
 **状态：** 批准实施；通过后续决定将范围缩小为代理绑定
 

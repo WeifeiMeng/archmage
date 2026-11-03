@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-29-team-workspace-vertical-layout-design.md)
+
 # 团队工作区纵向布局设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-29-team-workspace-vertical-layout-design.md)
 
 ## 目标
 

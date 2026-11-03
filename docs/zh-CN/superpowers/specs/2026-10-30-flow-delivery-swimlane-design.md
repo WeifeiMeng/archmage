@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-30-flow-delivery-swimlane-design.md)
+
 # Run 交付消息泳道设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-30-flow-delivery-swimlane-design.md)
 
 ## 背景
 

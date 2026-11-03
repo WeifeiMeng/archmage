@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/plans/2026-10-14-selectable-team-capabilities.md)
+
 # 可选择的团队能力实施计划
 
-简体中文 | [English](../../../en/superpowers/plans/2026-10-14-selectable-team-capabilities.md)
 
 **状态：** 已实施。确定性测试和构建通过；法典的现场验收仍然是一项单独的手动操作。
 

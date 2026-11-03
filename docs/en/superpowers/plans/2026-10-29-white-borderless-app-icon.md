@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/plans/2026-10-29-white-borderless-app-icon.md) | English
+
 # White Borderless App Icon Implementation Plan
 
-[简体中文](../../../zh-CN/superpowers/plans/2026-10-29-white-borderless-app-icon.md) | English
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

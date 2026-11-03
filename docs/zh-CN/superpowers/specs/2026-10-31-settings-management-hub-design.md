@@ -1,6 +1,7 @@
+简体中文 | [English](../../../en/superpowers/specs/2026-10-31-settings-management-hub-design.md)
+
 # 设置管理中心设计
 
-简体中文 | [English](../../../en/superpowers/specs/2026-10-31-settings-management-hub-design.md)
 
 ## 目标
 

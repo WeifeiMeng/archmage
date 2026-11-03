@@ -1,6 +1,7 @@
+[简体中文](../../../zh-CN/superpowers/specs/2026-10-31-settings-management-hub-design.md) | English
+
 # Set up the admin center design
 
-[简体中文](../../../zh-CN/superpowers/specs/2026-10-31-settings-management-hub-design.md) | English
 
 ## target
 
