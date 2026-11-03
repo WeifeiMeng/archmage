@@ -117,4 +117,3 @@ If a Provider cannot reliably return schema-constrained JSON, it is not compatib
 - [Collaboration model](../concepts/collaboration-model.md)
 - [Message-flow Team design](../superpowers/specs/2026-10-14-message-flow-teams-design.md)
 - [DeepSeek Harness Provider design](../superpowers/specs/2026-10-30-deepseek-harness-provider-design.md)
-

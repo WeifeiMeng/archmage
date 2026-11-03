@@ -117,4 +117,3 @@ Capability A → Provider A 返回 JSON → Archmage 校验并提交 artifact
 - [协作模型](../concepts/collaboration-model.md)
 - [消息流 Team 设计](../superpowers/specs/2026-10-14-message-flow-teams-design.md)
 - [DeepSeek Harness Provider 设计](../superpowers/specs/2026-10-30-deepseek-harness-provider-design.md)
-
