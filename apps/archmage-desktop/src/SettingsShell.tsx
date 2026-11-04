@@ -23,11 +23,19 @@ export function SettingsShell({ activeView, onNavigate, onBack, children }: Sett
   return <section className="settings-shell">
     <div className="settings-shell-body">
       <nav className="settings-sections" aria-label="设置分类">
-        <span className="settings-sidebar-brand">ARCHMAGE</span>
-        <p>通用</p>
-        {sections.slice(0, 1).map(({ view, label, icon: Icon }) => <button key={view} type="button" className={activeView === view ? "active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onNavigate(view)}><Icon size={17} />{label}</button>)}
-        <p>资源管理</p>
-        {sections.slice(1).map(({ view, label, icon: Icon }) => <button key={view} type="button" className={activeView === view ? "active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onNavigate(view)}><Icon size={17} />{label}</button>)}
+        <div className="settings-section-list" onFocus={(event) => {
+          const list = event.currentTarget;
+          // Native focus scrolling can leave a partially visible button clipped.
+          if (list.scrollWidth > list.clientWidth && event.target.matches(":focus-visible")) {
+            event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+          }
+        }}>
+          <span className="settings-sidebar-brand">ARCHMAGE</span>
+          <p>通用</p>
+          {sections.slice(0, 1).map(({ view, label, icon: Icon }) => <button key={view} type="button" className={activeView === view ? "active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onNavigate(view)}><Icon size={17} />{label}</button>)}
+          <p>资源管理</p>
+          {sections.slice(1).map(({ view, label, icon: Icon }) => <button key={view} type="button" className={activeView === view ? "active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onNavigate(view)}><Icon size={17} />{label}</button>)}
+        </div>
         <button type="button" className="settings-back" onClick={onBack}><ArrowLeft size={17} />返回主界面</button>
       </nav>
       <div className="settings-shell-content">{children}</div>

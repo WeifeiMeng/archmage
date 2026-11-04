@@ -1,7 +1,8 @@
 .settings-view { max-width: 980px; margin: 0 auto; padding: 36px 0 72px; }
 .settings-shell { min-height: 100vh; background: var(--canvas-bg); }
 .settings-shell-body { min-height: 100vh; display: grid; grid-template-columns: 220px minmax(0, 1fr); }
-.settings-sections { min-height: 100vh; padding: 28px 14px 18px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar-bg); }
+.settings-sections { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 28px 14px 18px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar-bg); }
+.settings-section-list { display: flex; flex-direction: column; }
 .settings-sidebar-brand { margin: 0 11px 26px; color: var(--accent); font: 700 9px ui-monospace,SFMono-Regular,monospace; letter-spacing: .14em; }
 .settings-sections p { margin: 4px 11px 9px; color: var(--muted); font-size: 9px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
 .settings-sections p:not(:first-of-type) { margin-top: 26px; }
@@ -53,12 +54,12 @@
 @media (max-width: 960px) {
   body:has(.settings-shell) { min-width: 0; }
   .settings-shell-body { display: block; }
-  .settings-sections { min-height: 0; padding: 10px 16px; flex-direction: row; gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-sections { position: static; height: auto; padding: 10px 16px; flex-direction: row; gap: 6px; overflow: visible; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-section-list { min-width: 0; flex: 1; flex-direction: row; gap: 6px; overflow-x: auto; }
   .settings-sidebar-brand, .settings-sections p { display: none; }
   .settings-sections button { width: auto; flex: 0 0 auto; padding: 0 12px; }
   .settings-sections button.active::before { left: 12px; right: 12px; top: auto; bottom: 0; width: auto; height: 2px; }
-  .settings-sections .settings-back { position: sticky; left: 0; z-index: 1; order: -1; margin: 0; border-top: 0; border-right: 1px solid var(--border); background: var(--sidebar-bg); }
-  .settings-sections .settings-back:hover { background: var(--surface-2); }
+  .settings-sections .settings-back { order: -1; margin: 0; border-top: 0; border-right: 1px solid var(--border); }
   .settings-shell-content { padding: 0 16px 24px; }
   .settings-view { padding-top: 24px; }
   .theme-options { grid-template-columns: 1fr; }

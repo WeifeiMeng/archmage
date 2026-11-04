@@ -31,8 +31,8 @@ describe("SettingsShell", () => {
     expect(navEnd).toBeLessThan(contentStart);
 
     const navHtml = html.slice(navStart, navEnd + "</nav>".length);
-    expect(navHtml).toMatch(/^<nav class="settings-sections" aria-label="设置分类"><span class="settings-sidebar-brand">ARCHMAGE<\/span>/);
-    expect(navHtml).toMatch(/<button[^>]*class="settings-back"[^>]*>[\s\S]*返回主界面<\/button><\/nav>$/);
+    expect(navHtml).toMatch(/^<nav class="settings-sections" aria-label="设置分类"><div class="settings-section-list"><span class="settings-sidebar-brand">ARCHMAGE<\/span>/);
+    expect(navHtml).toMatch(/<\/div><button[^>]*class="settings-back"[^>]*>[\s\S]*返回主界面<\/button><\/nav>$/);
     expect(html).toMatch(/^<section class="settings-shell"><div class="settings-shell-body"><nav class="settings-sections" aria-label="设置分类">[\s\S]*<\/nav><div class="settings-shell-content"><div>Agent content<\/div><\/div><\/div><\/section>$/);
     expect(html).not.toContain("settings-shell-header");
     expect(html).not.toContain("settings-shell-title");
@@ -41,8 +41,8 @@ describe("SettingsShell", () => {
 
   it("scopes the flat settings styles and keeps the responsive navigation", () => {
     expect(settingsStyles).toContain(".settings-sections button.active::before");
-    expect(settingsStyles).toContain(".settings-shell-content .management-hero");
-    expect(settingsStyles).toContain(".settings-shell-content .management-hero::after");
+    expect(settingsStyles).toMatch(/\.settings-shell-content \.management-hero\s*\{/);
+    expect(settingsStyles).toMatch(/\.settings-shell-content \.management-hero::after\s*\{/);
     expect(settingsStyles).toContain("@media (max-width: 960px)");
     expect(settingsStyles).not.toContain(".settings-shell-header");
     expect(settingsStyles).not.toContain("box-shadow: var(--shadow)");
