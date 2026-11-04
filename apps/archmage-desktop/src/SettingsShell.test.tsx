@@ -37,6 +37,14 @@ describe("SettingsShell", () => {
     expect(html).not.toContain("settings-shell-header");
     expect(html).not.toContain("settings-shell-title");
     expect(html).not.toContain("<h1");
+  });
+
+  it("scopes the flat settings styles and keeps the responsive navigation", () => {
+    expect(settingsStyles).toContain(".settings-sections button.active::before");
+    expect(settingsStyles).toContain(".settings-shell-content .management-hero");
+    expect(settingsStyles).toContain(".settings-shell-content .management-hero::after");
     expect(settingsStyles).toContain("@media (max-width: 960px)");
+    expect(settingsStyles).not.toContain(".settings-shell-header");
+    expect(settingsStyles).not.toContain("box-shadow: var(--shadow)");
   });
 });
