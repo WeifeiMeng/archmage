@@ -235,4 +235,3 @@ Expected: 导航横向排列且无页面级横向溢出；返回入口保持可�
 Run: `git diff --check && git status --short`
 
 Expected: `git diff --check` 无输出；工作区只包含计划内文件，或在任务提交后保持干净。
-
