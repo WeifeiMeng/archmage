@@ -21,7 +21,18 @@ describe("SettingsShell", () => {
     expect(html).toContain('aria-current="page"');
     expect(html).toContain("Agent content");
     expect(html).toContain('class="settings-sidebar-brand"');
-    expect(html).toMatch(/<nav[^>]*class="settings-sections"[\s\S]*class="settings-back"/);
+
+    const bodyStart = html.indexOf('<div class="settings-shell-body">');
+    const navStart = html.indexOf('<nav class="settings-sections" aria-label="设置分类">');
+    const navEnd = html.indexOf("</nav>", navStart);
+    const contentStart = html.indexOf('<div class="settings-shell-content">');
+    expect(bodyStart).toBeLessThan(navStart);
+    expect(navStart).toBeLessThan(navEnd);
+    expect(navEnd).toBeLessThan(contentStart);
+
+    const navHtml = html.slice(navStart, navEnd + "</nav>".length);
+    expect(navHtml).toMatch(/^<nav class="settings-sections" aria-label="设置分类"><span class="settings-sidebar-brand">ARCHMAGE<\/span>/);
+    expect(navHtml).toMatch(/<button[^>]*class="settings-back"[^>]*>[\s\S]*返回主界面<\/button><\/nav>$/);
     expect(html).not.toContain("settings-shell-header");
     expect(html).not.toContain("settings-shell-title");
     expect(html).not.toContain("<h1");
