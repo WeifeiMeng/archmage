@@ -33,6 +33,7 @@ describe("SettingsShell", () => {
     const navHtml = html.slice(navStart, navEnd + "</nav>".length);
     expect(navHtml).toMatch(/^<nav class="settings-sections" aria-label="设置分类"><span class="settings-sidebar-brand">ARCHMAGE<\/span>/);
     expect(navHtml).toMatch(/<button[^>]*class="settings-back"[^>]*>[\s\S]*返回主界面<\/button><\/nav>$/);
+    expect(html).toMatch(/^<section class="settings-shell"><div class="settings-shell-body"><nav class="settings-sections" aria-label="设置分类">[\s\S]*<\/nav><div class="settings-shell-content"><div>Agent content<\/div><\/div><\/div><\/section>$/);
     expect(html).not.toContain("settings-shell-header");
     expect(html).not.toContain("settings-shell-title");
     expect(html).not.toContain("<h1");
