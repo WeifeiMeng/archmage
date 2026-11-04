@@ -59,7 +59,7 @@
   .settings-sidebar-brand, .settings-sections p { display: none; }
   .settings-sections button { width: auto; flex: 0 0 auto; padding: 0 12px; }
   .settings-sections button.active::before { left: 12px; right: 12px; top: auto; bottom: 0; width: auto; height: 2px; }
-  .settings-sections .settings-back { order: -1; margin: 0; border-top: 0; border-right: 1px solid var(--border); }
+  .settings-sections .settings-back { margin: 0; border-top: 0; border-left: 1px solid var(--border); }
   .settings-shell-content { padding: 0 16px 24px; }
   .settings-view { padding-top: 24px; }
   .theme-options { grid-template-columns: 1fr; }
