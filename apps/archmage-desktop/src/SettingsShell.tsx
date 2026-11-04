@@ -21,16 +21,14 @@ const sections: Array<{ view: SettingsSection; label: string; icon: typeof Palet
 
 export function SettingsShell({ activeView, onNavigate, onBack, children }: SettingsShellProps) {
   return <section className="settings-shell">
-    <header className="settings-shell-header">
-      <button type="button" className="settings-back" onClick={onBack}><ArrowLeft size={17} />返回主界面</button>
-      <div><span>ARCHMAGE</span><strong className="settings-shell-title">设置</strong></div>
-    </header>
     <div className="settings-shell-body">
       <nav className="settings-sections" aria-label="设置分类">
+        <span className="settings-sidebar-brand">ARCHMAGE</span>
         <p>通用</p>
         {sections.slice(0, 1).map(({ view, label, icon: Icon }) => <button key={view} type="button" className={activeView === view ? "active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onNavigate(view)}><Icon size={17} />{label}</button>)}
         <p>资源管理</p>
         {sections.slice(1).map(({ view, label, icon: Icon }) => <button key={view} type="button" className={activeView === view ? "active" : ""} aria-current={activeView === view ? "page" : undefined} onClick={() => onNavigate(view)}><Icon size={17} />{label}</button>)}
+        <button type="button" className="settings-back" onClick={onBack}><ArrowLeft size={17} />返回主界面</button>
       </nav>
       <div className="settings-shell-content">{children}</div>
     </div>

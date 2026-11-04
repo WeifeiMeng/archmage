@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 const settingsStyles = readFileSync(new URL("./settings.css", import.meta.url), "utf8");
 
 describe("SettingsShell", () => {
-  it("renders a full-screen settings navigator around the active management page", () => {
+  it("renders flat settings navigation with the back action inside the sidebar", () => {
     const html = renderToStaticMarkup(
       <SettingsShell activeView="agents" onNavigate={() => undefined} onBack={() => undefined}>
         <div>Agent content</div>
@@ -20,6 +20,10 @@ describe("SettingsShell", () => {
     expect(html).toContain("团队管理");
     expect(html).toContain('aria-current="page"');
     expect(html).toContain("Agent content");
+    expect(html).toContain('class="settings-sidebar-brand"');
+    expect(html).toMatch(/<nav[^>]*class="settings-sections"[\s\S]*class="settings-back"/);
+    expect(html).not.toContain("settings-shell-header");
+    expect(html).not.toContain("settings-shell-title");
     expect(html).not.toContain("<h1");
     expect(settingsStyles).toContain("@media (max-width: 960px)");
   });
