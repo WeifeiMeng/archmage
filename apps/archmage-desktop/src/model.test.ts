@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentInputIsComplete, capabilityDraft, capabilityDisplayName, isCapabilityDirty, groupTopologyEdges, initialTimelineState, isSupportedProvider, providerLabel, reduceEvent, runBindingIssues, selectedTeamForRun, shouldConfirmCapabilityExit, teamRunOverview, toRunRequest, type AgentManagementSnapshot, type CapabilityConfiguration, type Team } from "./model";
+import { agentInputIsComplete, capabilityDraft, capabilityDisplayName, installGuidanceFor, isCapabilityDirty, groupTopologyEdges, initialTimelineState, isSupportedProvider, providerLabel, reduceEvent, runBindingIssues, selectedTeamForRun, shouldConfirmCapabilityExit, teamRunOverview, toRunRequest, type AgentInstallGuidance, type AgentManagementSnapshot, type CapabilityConfiguration, type Team } from "./model";
 
 describe("capability topology", () => {
   it("keeps execution dependencies separate from extra context handoffs", () => {
@@ -64,6 +64,16 @@ describe("run request", () => {
 });
 
 describe("agent routing", () => {
+  it("looks up installation guidance by provider", () => {
+    const guidance: AgentInstallGuidance[] = [{
+      providerKind: "codex", platform: "macos", architecture: "aarch64",
+      supported: true, detected: false, prerequisite: null,
+      command: "install codex", documentationUrl: "https://example.com/codex",
+      unsupportedReason: null,
+    }];
+    expect(installGuidanceFor(guidance, "codex")?.platform).toBe("macos");
+    expect(installGuidanceFor(guidance, "hermes")).toBeUndefined();
+  });
   it("requires an explicit provider route and model for DeepSeek Harness", () => {
     expect(agentInputIsComplete({ providerKind: "codex", providerRoute: null, model: null })).toBe(true);
     expect(agentInputIsComplete({ providerKind: "deepseek_harness", providerRoute: null, model: "deepseek-v4-flash" })).toBe(false);

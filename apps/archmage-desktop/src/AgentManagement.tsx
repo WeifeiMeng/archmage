@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { Bot, CheckCircle2, CircleAlert, LoaderCircle, Plus, Save, Unplug, Wifi } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { Bot, Check, CheckCircle2, CircleAlert, Clipboard, ExternalLink, LoaderCircle, Plus, RefreshCw, Save, Unplug, Wifi, X } from "lucide-react";
 import { api } from "./api";
 import { ManagementHero, PageMetric } from "./ManagementHero";
 import { agentMetrics } from "./managementLayout";
 import {
   connectionLabel,
   agentInputIsComplete,
+  installGuidanceFor,
   providerLabel,
+  type AgentInstallGuidance,
   type AgentInstance,
   type AgentInstanceInput,
   type AgentManagementSnapshot,
@@ -20,10 +23,22 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [addingProvider, setAddingProvider] = useState<SupportedProvider | null>(null);
+  const [guidance, setGuidance] = useState<AgentInstallGuidance[]>([]);
+  const [activeGuide, setActiveGuide] = useState<InstallGuideTarget | null>(null);
+
+  async function refreshGuidance() {
+    try {
+      setGuidance(await api.listAgentInstallGuidance());
+    } catch (reason) {
+      onError(String(reason));
+      throw reason;
+    }
+  }
 
   useEffect(() => {
     if (!isTauri()) return;
     api.getAgentManagement().then(setSnapshot).catch((reason) => { setLoadError(String(reason)); onError(String(reason)); });
+    void refreshGuidance().catch(() => undefined);
   }, [onError]);
 
   async function run(id: string, action: () => Promise<AgentManagementSnapshot>): Promise<boolean> {
@@ -53,6 +68,11 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
     snapshot={snapshot}
     busy={busy}
     addingProvider={addingProvider}
+    guidance={guidance}
+    activeGuide={activeGuide}
+    onOpenGuidance={(provider, instanceId) => setActiveGuide({ provider, instanceId })}
+    onCloseGuidance={() => setActiveGuide(null)}
+    onRefreshGuidance={refreshGuidance}
     onToggleAdding={(provider) => setAddingProvider((current) => current === provider ? null : provider)}
     onRun={run}
     onOpenCapabilities={onOpenCapabilities}
@@ -60,6 +80,7 @@ export function AgentManagement({ onError, onOpenCapabilities }: { onError: (mes
 }
 
 type SupportedProvider = Extract<ProviderKind, "codex" | "deepseek_harness">;
+type InstallGuideTarget = { provider: SupportedProvider; instanceId?: string };
 
 const providerSections: Array<{ kind: SupportedProvider; description: string; addLabel: string }> = [
   { kind: "codex", description: "Codex CLI 连接", addLabel: "添加 Codex" },
@@ -70,12 +91,17 @@ type AgentManagementContentProps = {
   snapshot: AgentManagementSnapshot;
   busy: string | null;
   addingProvider: SupportedProvider | null;
+  guidance: AgentInstallGuidance[];
+  activeGuide: InstallGuideTarget | null;
+  onOpenGuidance: (provider: SupportedProvider, instanceId?: string) => void;
+  onCloseGuidance: () => void;
+  onRefreshGuidance: () => Promise<void>;
   onToggleAdding: (provider: SupportedProvider) => void;
   onRun: (id: string, action: () => Promise<AgentManagementSnapshot>) => Promise<boolean>;
   onOpenCapabilities: () => void;
 };
 
-export function AgentManagementContent({ snapshot, busy, addingProvider, onToggleAdding, onRun, onOpenCapabilities }: AgentManagementContentProps) {
+export function AgentManagementContent({ snapshot, busy, addingProvider, guidance, activeGuide, onOpenGuidance, onCloseGuidance, onRefreshGuidance, onToggleAdding, onRun, onOpenCapabilities }: AgentManagementContentProps) {
   const metrics = agentMetrics(snapshot);
   const boundIds = new Set(snapshot.bindings.map((item) => item.agentInstanceId));
   return <section className="agents-view">
@@ -89,13 +115,19 @@ export function AgentManagementContent({ snapshot, busy, addingProvider, onToggl
       {providerSections.map((section) => {
         const instances = snapshot.instances.filter((instance) => instance.providerKind === section.kind);
         const isAdding = addingProvider === section.kind;
+        const install = installGuidanceFor(guidance, section.kind);
+        const hasDetectedInstance = instances.some((instance) => Boolean(instance.discoveredVersion));
         return <section className="agent-provider-section" key={section.kind}>
           <div className="agent-provider-heading">
             <div><h2>{providerLabel(section.kind)}</h2><p>{section.description}</p></div>
-            <button className="secondary-action" onClick={() => onToggleAdding(section.kind)}><Plus size={16} />{isAdding ? "收起" : section.addLabel}</button>
+            <div className="agent-provider-heading-actions">
+              {install && !install.detected && !hasDetectedInstance && <button className="secondary-action install-guidance-trigger" onClick={() => onOpenGuidance(section.kind)}>安装指引</button>}
+              <button className="secondary-action" onClick={() => onToggleAdding(section.kind)}><Plus size={16} />{isAdding ? "收起" : section.addLabel}</button>
+            </div>
           </div>
           <div className="agent-grid">
-            {instances.map((instance) => <AgentCard key={instance.id} instance={instance} bound={boundIds.has(instance.id)} busy={busy === instance.id} onSave={(input) => onRun(instance.id, () => api.saveAgentInstance(input))} onDiscover={() => onRun(instance.id, () => api.discoverAgentInstance(instance.id))} onVerify={() => onRun(instance.id, () => api.verifyAgentInstance(instance.id))} onDelete={async () => { if (await confirm(`删除 ${instance.displayName}？`, { title: "删除 Agent 实例", kind: "warning" })) await onRun(instance.id, () => api.deleteAgentInstance(instance.id)); }} />)}
+            {activeGuide?.provider === section.kind && install && <AgentInstallGuide guidance={install} onClose={onCloseGuidance} onRecheck={async () => { if (activeGuide.instanceId) { const succeeded = await onRun(activeGuide.instanceId, () => api.discoverAgentInstance(activeGuide.instanceId!)); if (!succeeded) throw new Error("Agent 检查未通过"); } await onRefreshGuidance(); }} />}
+            {instances.map((instance) => <AgentCard key={instance.id} instance={instance} bound={boundIds.has(instance.id)} busy={busy === instance.id} onInstallGuide={instance.connectionState === "failed" && !instance.discoveredVersion ? () => onOpenGuidance(section.kind, instance.id) : undefined} onSave={(input) => onRun(instance.id, () => api.saveAgentInstance(input))} onDiscover={() => onRun(instance.id, () => api.discoverAgentInstance(instance.id))} onVerify={() => onRun(instance.id, () => api.verifyAgentInstance(instance.id))} onDelete={async () => { if (await confirm(`删除 ${instance.displayName}？`, { title: "删除 Agent 实例", kind: "warning" })) await onRun(instance.id, () => api.deleteAgentInstance(instance.id)); }} />)}
             {instances.length === 0 && !isAdding && <div className="agent-provider-empty">尚未配置 {providerLabel(section.kind)} 实例。</div>}
             {isAdding && <NewAgentCard provider={section.kind} busy={busy === "new"} onCancel={() => onToggleAdding(section.kind)} onSave={async (input) => { if (await onRun("new", () => api.saveAgentInstance(input))) onToggleAdding(section.kind); }} />}
           </div>
@@ -111,7 +143,7 @@ export function AgentManagementContent({ snapshot, busy, addingProvider, onToggl
   </section>;
 }
 
-function AgentCard({ instance, bound, busy, onSave, onDiscover, onVerify, onDelete }: { instance: AgentInstance; bound: boolean; busy: boolean; onSave: (input: AgentInstanceInput) => Promise<unknown>; onDiscover: () => Promise<unknown>; onVerify: () => Promise<unknown>; onDelete: () => Promise<void> }) {
+function AgentCard({ instance, bound, busy, onInstallGuide, onSave, onDiscover, onVerify, onDelete }: { instance: AgentInstance; bound: boolean; busy: boolean; onInstallGuide?: () => void; onSave: (input: AgentInstanceInput) => Promise<unknown>; onDiscover: () => Promise<unknown>; onVerify: () => Promise<unknown>; onDelete: () => Promise<void> }) {
   const isDsh = instance.providerKind === "deepseek_harness";
   const [name, setName] = useState(instance.displayName);
   const [path, setPath] = useState(instance.executablePath ?? "");
@@ -134,7 +166,59 @@ function AgentCard({ instance, bound, busy, onSave, onDiscover, onVerify, onDele
     </div>
     <div className="agent-facts"><span>版本<strong>{instance.discoveredVersion ?? "尚未读取"}</strong></span><span>上次验证<strong>{instance.lastVerifiedAt ? new Date(instance.lastVerifiedAt).toLocaleString() : "从未"}</strong></span></div>
     {instance.lastError && <p className="inline-agent-error"><CircleAlert size={14} />{instance.lastError}</p>}
-    <div className="agent-actions"><button disabled={!dirty || busy || !name.trim() || !complete} onClick={() => onSave({ id: instance.id, providerKind: instance.providerKind, displayName: name.trim(), executablePath: path.trim() || null, providerRoute: isDsh ? providerRoute.trim() || null : null, model: model.trim() || null, enabled })}><Save size={15} />保存配置</button><button disabled={busy || dirty || !enabled} onClick={onDiscover}>{isDsh ? "检查 SDK" : "检查 CLI"}</button><button className="verify" disabled={busy || dirty || !enabled} onClick={onVerify}>{busy ? <LoaderCircle className="spin" size={15} /> : <Wifi size={15} />}验证连接</button>{!bound && <button disabled={busy} onClick={onDelete}>删除</button>}</div>
+    <div className="agent-actions">{onInstallGuide && <button className="install-guidance-trigger" disabled={busy} onClick={onInstallGuide}>查看安装指引</button>}<button disabled={!dirty || busy || !name.trim() || !complete} onClick={() => onSave({ id: instance.id, providerKind: instance.providerKind, displayName: name.trim(), executablePath: path.trim() || null, providerRoute: isDsh ? providerRoute.trim() || null : null, model: model.trim() || null, enabled })}><Save size={15} />保存配置</button><button disabled={busy || dirty || !enabled} onClick={onDiscover}>{isDsh ? "检查 SDK" : "检查 CLI"}</button><button className="verify" disabled={busy || dirty || !enabled} onClick={onVerify}>{busy ? <LoaderCircle className="spin" size={15} /> : <Wifi size={15} />}验证连接</button>{!bound && <button disabled={busy} onClick={onDelete}>删除</button>}</div>
+  </article>;
+}
+
+function AgentInstallGuide({ guidance, onClose, onRecheck }: { guidance: AgentInstallGuidance; onClose: () => void; onRecheck: () => Promise<void> }) {
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const platform = guidance.platform === "macos" ? "macOS" : guidance.platform === "windows" ? "Windows" : guidance.platform;
+
+  async function copyCommand() {
+    if (!guidance.command) return;
+    try {
+      await navigator.clipboard.writeText(guidance.command);
+      setFeedback("安装命令已复制");
+    } catch (reason) {
+      setFeedback(`复制失败：${String(reason)}`);
+    }
+  }
+
+  async function openDocumentation() {
+    try {
+      await openUrl(guidance.documentationUrl);
+      setFeedback("已打开官方文档");
+    } catch (reason) {
+      setFeedback(`无法打开官方文档：${String(reason)}`);
+    }
+  }
+
+  async function recheck() {
+    setChecking(true);
+    try {
+      await onRecheck();
+      setFeedback("检查完成；若仍未发现，请重新启动 Archmage 后再试。");
+    } catch (reason) {
+      setFeedback(`检查失败：${String(reason)}`);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return <article className={`agent-install-guide ${guidance.supported ? "supported" : "unsupported"}`}>
+    <div className="agent-install-guide-heading"><div><span>{platform} · {guidance.architecture}</span><h3>{providerLabel(guidance.providerKind)} 安装指引</h3></div><button type="button" className="agent-guide-close" aria-label="关闭安装指引" onClick={onClose}><X size={17} /></button></div>
+    {guidance.supported ? <>
+      <p>请在系统终端中执行以下官方安装命令。Archmage 只提供指引，不会代替你执行。</p>
+      {guidance.prerequisite && <p className="agent-install-prerequisite"><strong>前置条件</strong>{guidance.prerequisite}</p>}
+      {guidance.command && <pre><code>{guidance.command}</code></pre>}
+    </> : <p className="agent-install-unsupported"><CircleAlert size={16} />{guidance.unsupportedReason}</p>}
+    <div className="agent-install-guide-actions">
+      {guidance.command && <button type="button" onClick={copyCommand}>{feedback === "安装命令已复制" ? <Check size={15} /> : <Clipboard size={15} />}复制命令</button>}
+      <button type="button" onClick={openDocumentation}><ExternalLink size={15} />打开官方文档</button>
+      {guidance.supported && <button type="button" className="verify" disabled={checking} onClick={recheck}>{checking ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}重新检查</button>}
+    </div>
+    {feedback && <p className="agent-install-feedback" aria-live="polite">{feedback}</p>}
   </article>;
 }
 

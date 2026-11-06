@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AgentInstanceInput,
+  AgentInstallGuidance,
   AgentManagementSnapshot,
   CapabilityConfigurationInput,
   CapabilityManagementSnapshot,
@@ -16,6 +17,8 @@ import type {
 
 export const api = {
   doctor: (online = false) => invoke<Record<string, unknown>>("doctor", { online }),
+  listAgentInstallGuidance: () =>
+    invoke<AgentInstallGuidance[]>("list_agent_install_guidance"),
   getAgentManagement: () =>
     invoke<AgentManagementSnapshot>("get_agent_management"),
   saveAgentInstance: (input: AgentInstanceInput) =>

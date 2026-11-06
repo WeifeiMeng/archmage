@@ -1,3 +1,5 @@
+mod agent_install;
+
 use archmage_core::{
     agent::{AgentInstanceInput, AgentManagementSnapshot},
     capability::{CapabilityConfigurationInput, CapabilityManagementSnapshot},
@@ -25,6 +27,11 @@ struct AppState {
 struct RunEventSignal {
     run_id: String,
     event_sequence: i64,
+}
+
+#[tauri::command]
+async fn list_agent_install_guidance() -> Vec<agent_install::AgentInstallGuidance> {
+    agent_install::list().await
 }
 
 #[tauri::command]
@@ -299,6 +306,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             doctor,
+            list_agent_install_guidance,
             get_agent_management,
             save_agent_instance,
             discover_agent_instance,

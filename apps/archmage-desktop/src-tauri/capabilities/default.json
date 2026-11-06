@@ -8,6 +8,7 @@
     "core:window:allow-destroy",
     "dialog:allow-open",
     "dialog:allow-message",
-    "opener:allow-reveal-item-in-dir"
+    "opener:allow-reveal-item-in-dir",
+    "opener:allow-open-url"
   ]
 }

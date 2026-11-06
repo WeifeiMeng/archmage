@@ -16,7 +16,7 @@
 - Create: `apps/archmage-desktop/src-tauri/src/agent_install.rs`
 - Modify: `apps/archmage-desktop/src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Write failing resolver tests**
+- [x] **Step 1: Write failing resolver tests**
 
 Add unit tests for these records:
 
@@ -28,13 +28,13 @@ assert!(!resolve(ProviderKind::DeepseekHarness, "windows", "x86_64", None, false
 assert!(!resolve(ProviderKind::DeepseekHarness, "macos", "x86_64", Some(14), false).supported);
 ```
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run: `cargo test -p archmage-desktop agent_install`
 
 Expected: FAIL because the module and resolver do not exist.
 
-- [ ] **Step 3: Implement the resolver and read-only command**
+- [x] **Step 3: Implement the resolver and read-only command**
 
 Define a camelCase-serialized `AgentInstallGuidance` with:
 
@@ -54,7 +54,7 @@ pub struct AgentInstallGuidance {
 
 Implement a pure `resolve(...)` function, a macOS-major-version reader using `/usr/bin/sw_vers -productVersion`, and an async `list_agent_install_guidance` Tauri command. Detect Codex with `codex::find_executable("codex")`; detect DSH with `deepseek_harness::inspect_at(None).await`. Return guidance for Codex and DeepSeek Harness only. Register the command in `generate_handler!`.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
 Run: `cargo test -p archmage-desktop agent_install`
 
@@ -67,7 +67,7 @@ Expected: all resolver tests PASS.
 - Modify: `apps/archmage-desktop/src/api.ts`
 - Modify: `apps/archmage-desktop/src/model.test.ts`
 
-- [ ] **Step 1: Write the failing model test**
+- [x] **Step 1: Write the failing model test**
 
 Add a small lookup test for a new helper:
 
@@ -76,13 +76,13 @@ expect(installGuidanceFor(guidance, "codex")?.platform).toBe("macos");
 expect(installGuidanceFor(guidance, "hermes")).toBeUndefined();
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- model.test.ts`
 
 Expected: FAIL because `AgentInstallGuidance` and `installGuidanceFor` do not exist.
 
-- [ ] **Step 3: Add types, lookup, and API call**
+- [x] **Step 3: Add types, lookup, and API call**
 
 Add the TypeScript mirror of the Rust record, implement `installGuidanceFor`, and expose:
 
@@ -90,7 +90,7 @@ Add the TypeScript mirror of the Rust record, implement `installGuidanceFor`, an
 listAgentInstallGuidance: () => invoke<AgentInstallGuidance[]>("list_agent_install_guidance")
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `npm test -- model.test.ts`
 
@@ -104,27 +104,27 @@ Expected: PASS.
 - Modify: `apps/archmage-desktop/src/agents.css`
 - Modify: `apps/archmage-desktop/src-tauri/capabilities/default.json`
 
-- [ ] **Step 1: Write failing rendering tests**
+- [x] **Step 1: Write failing rendering tests**
 
 Render `AgentManagementContent` with undetected Codex and unsupported Windows DSH guidance. Assert that Provider headings expose “安装指引”, the open guide contains the fixed command and “复制命令”, and unsupported DSH contains its explanation without a copy action. Add a failed, versionless instance and assert its card exposes “查看安装指引”.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `npm test -- AgentManagement.test.tsx`
 
 Expected: FAIL because guidance props and UI do not exist.
 
-- [ ] **Step 3: Implement guide state and actions**
+- [x] **Step 3: Implement guide state and actions**
 
 Load snapshot and guidance together in `AgentManagement`. Track the active guide as `{ provider, instanceId? }`. Implement one `AgentInstallGuide` component with local copy/open/recheck feedback. Use `navigator.clipboard.writeText`, `openUrl` from `@tauri-apps/plugin-opener`, and add `opener:allow-open-url` to the desktop capability.
 
 Provider headings show the guide button only when `detected === false`. Failed instance cards show it only when `connectionState === "failed" && !discoveredVersion`. Provider recheck reloads guidance; instance recheck first invokes existing discovery, then reloads guidance. No action executes the displayed command.
 
-- [ ] **Step 4: Add accessible responsive styles**
+- [x] **Step 4: Add accessible responsive styles**
 
 Style the guide as an inline card spanning the Provider grid. Keep command text selectable, make buttons at least 40px high with visible focus states, and stack guide actions below 780px.
 
-- [ ] **Step 5: Run the focused test and verify GREEN**
+- [x] **Step 5: Run the focused test and verify GREEN**
 
 Run: `npm test -- AgentManagement.test.tsx`
 
@@ -135,25 +135,25 @@ Expected: PASS.
 **Files:**
 - Modify only if verification exposes a defect in files listed above.
 
-- [ ] **Step 1: Run Rust tests**
+- [x] **Step 1: Run Rust tests**
 
 Run: `cargo test -p archmage-desktop`
 
 Expected: all tests PASS.
 
-- [ ] **Step 2: Run desktop frontend tests**
+- [x] **Step 2: Run desktop frontend tests**
 
 Run: `npm test`
 
 Expected: all tests PASS.
 
-- [ ] **Step 3: Build the desktop frontend**
+- [x] **Step 3: Build the desktop frontend**
 
 Run: `npm run build`
 
 Expected: TypeScript and Vite build successfully.
 
-- [ ] **Step 4: Review and commit**
+- [x] **Step 4: Review and commit**
 
 Run: `git diff --check && git status --short`
 

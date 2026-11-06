@@ -10,6 +10,22 @@ export type Team = { id: string; name: string; revision: number; graph: TeamGrap
 export type TeamLoadState = "loading" | "ready" | "failed";
 export type AppView = "runs" | "agents" | "capabilities" | "teams" | "settings";
 
+export type AgentInstallGuidance = {
+  providerKind: ProviderKind;
+  platform: string;
+  architecture: string;
+  supported: boolean;
+  detected: boolean;
+  prerequisite: string | null;
+  command: string | null;
+  documentationUrl: string;
+  unsupportedReason: string | null;
+};
+
+export function installGuidanceFor(guidance: AgentInstallGuidance[], provider: ProviderKind): AgentInstallGuidance | undefined {
+  return guidance.find((item) => item.providerKind === provider);
+}
+
 export function selectedTeamForRun(teams: Team[], teamId: string, loadState: TeamLoadState): Team | null {
   return loadState === "ready" ? teams.find((team) => team.id === teamId) ?? null : null;
 }

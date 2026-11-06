@@ -5,7 +5,22 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => false }));
 
 import { AgentManagement, AgentManagementContent } from "./AgentManagement";
-import type { AgentManagementSnapshot } from "./model";
+import type { AgentInstallGuidance, AgentManagementSnapshot } from "./model";
+
+const guidance: AgentInstallGuidance[] = [
+  {
+    providerKind: "codex", platform: "macos", architecture: "aarch64",
+    supported: true, detected: false, prerequisite: null,
+    command: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+    documentationUrl: "https://github.com/openai/codex#quickstart", unsupportedReason: null,
+  },
+  {
+    providerKind: "deepseek_harness", platform: "windows", architecture: "x86_64",
+    supported: false, detected: false, prerequisite: "Python 3.10 或更高版本",
+    command: null, documentationUrl: "https://github.com/deepseek-ai/deepseek-harness",
+    unsupportedReason: "当前 DeepSeek Harness Python SDK 暂不支持 Windows Agent。",
+  },
+];
 
 const snapshot: AgentManagementSnapshot = {
   adapters: [
@@ -46,6 +61,11 @@ describe("Agent Management browser preview", () => {
         snapshot={snapshot}
         busy={null}
         addingProvider="deepseek_harness"
+        guidance={guidance}
+        activeGuide={null}
+        onOpenGuidance={() => undefined}
+        onCloseGuidance={() => undefined}
+        onRefreshGuidance={async () => undefined}
         onToggleAdding={() => undefined}
         onRun={async () => true}
         onOpenCapabilities={() => undefined}
@@ -58,6 +78,95 @@ describe("Agent Management browser preview", () => {
     expect(html).toContain("添加 DeepSeek Harness 实例");
     expect(html).not.toContain("添加 Codex 实例");
     expect(html).not.toContain("<select");
+  });
+
+  it("shows platform guidance for a missing provider without executing it", () => {
+    const html = renderToStaticMarkup(
+      <AgentManagementContent
+        snapshot={{ ...snapshot, instances: [], bindings: [] }}
+        busy={null}
+        addingProvider={null}
+        guidance={guidance}
+        activeGuide={{ provider: "codex" }}
+        onOpenGuidance={() => undefined}
+        onCloseGuidance={() => undefined}
+        onRefreshGuidance={async () => undefined}
+        onToggleAdding={() => undefined}
+        onRun={async () => true}
+        onOpenCapabilities={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("安装指引");
+    expect(html).toContain("curl -fsSL https://chatgpt.com/codex/install.sh | sh");
+    expect(html).toContain("复制命令");
+    expect(html).toContain("重新检查");
+  });
+
+  it("does not flag a provider as missing when a custom-path instance is already discovered", () => {
+    const html = renderToStaticMarkup(
+      <AgentManagementContent
+        snapshot={snapshot}
+        busy={null}
+        addingProvider={null}
+        guidance={guidance}
+        activeGuide={null}
+        onOpenGuidance={() => undefined}
+        onCloseGuidance={() => undefined}
+        onRefreshGuidance={async () => undefined}
+        onToggleAdding={() => undefined}
+        onRun={async () => true}
+        onOpenCapabilities={() => undefined}
+      />,
+    );
+
+    expect(html.match(/>安装指引</g)).toHaveLength(1);
+  });
+
+  it("explains unsupported DSH platforms without offering an invalid command", () => {
+    const html = renderToStaticMarkup(
+      <AgentManagementContent
+        snapshot={snapshot}
+        busy={null}
+        addingProvider={null}
+        guidance={guidance}
+        activeGuide={{ provider: "deepseek_harness" }}
+        onOpenGuidance={() => undefined}
+        onCloseGuidance={() => undefined}
+        onRefreshGuidance={async () => undefined}
+        onToggleAdding={() => undefined}
+        onRun={async () => true}
+        onOpenCapabilities={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("暂不支持 Windows Agent");
+    expect(html).not.toContain("复制命令");
+    expect(html).not.toContain("重新检查");
+  });
+
+  it("offers guidance from a failed versionless instance", () => {
+    const failedSnapshot: AgentManagementSnapshot = {
+      ...snapshot,
+      instances: [{ ...snapshot.instances[0], connectionState: "failed", discoveredVersion: null, lastError: "codex executable not found" }],
+    };
+    const html = renderToStaticMarkup(
+      <AgentManagementContent
+        snapshot={failedSnapshot}
+        busy={null}
+        addingProvider={null}
+        guidance={guidance}
+        activeGuide={null}
+        onOpenGuidance={() => undefined}
+        onCloseGuidance={() => undefined}
+        onRefreshGuidance={async () => undefined}
+        onToggleAdding={() => undefined}
+        onRun={async () => true}
+        onOpenCapabilities={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("查看安装指引");
   });
 
   it("uses provider section styles instead of a highlighted Hero action", () => {
