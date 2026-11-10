@@ -2,7 +2,7 @@
 
 # 跨 Provider 的 Capability 交付
 
-本文说明一个 Capability 运行在 Codex、下一个 Capability 运行在 DeepSeek Harness（DSH）时的当前交付契约。未来新增 Provider 适配器也使用同一边界。
+本文说明相邻 Capability 使用 Codex、DeepSeek Harness（DSH）或 Qoder ACP 时的交付契约。未来新增 Provider 适配器也使用同一边界。
 
 ## 一句话结论
 
@@ -22,7 +22,7 @@ Capability A → Provider A 返回 JSON → Archmage 校验并提交 artifact
 |---|---|---|
 | 协作层 | Archmage Runtime | 交付物、路由、artifact、delivery 台账、Context Snapshot |
 | Capability 层 | Archmage 校验器 | Designer、Coder、Tester、Reviewer 或咨询结果的版本化 JSON Schema |
-| Provider 传输层 | Provider 适配器 | Codex CLI JSONL/结果文件，或 DSH bridge JSONL/session 帧 |
+| Provider 传输层 | Provider 适配器 | Codex CLI JSONL/结果文件、DSH bridge JSONL/session 帧或 Qoder ACP v1 JSON-RPC |
 
 无论由哪个 Provider 执行，Capability 都消费相同的逻辑上下文，并满足相同的输出 Schema。
 
@@ -89,6 +89,7 @@ Capability A → Provider A 返回 JSON → Archmage 校验并提交 artifact
 - DSH sidecar 意外退出后不会被静默替换，因为新 session 会制造历史连续的假象。
 - Archmage 重启后不会恢复存活 DSH session；受影响的旧进程收敛到 `interrupted`。
 - 咨询使用临时隔离的 DSH session，不进入 Capability 主对话。
+- Qoder 同样为每个 `Run + Capability` 保留一个 ACP 进程和 session；咨询 session 是临时的，文件与终端回调始终受 worktree 边界限制。
 
 这些 Provider session 规则不能替代明确的交付 artifact。
 
@@ -117,3 +118,4 @@ Capability A → Provider A 返回 JSON → Archmage 校验并提交 artifact
 - [协作模型](../concepts/collaboration-model.md)
 - [消息流 Team 设计](../superpowers/specs/2026-10-14-message-flow-teams-design.md)
 - [DeepSeek Harness Provider 设计](../superpowers/specs/2026-10-30-deepseek-harness-provider-design.md)
+- [Qoder ACP Provider 运行手册](../runbooks/qoder-provider.md)

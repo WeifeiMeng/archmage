@@ -2,7 +2,7 @@
 
 # Cross-provider Capability handoff
 
-This guide describes the current handoff contract when one Capability runs on Codex and the next runs on DeepSeek Harness (DSH). Future Provider adapters use the same boundary.
+This guide describes the handoff contract when adjacent Capabilities use Codex, DeepSeek Harness (DSH), or Qoder ACP. Future Provider adapters use the same boundary.
 
 ## Short answer
 
@@ -22,7 +22,7 @@ The common machine language is **UTF-8 JSON constrained by JSON Schema**. Human-
 |---|---|---|
 | Collaboration | Archmage Runtime | Deliverable, routing, artifacts, delivery ledger, Context Snapshot |
 | Capability | Archmage validator | Versioned JSON Schema for Designer, Coder, Tester, Reviewer, or consultation |
-| Provider transport | Provider adapter | Codex CLI JSONL/output file, or DSH bridge JSONL/session frames |
+| Provider transport | Provider adapter | Codex CLI JSONL/output file, DSH bridge JSONL/session frames, or Qoder ACP v1 JSON-RPC |
 
 A Capability consumes the same logical context and satisfies the same output schema regardless of its Provider.
 
@@ -89,6 +89,7 @@ Reversing Provider bindings changes only the adapter transport, not the artifact
 - An unexpectedly exited DSH sidecar is not silently replaced, because a new session would falsely appear continuous.
 - Live DSH sessions are not restored after an Archmage restart; affected legacy processes converge to `interrupted`.
 - Consultation uses a temporary isolated DSH session, outside the Capability's main conversation.
+- Qoder likewise keeps one ACP process and session per `Run + Capability`; its consultation session is temporary and its file/terminal callbacks remain worktree-bound.
 
 These Provider-specific session rules never replace the explicit handoff artifact.
 
@@ -117,3 +118,4 @@ If a Provider cannot reliably return schema-constrained JSON, it is not compatib
 - [Collaboration model](../concepts/collaboration-model.md)
 - [Message-flow Team design](../superpowers/specs/2026-10-14-message-flow-teams-design.md)
 - [DeepSeek Harness Provider design](../superpowers/specs/2026-10-30-deepseek-harness-provider-design.md)
+- [Qoder ACP Provider runbook](../runbooks/qoder-provider.md)
