@@ -170,6 +170,7 @@ impl Store {
                 "../../migrations/0015_flow_terminal_states.sql"
             ))?;
             tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0017_qoder.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -242,7 +243,11 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
                 version = 16;
             }
-            if version != 16 {
+            if version == 16 {
+                tx.execute_batch(include_str!("../../migrations/0017_qoder.sql"))?;
+                version = 17;
+            }
+            if version != 17 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
@@ -403,7 +408,8 @@ impl Store {
 
     pub fn agent_instances(&self) -> Result<Vec<AgentInstance>> {
         let mut query = self.db.prepare(
-            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,enabled,
+            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,agent_name,
+                    provider_config_json,enabled,
                     connection_state,discovered_version,last_verified_at,last_error,
                     verification_thread_id
              FROM agent_instances ORDER BY created_at,id",
@@ -415,7 +421,8 @@ impl Store {
 
     pub fn agent_instance(&self, id: &str) -> Result<AgentInstance> {
         Ok(self.db.query_row(
-            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,enabled,
+            "SELECT id,provider_kind,display_name,executable_path,provider_route,model,agent_name,
+                    provider_config_json,enabled,
                     connection_state,discovered_version,last_verified_at,last_error,
                     verification_thread_id
              FROM agent_instances WHERE id=?1",
@@ -442,40 +449,55 @@ impl Store {
             .executable_path
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned());
+        let provider_config_json = serde_json::to_string(&input.provider_config)
+            .map_err(|error| Error::Preflight(error.to_string()))?;
         self.db.execute(
             "INSERT INTO agent_instances(
-                id,provider_kind,display_name,executable_path,provider_route,model,enabled
-             ) VALUES(?1,?2,?3,?4,?5,?6,?7)
+                id,provider_kind,display_name,executable_path,provider_route,model,agent_name,
+                provider_config_json,enabled
+             ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)
              ON CONFLICT(id) DO UPDATE SET
                 display_name=excluded.display_name,
                 executable_path=excluded.executable_path,
                 provider_route=excluded.provider_route,
                 model=excluded.model,
+                agent_name=excluded.agent_name,
+                provider_config_json=excluded.provider_config_json,
                 enabled=excluded.enabled,
                 connection_state=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
                      AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
+                     AND agent_instances.agent_name IS excluded.agent_name
+                     AND agent_instances.provider_config_json IS excluded.provider_config_json
                     THEN agent_instances.connection_state ELSE 'unverified' END,
                 discovered_version=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
                      AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
+                     AND agent_instances.agent_name IS excluded.agent_name
+                     AND agent_instances.provider_config_json IS excluded.provider_config_json
                     THEN agent_instances.discovered_version ELSE NULL END,
                 last_verified_at=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
                      AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
+                     AND agent_instances.agent_name IS excluded.agent_name
+                     AND agent_instances.provider_config_json IS excluded.provider_config_json
                     THEN agent_instances.last_verified_at ELSE NULL END,
                 last_error=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
                      AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
+                     AND agent_instances.agent_name IS excluded.agent_name
+                     AND agent_instances.provider_config_json IS excluded.provider_config_json
                     THEN agent_instances.last_error ELSE NULL END,
                 verification_thread_id=CASE
                     WHEN agent_instances.executable_path IS excluded.executable_path
                      AND agent_instances.provider_route IS excluded.provider_route
                      AND agent_instances.model IS excluded.model
+                     AND agent_instances.agent_name IS excluded.agent_name
+                     AND agent_instances.provider_config_json IS excluded.provider_config_json
                     THEN agent_instances.verification_thread_id ELSE NULL END,
                 updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')",
             rusqlite::params![
@@ -485,6 +507,8 @@ impl Store {
                 executable_path,
                 input.provider_route.as_ref().map(|value| value.trim()),
                 input.model.as_ref().map(|value| value.trim()),
+                input.agent_name.as_ref().map(|value| value.trim()),
+                provider_config_json,
                 input.enabled,
             ],
         )?;
@@ -617,14 +641,35 @@ impl Store {
         let tx = self
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let current: Option<(String, Option<String>, Option<String>, Option<String>, bool)> = tx
+        let current: Option<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            String,
+            bool,
+        )> = tx
             .query_row(
-                "SELECT provider_kind,executable_path,provider_route,model,enabled FROM agent_instances WHERE id=?1",
+                "SELECT provider_kind,executable_path,provider_route,model,agent_name,
+                        provider_config_json,enabled FROM agent_instances WHERE id=?1",
                 [&expected.id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                    ))
+                },
             )
             .optional()?;
-        let Some((provider, path, provider_route, model, enabled)) = current else {
+        let Some((provider, path, provider_route, model, agent_name, provider_config, enabled)) =
+            current
+        else {
             return Ok(false);
         };
         let expected_path = expected
@@ -635,6 +680,8 @@ impl Store {
             || path != expected_path
             || provider_route != expected.provider_route
             || model != expected.model
+            || agent_name != expected.agent_name
+            || parse_json(provider_config, 5)? != expected.provider_config
             || enabled != expected.enabled
         {
             return Ok(false);
@@ -702,12 +749,12 @@ impl Store {
 
 fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance> {
     let provider: String = row.get(1)?;
-    let connection: String = row.get(7)?;
+    let connection: String = row.get(9)?;
     let provider_kind = provider.parse().map_err(|error: Error| {
         rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let connection_state = connection.parse().map_err(|error: Error| {
-        rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(error))
+        rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(error))
     })?;
     let executable_path: Option<String> = row.get(3)?;
     Ok(AgentInstance {
@@ -717,12 +764,14 @@ fn agent_instance_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AgentInstance
         executable_path: executable_path.map(Into::into),
         provider_route: row.get(4)?,
         model: row.get(5)?,
-        enabled: row.get(6)?,
+        agent_name: row.get(6)?,
+        provider_config: parse_json(row.get(7)?, 7)?,
+        enabled: row.get(8)?,
         connection_state,
-        discovered_version: row.get(8)?,
-        last_verified_at: row.get(9)?,
-        last_error: row.get(10)?,
-        verification_thread_id: row.get(11)?,
+        discovered_version: row.get(10)?,
+        last_verified_at: row.get(11)?,
+        last_error: row.get(12)?,
+        verification_thread_id: row.get(13)?,
     })
 }
 fn workspace_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {

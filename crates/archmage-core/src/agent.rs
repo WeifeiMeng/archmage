@@ -14,6 +14,7 @@ pub enum ProviderKind {
     Codex,
     #[serde(rename = "deepseek_harness")]
     DeepseekHarness,
+    Qoder,
     Claude,
     OpenClaw,
     Hermes,
@@ -24,6 +25,7 @@ impl ProviderKind {
         match self {
             Self::Codex => "codex",
             Self::DeepseekHarness => "deepseek_harness",
+            Self::Qoder => "qoder",
             Self::Claude => "claude",
             Self::OpenClaw => "openclaw",
             Self::Hermes => "hermes",
@@ -31,7 +33,7 @@ impl ProviderKind {
     }
 
     pub fn supported(self) -> bool {
-        matches!(self, Self::Codex | Self::DeepseekHarness)
+        matches!(self, Self::Codex | Self::DeepseekHarness | Self::Qoder)
     }
 }
 
@@ -48,6 +50,7 @@ impl FromStr for ProviderKind {
         match value {
             "codex" => Ok(Self::Codex),
             "deepseek_harness" => Ok(Self::DeepseekHarness),
+            "qoder" => Ok(Self::Qoder),
             "claude" => Ok(Self::Claude),
             "openclaw" => Ok(Self::OpenClaw),
             "hermes" => Ok(Self::Hermes),
@@ -99,7 +102,15 @@ pub struct AgentInstanceInput {
     #[serde(default)]
     pub provider_route: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub agent_name: Option<String>,
+    #[serde(default = "empty_provider_config")]
+    pub provider_config: serde_json::Value,
     pub enabled: bool,
+}
+
+fn empty_provider_config() -> serde_json::Value {
+    serde_json::json!({})
 }
 
 impl AgentInstanceInput {
@@ -137,11 +148,24 @@ impl AgentInstanceInput {
                 "agent provider route cannot be blank".into(),
             ));
         }
+        if self
+            .agent_name
+            .as_ref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err(Error::Preflight("agent name cannot be blank".into()));
+        }
+        if !self.provider_config.is_object() {
+            return Err(Error::Preflight(
+                "agent provider config must be a JSON object".into(),
+            ));
+        }
         match self.provider_kind {
-            ProviderKind::Codex if self.provider_route.is_some() => {
-                return Err(Error::Preflight(
-                    "Codex does not use a provider route".into(),
-                ));
+            ProviderKind::Codex | ProviderKind::Qoder if self.provider_route.is_some() => {
+                return Err(Error::Preflight(format!(
+                    "{} does not use a provider route",
+                    self.provider_kind
+                )));
             }
             ProviderKind::DeepseekHarness
                 if self.provider_route.is_none() || self.model.is_none() =>
@@ -165,6 +189,8 @@ pub struct AgentInstance {
     pub executable_path: Option<PathBuf>,
     pub provider_route: Option<String>,
     pub model: Option<String>,
+    pub agent_name: Option<String>,
+    pub provider_config: serde_json::Value,
     pub enabled: bool,
     pub connection_state: ConnectionState,
     pub discovered_version: Option<String>,
@@ -200,6 +226,7 @@ pub fn adapter_descriptors() -> Vec<AdapterDescriptor> {
     [
         (ProviderKind::Codex, "Codex"),
         (ProviderKind::DeepseekHarness, "DeepSeek Harness"),
+        (ProviderKind::Qoder, "Qoder"),
         (ProviderKind::Claude, "Claude"),
         (ProviderKind::OpenClaw, "OpenClaw"),
         (ProviderKind::Hermes, "Hermes"),

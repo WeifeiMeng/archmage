@@ -379,6 +379,8 @@ fn changing_global_binding_does_not_change_existing_run() {
             executable_path: None,
             provider_route: None,
             model: None,
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -484,6 +486,8 @@ async fn start_run_freezes_a_deepseek_harness_executable() {
             executable_path: Some(binary.canonicalize().unwrap()),
             provider_route: Some("deepseek-official".into()),
             model: Some("deepseek-v4-flash".into()),
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();

@@ -85,6 +85,10 @@ pub struct FrozenAgentBinding {
     #[serde(default)]
     pub provider_route: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub agent_name: Option<String>,
+    #[serde(default)]
+    pub provider_config: serde_json::Value,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -426,6 +430,8 @@ impl Runtime {
                     executable_path: instance.executable_path,
                     provider_route: instance.provider_route,
                     model: instance.model,
+                    agent_name: instance.agent_name,
+                    provider_config: instance.provider_config,
                 },
             );
             frozen_configurations.insert(capability.to_owned(), configuration.clone());

@@ -6,9 +6,39 @@ use archmage_core::{
 };
 
 #[test]
+fn qoder_instances_are_supported_and_persist_explicit_configuration() {
+    let (_temp, mut store) = fixture_store();
+    assert_eq!(
+        "qoder".parse::<ProviderKind>().unwrap(),
+        ProviderKind::Qoder
+    );
+    assert!(ProviderKind::Qoder.supported());
+    store
+        .save_agent_instance(&AgentInstanceInput {
+            id: "qoder-local".into(),
+            provider_kind: ProviderKind::Qoder,
+            display_name: "Qoder Local".into(),
+            executable_path: Some("/opt/qoder/bin/qoder".into()),
+            provider_route: None,
+            model: Some("performance".into()),
+            agent_name: Some("archmage-coder".into()),
+            provider_config: serde_json::json!({"mcpServers": []}),
+            enabled: true,
+        })
+        .unwrap();
+    let instance = store.agent_instance("qoder-local").unwrap();
+    assert_eq!(instance.provider_kind, ProviderKind::Qoder);
+    assert_eq!(instance.agent_name.as_deref(), Some("archmage-coder"));
+    assert_eq!(
+        instance.provider_config,
+        serde_json::json!({"mcpServers": []})
+    );
+}
+
+#[test]
 fn capability_config_is_seeded_and_saved_with_revision_guard() {
     let (_temp, mut store) = fixture_store();
-    assert_eq!(store.schema_version().unwrap(), 16);
+    assert_eq!(store.schema_version().unwrap(), 17);
     let configs = store.capability_configurations().unwrap();
     assert_eq!(configs.len(), 4);
     assert_eq!(configs[0].key, "designer");
@@ -59,6 +89,8 @@ fn capability_configuration_can_bind_to_deepseek_harness() {
             executable_path: Some("/opt/dsh/bin/python".into()),
             provider_route: Some("deepseek-official".into()),
             model: Some("deepseek-v4-flash".into()),
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -162,11 +194,11 @@ fn schema_eight_upgrade_keeps_existing_agent_bindings() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15,16);",
+            "DROP TABLE flow_deliveries; DROP TABLE consultation_processes; DROP TABLE revision_feedback; DROP TABLE consultations; DROP TABLE teams; DROP TABLE capability_configurations; DELETE FROM schema_migrations WHERE version IN (9,10,11,12,13,14,15,16,17);",
         )
         .unwrap();
     let upgraded = Store::open(&path).unwrap();
-    assert_eq!(upgraded.schema_version().unwrap(), 16);
+    assert_eq!(upgraded.schema_version().unwrap(), 17);
     assert_eq!(upgraded.capability_configurations().unwrap().len(), 4);
     assert_eq!(
         upgraded.capability_bindings().unwrap()[0].agent_instance_id,
@@ -230,6 +262,8 @@ fn deepseek_harness_requires_provider_route_and_model() {
         executable_path: None,
         provider_route: None,
         model: None,
+        agent_name: None,
+        provider_config: serde_json::json!({}),
         enabled: true,
     };
     assert!(base.validate().is_err());
@@ -263,6 +297,8 @@ fn stores_multiple_codex_instances_with_stable_ids() {
             executable_path: Some("/opt/codex/bin/codex".into()),
             provider_route: None,
             model: Some("gpt-5.4".into()),
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -289,6 +325,8 @@ fn changing_execution_config_invalidates_verification() {
             executable_path: Some("/opt/codex/bin/codex".into()),
             provider_route: None,
             model: None,
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -309,6 +347,8 @@ fn bound_instance_cannot_be_disabled_or_deleted() {
         executable_path: None,
         provider_route: None,
         model: None,
+        agent_name: None,
+        provider_config: serde_json::json!({}),
         enabled: false,
     };
     assert!(store.save_agent_instance(&disabled).is_err());
@@ -375,6 +415,8 @@ fn renaming_a_failed_instance_preserves_its_failure_message() {
             executable_path: None,
             provider_route: None,
             model: None,
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -410,6 +452,8 @@ async fn stale_verification_cannot_mark_a_changed_model_ready() {
             executable_path: Some(binary.clone()),
             provider_route: None,
             model: None,
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -432,6 +476,8 @@ async fn stale_verification_cannot_mark_a_changed_model_ready() {
             executable_path: Some(binary),
             provider_route: None,
             model: Some("new-model".into()),
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -462,6 +508,8 @@ async fn verification_failure_is_persisted_as_safe_state() {
             executable_path: Some(temp.path().join("missing-codex")),
             provider_route: None,
             model: None,
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -498,6 +546,8 @@ async fn discovery_does_not_claim_online_verification() {
             executable_path: Some(binary),
             provider_route: None,
             model: None,
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -532,6 +582,8 @@ async fn configured_model_is_used_for_real_agent_verification() {
             executable_path: Some(binary),
             provider_route: None,
             model: Some("test-model".into()),
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();
@@ -579,6 +631,8 @@ async fn deepseek_harness_can_be_discovered_and_verified() {
             executable_path: Some(binary),
             provider_route: Some("deepseek-official".into()),
             model: Some("deepseek-v4-flash".into()),
+            agent_name: None,
+            provider_config: serde_json::json!({}),
             enabled: true,
         })
         .unwrap();

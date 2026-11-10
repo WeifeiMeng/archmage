@@ -14,10 +14,10 @@ fn setup() -> (tempfile::TempDir, Store, String, String) {
 #[test]
 fn migration_and_pragmas_survive_reopen() {
     let (dir, store, run, _) = setup();
-    assert_eq!(store.schema_version().unwrap(), 16);
+    assert_eq!(store.schema_version().unwrap(), 17);
     drop(store);
     let store = Store::open(&dir.path().join("state.db")).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 16);
+    assert_eq!(store.schema_version().unwrap(), 17);
     assert_eq!(store.run(&run).unwrap().state, "running");
     let db = rusqlite::Connection::open(dir.path().join("state.db")).unwrap();
     assert_eq!(
@@ -28,6 +28,49 @@ fn migration_and_pragmas_survive_reopen() {
 }
 
 #[test]
+fn schema_sixteen_upgrades_to_qoder_without_losing_bindings() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("schema-16.db");
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    for migration in [
+        include_str!("../migrations/0001_initial.sql"),
+        include_str!("../migrations/0002_workspaces.sql"),
+        include_str!("../migrations/0003_ownership.sql"),
+        include_str!("../migrations/0004_contexts.sql"),
+        include_str!("../migrations/0005_checks.sql"),
+        include_str!("../migrations/0006_runtime.sql"),
+        include_str!("../migrations/0007_control.sql"),
+        include_str!("../migrations/0008_agents.sql"),
+        include_str!("../migrations/0009_capabilities.sql"),
+        include_str!("../migrations/0010_teams.sql"),
+        include_str!("../migrations/0011_consultations.sql"),
+        include_str!("../migrations/0012_consultation_provenance.sql"),
+        include_str!("../migrations/0013_capability_guidance.sql"),
+        include_str!("../migrations/0014_flow_deliveries.sql"),
+        include_str!("../migrations/0015_flow_terminal_states.sql"),
+        include_str!("../migrations/0016_deepseek_harness.sql"),
+    ] {
+        conn.execute_batch(migration).unwrap();
+    }
+    assert_eq!(
+        conn.query_row("SELECT COUNT(*) FROM capability_bindings", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        4
+    );
+    drop(conn);
+
+    let store = Store::open(&path).unwrap();
+    assert_eq!(store.schema_version().unwrap(), 17);
+    assert_eq!(store.capability_bindings().unwrap().len(), 4);
+    assert!(store
+        .agent_management_snapshot()
+        .unwrap()
+        .adapters
+        .iter()
+        .any(|adapter| adapter.kind.to_string() == "qoder" && adapter.supported));
+}
+
+#[test]
 fn schema_thirteen_upgrades_without_losing_runs() {
     let (dir, store, run, _) = setup();
     drop(store);
@@ -35,11 +78,11 @@ fn schema_thirteen_upgrades_without_losing_runs() {
     rusqlite::Connection::open(&path)
         .unwrap()
         .execute_batch(
-            "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version IN (14,15,16);",
+            "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version IN (14,15,16,17);",
         )
         .unwrap();
     let reopened = Store::open(&path).unwrap();
-    assert_eq!(reopened.schema_version().unwrap(), 16);
+    assert_eq!(reopened.schema_version().unwrap(), 17);
     assert_eq!(reopened.run(&run).unwrap().state, "running");
     assert!(reopened.flow_deliveries(&run).unwrap().is_empty());
 }
@@ -51,7 +94,7 @@ fn schema_fourteen_upgrades_flow_delivery_states() {
     let path = dir.path().join("state.db");
     let db = rusqlite::Connection::open(&path).unwrap();
     db.execute_batch(
-        "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version IN (14,15,16);",
+        "DROP TABLE flow_deliveries; DELETE FROM schema_migrations WHERE version IN (14,15,16,17);",
     )
     .unwrap();
     db.execute_batch(include_str!("../migrations/0014_flow_deliveries.sql"))
@@ -59,7 +102,7 @@ fn schema_fourteen_upgrades_flow_delivery_states() {
     db.execute("INSERT INTO flow_deliveries(id,run_id,sequence,target_key,state) VALUES('legacy-delivery',?1,1,'design','queued')", [&run]).unwrap();
     drop(db);
     let reopened = Store::open(&path).unwrap();
-    assert_eq!(reopened.schema_version().unwrap(), 16);
+    assert_eq!(reopened.schema_version().unwrap(), 17);
     assert_eq!(reopened.run(&run).unwrap().state, "running");
     assert_eq!(
         reopened.flow_deliveries(&run).unwrap()[0].id,
@@ -125,7 +168,7 @@ fn schema_eleven_upgrades_to_consultation_provenance() {
     }
     drop(conn);
     let store = Store::open(&path).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 16);
+    assert_eq!(store.schema_version().unwrap(), 17);
     assert!(
         store
             .active_consultation_processes("missing")
