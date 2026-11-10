@@ -1,8 +1,7 @@
 use super::{
     Runtime,
     dispatch::{
-        capability, dsh_sidecar_config, error_code, permission_mode, private_dir,
-        provider_execution,
+        capability, error_code, persistent_provider_config, private_dir, provider_execution,
     },
 };
 use crate::{
@@ -220,14 +219,17 @@ impl Runtime {
             CapabilityKind::Coder | CapabilityKind::Tester => Sandbox::WorkspaceWrite,
         };
         let diagnostics_dir = attempt_dir.join("diagnostics");
-        let outcome = if binding.provider_kind == crate::agent::ProviderKind::DeepseekHarness {
+        let outcome = if matches!(
+            binding.provider_kind,
+            crate::agent::ProviderKind::DeepseekHarness | crate::agent::ProviderKind::Qoder
+        ) {
             let schema: serde_json::Value = serde_json::from_str(&flow_output_schema(kind)?)
                 .map_err(|error| Error::Preflight(error.to_string()))?;
-            let sidecar = dsh_sidecar_config(
+            let session = persistent_provider_config(
                 binding,
                 repository.root.clone(),
                 diagnostics_dir,
-                permission_mode(sandbox),
+                sandbox,
                 self.config
                     .data_root
                     .join("provider-sessions")
@@ -238,7 +240,7 @@ impl Runtime {
             self.provider_pool
                 .invoke_main(
                     SidecarKey::new(&run.id, kind.key()),
-                    sidecar,
+                    session,
                     attempt_id,
                     &context.rendered,
                     &schema,

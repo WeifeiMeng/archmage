@@ -65,9 +65,10 @@ pub async fn invoke(
                 result: outcome.result,
             })
         }
-        ProviderKind::DeepseekHarness => Err(Error::Preflight(
-            "DeepSeek Harness execution requires the Runtime sidecar pool".into(),
-        )),
+        ProviderKind::DeepseekHarness | ProviderKind::Qoder => Err(Error::Preflight(format!(
+            "{} execution requires the Runtime provider session pool",
+            execution.provider_kind
+        ))),
         kind => Err(Error::Preflight(format!(
             "{kind} provider is not supported yet"
         ))),

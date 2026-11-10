@@ -272,6 +272,18 @@ impl Runtime {
                     })?;
                     binding.executable_path = Some(tools.python_binary);
                 }
+                ProviderKind::Qoder => {
+                    let tools =
+                        crate::provider::qoder::inspect_at(binding.executable_path.as_deref())
+                            .await
+                            .map_err(|error| {
+                                Error::Preflight(format!(
+                                    "capability {capability} uses Agent {}: {error}",
+                                    binding.agent_instance_id
+                                ))
+                            })?;
+                    binding.executable_path = Some(tools.binary);
+                }
                 kind => {
                     return Err(Error::Preflight(format!(
                         "capability {capability} uses unsupported {kind} provider"

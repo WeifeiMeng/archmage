@@ -64,7 +64,10 @@ for line in sys.stdin:
                 ]
             })
             assert permission["result"]["outcome"] == {"outcome":"selected", "optionId":"allow"}
-        text = '{"status":"implemented"}'
+        prompt_text = "".join(
+            item.get("text", "") for item in request.get("params", {}).get("prompt", [])
+        )
+        text = '{"ok":true}' if '"ok":true' in prompt_text else '{"status":"implemented"}'
         if scenario == "invalid-result":
             text = '```json\n{"status":"implemented"}\n```'
         if scenario == "oversized":

@@ -10,7 +10,8 @@ use crate::{
         codex::Sandbox,
         deepseek_harness::{PermissionMode, SidecarConfig},
         executor::{self, ProviderExecution, ProviderLifecycle},
-        pool::SidecarKey,
+        pool::{ProviderSessionConfig, SidecarKey},
+        qoder::QoderSessionConfig,
     },
     store::{AttemptOutcome, Store},
     team::TeamMode,
@@ -349,14 +350,17 @@ impl Runtime {
             CapabilityKind::Designer | CapabilityKind::Reviewer => Sandbox::ReadOnly,
             CapabilityKind::Coder | CapabilityKind::Tester => Sandbox::WorkspaceWrite,
         };
-        let outcome = if binding.provider_kind == ProviderKind::DeepseekHarness {
+        let outcome = if matches!(
+            binding.provider_kind,
+            ProviderKind::DeepseekHarness | ProviderKind::Qoder
+        ) {
             let schema: serde_json::Value = serde_json::from_str(kind.schema())
                 .map_err(|error| Error::Preflight(error.to_string()))?;
-            let sidecar = dsh_sidecar_config(
+            let session = persistent_provider_config(
                 binding,
                 repository.root.clone(),
                 diagnostics_dir,
-                permission_mode(sandbox),
+                sandbox,
                 self.config
                     .data_root
                     .join("provider-sessions")
@@ -367,7 +371,7 @@ impl Runtime {
             self.provider_pool
                 .invoke_main(
                     SidecarKey::new(run_id, kind.key()),
-                    sidecar,
+                    session,
                     attempt_id,
                     &context.rendered,
                     &schema,
@@ -487,6 +491,62 @@ pub(super) fn dsh_sidecar_config(
         max_result_bytes: config.max_result_bytes,
         environment: std::collections::BTreeMap::new(),
     })
+}
+
+pub(super) fn qoder_session_config(
+    binding: &FrozenAgentBinding,
+    repository: std::path::PathBuf,
+    diagnostics_dir: std::path::PathBuf,
+    sandbox: Sandbox,
+    config: &crate::config::Config,
+) -> Result<QoderSessionConfig> {
+    Ok(QoderSessionConfig {
+        binary: binding
+            .executable_path
+            .clone()
+            .ok_or_else(|| Error::Preflight("Qoder executable path is missing".into()))?,
+        repository,
+        model: binding.model.clone(),
+        agent_name: binding.agent_name.clone(),
+        provider_config: binding.provider_config.clone(),
+        access: match sandbox {
+            Sandbox::ReadOnly => crate::provider::acp::AcpAccess::ReadOnly,
+            Sandbox::WorkspaceWrite => crate::provider::acp::AcpAccess::WorkspaceWrite,
+        },
+        diagnostics_dir,
+        deadline: Duration::from_secs(config.node_timeout_seconds),
+        max_line_bytes: config.max_line_bytes,
+        max_stream_bytes: config.max_stream_bytes,
+        max_result_bytes: config.max_result_bytes,
+        environment: std::collections::BTreeMap::new(),
+    })
+}
+
+pub(super) fn persistent_provider_config(
+    binding: &FrozenAgentBinding,
+    repository: std::path::PathBuf,
+    diagnostics_dir: std::path::PathBuf,
+    sandbox: Sandbox,
+    session_root: std::path::PathBuf,
+    config: &crate::config::Config,
+) -> Result<ProviderSessionConfig> {
+    match binding.provider_kind {
+        ProviderKind::DeepseekHarness => Ok(dsh_sidecar_config(
+            binding,
+            repository,
+            diagnostics_dir,
+            permission_mode(sandbox),
+            session_root,
+            config,
+        )?
+        .into()),
+        ProviderKind::Qoder => {
+            Ok(qoder_session_config(binding, repository, diagnostics_dir, sandbox, config)?.into())
+        }
+        kind => Err(Error::Preflight(format!(
+            "{kind} does not use a persistent provider session"
+        ))),
+    }
 }
 
 pub(super) fn permission_mode(sandbox: Sandbox) -> PermissionMode {

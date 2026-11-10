@@ -4,6 +4,7 @@ use crate::{
     provider::{
         deepseek_harness::{DeepseekHarnessSidecar, SidecarConfig},
         executor::ProviderOutcome,
+        qoder::{QoderSession, QoderSessionConfig},
     },
 };
 use std::{collections::HashMap, sync::Arc};
@@ -24,8 +25,65 @@ impl SidecarKey {
     }
 }
 
+pub enum ProviderSessionConfig {
+    DeepseekHarness(SidecarConfig),
+    Qoder(QoderSessionConfig),
+}
+
+impl From<SidecarConfig> for ProviderSessionConfig {
+    fn from(value: SidecarConfig) -> Self {
+        Self::DeepseekHarness(value)
+    }
+}
+
+impl From<QoderSessionConfig> for ProviderSessionConfig {
+    fn from(value: QoderSessionConfig) -> Self {
+        Self::Qoder(value)
+    }
+}
+
+enum PersistentProviderSession {
+    DeepseekHarness(DeepseekHarnessSidecar),
+    Qoder(QoderSession),
+}
+
+impl PersistentProviderSession {
+    fn identity(&self) -> &ProcessIdentity {
+        match self {
+            Self::DeepseekHarness(session) => session.identity(),
+            Self::Qoder(session) => session.identity(),
+        }
+    }
+
+    async fn invoke(
+        &mut self,
+        invocation_id: &str,
+        task: &[u8],
+        schema: &serde_json::Value,
+    ) -> Result<ProviderOutcome> {
+        match self {
+            Self::DeepseekHarness(session) => session.invoke(invocation_id, task, schema).await,
+            Self::Qoder(session) => session.prompt(invocation_id, task).await,
+        }
+    }
+
+    async fn close(self) -> Result<()> {
+        match self {
+            Self::DeepseekHarness(session) => session.close().await,
+            Self::Qoder(session) => session.close().await,
+        }
+    }
+
+    async fn cancel(self) -> Result<()> {
+        match self {
+            Self::DeepseekHarness(session) => session.cancel().await,
+            Self::Qoder(session) => session.cancel().await,
+        }
+    }
+}
+
 enum PoolEntry {
-    Live(DeepseekHarnessSidecar),
+    Live(PersistentProviderSession),
     Poisoned(String),
     Closing,
 }
@@ -50,12 +108,13 @@ impl ProviderPool {
     pub async fn invoke_main(
         &self,
         key: SidecarKey,
-        mut config: SidecarConfig,
+        config: impl Into<ProviderSessionConfig>,
         invocation_id: &str,
         task: &[u8],
         schema: &serde_json::Value,
         on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
     ) -> Result<ProviderOutcome> {
+        let mut config = config.into();
         let entry = {
             let mut entries = self.entries.lock().await;
             entries
@@ -65,8 +124,10 @@ impl ProviderPool {
         };
         let mut guard = entry.lock().await;
         if matches!(*guard, PoolEntry::Closing) {
-            config.session_id = format!("archmage-{}", uuid::Uuid::new_v4());
-            match DeepseekHarnessSidecar::start(config).await {
+            if let ProviderSessionConfig::DeepseekHarness(config) = &mut config {
+                config.session_id = format!("archmage-{}", uuid::Uuid::new_v4());
+            }
+            match start_session(config).await {
                 Ok(sidecar) => *guard = PoolEntry::Live(sidecar),
                 Err(error) => {
                     let message = stable_message(&error);
@@ -76,9 +137,9 @@ impl ProviderPool {
             }
         }
         match &mut *guard {
-            PoolEntry::Live(sidecar) => {
-                on_spawn(sidecar.identity())?;
-                sidecar.invoke(invocation_id, task, schema).await
+            PoolEntry::Live(session) => {
+                on_spawn(session.identity())?;
+                session.invoke(invocation_id, task, schema).await
             }
             PoolEntry::Poisoned(message) => Err(Error::Preflight(message.clone())),
             PoolEntry::Closing => Err(Error::Conflict),
@@ -87,22 +148,25 @@ impl ProviderPool {
 
     pub async fn invoke_temporary(
         &self,
-        mut config: SidecarConfig,
+        config: impl Into<ProviderSessionConfig>,
         invocation_id: &str,
         task: &[u8],
         schema: &serde_json::Value,
         on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
     ) -> Result<ProviderOutcome> {
-        config.session_id = format!("archmage-consult-{}", uuid::Uuid::new_v4());
-        let mut sidecar = DeepseekHarnessSidecar::start(config).await?;
-        on_spawn(sidecar.identity())?;
-        match sidecar.invoke(invocation_id, task, schema).await {
+        let mut config = config.into();
+        if let ProviderSessionConfig::DeepseekHarness(config) = &mut config {
+            config.session_id = format!("archmage-consult-{}", uuid::Uuid::new_v4());
+        }
+        let mut session = start_session(config).await?;
+        on_spawn(session.identity())?;
+        match session.invoke(invocation_id, task, schema).await {
             Ok(outcome) => {
-                sidecar.close().await?;
+                session.close().await?;
                 Ok(outcome)
             }
             Err(error) => {
-                let _ = sidecar.cancel().await;
+                let _ = session.cancel().await;
                 Err(error)
             }
         }
@@ -123,8 +187,8 @@ impl ProviderPool {
         let mut first_error = None;
         for entry in removed {
             let mut guard = entry.lock().await;
-            if let PoolEntry::Live(sidecar) = std::mem::replace(&mut *guard, PoolEntry::Closing)
-                && let Err(error) = sidecar.close().await
+            if let PoolEntry::Live(session) = std::mem::replace(&mut *guard, PoolEntry::Closing)
+                && let Err(error) = session.close().await
                 && first_error.is_none()
             {
                 first_error = Some(error);
@@ -155,13 +219,26 @@ impl ProviderPool {
             return Ok(());
         };
         let mut guard = entry.lock().await;
-        if let PoolEntry::Live(sidecar) = std::mem::replace(
+        if let PoolEntry::Live(session) = std::mem::replace(
             &mut *guard,
-            PoolEntry::Poisoned("DeepSeek Harness sidecar was cancelled".into()),
+            PoolEntry::Poisoned("provider session was cancelled".into()),
         ) {
-            sidecar.cancel().await?;
+            session.cancel().await?;
         }
         Ok(())
+    }
+}
+
+async fn start_session(config: ProviderSessionConfig) -> Result<PersistentProviderSession> {
+    match config {
+        ProviderSessionConfig::DeepseekHarness(config) => {
+            Ok(PersistentProviderSession::DeepseekHarness(
+                DeepseekHarnessSidecar::start(config).await?,
+            ))
+        }
+        ProviderSessionConfig::Qoder(config) => Ok(PersistentProviderSession::Qoder(
+            QoderSession::start(config).await?,
+        )),
     }
 }
 

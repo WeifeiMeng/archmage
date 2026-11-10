@@ -508,3 +508,53 @@ async fn start_run_freezes_a_deepseek_harness_executable() {
             && binding.model.as_deref() == Some("deepseek-v4-flash")
     }));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn start_run_freezes_qoder_agent_and_provider_configuration() {
+    use archmage_core::agent::{AgentInstanceInput, ProviderKind};
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    std::fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "--quiet"]);
+    git(&repo, &["config", "user.email", "archmage@example.invalid"]);
+    git(&repo, &["config", "user.name", "Archmage Test"]);
+    std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
+    git(&repo, &["add", "README.md"]);
+    git(&repo, &["commit", "--quiet", "-m", "fixture"]);
+    let binary = temp.path().join("qoder");
+    std::fs::copy("tests/fixtures/fake_qoder_acp.py", &binary).unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let runtime =
+        Runtime::open(Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap())
+            .unwrap();
+    let agents = runtime.agent_service();
+    agents
+        .save(&AgentInstanceInput {
+            id: "qoder-local".into(),
+            provider_kind: ProviderKind::Qoder,
+            display_name: "Qoder Local".into(),
+            executable_path: Some(binary.canonicalize().unwrap()),
+            provider_route: None,
+            model: Some("performance".into()),
+            agent_name: Some("archmage-coder".into()),
+            provider_config: serde_json::json!({"mcpServers": []}),
+            enabled: true,
+        })
+        .unwrap();
+    for capability in ["designer", "coder", "tester", "reviewer"] {
+        agents.bind(capability, "qoder-local").unwrap();
+    }
+
+    let run_id = runtime
+        .start_run(&RunRequest::new(&repo, "goal").unwrap())
+        .await
+        .unwrap();
+    let run = runtime.snapshot(&run_id).unwrap();
+    assert!(run.agent_bindings.values().all(|binding| {
+        binding.provider_kind == ProviderKind::Qoder
+            && binding.agent_name.as_deref() == Some("archmage-coder")
+            && binding.provider_config == serde_json::json!({"mcpServers": []})
+    }));
+}

@@ -1,6 +1,6 @@
 use super::{
     Runtime,
-    dispatch::{dsh_sidecar_config, provider_execution},
+    dispatch::{persistent_provider_config, provider_execution},
 };
 use crate::{
     capability::{CapabilityConfiguration, CapabilityKind, GUIDANCE_NOTE},
@@ -160,20 +160,23 @@ impl Runtime {
         let registered_run = run_id.to_owned();
         let registered_attempt = source_attempt_id.to_owned();
         let registered_target = target.to_owned();
-        let result = if binding.provider_kind == crate::agent::ProviderKind::DeepseekHarness {
+        let result = if matches!(
+            binding.provider_kind,
+            crate::agent::ProviderKind::DeepseekHarness | crate::agent::ProviderKind::Qoder
+        ) {
             let schema: serde_json::Value = serde_json::from_str(CONSULTATION_SCHEMA)
                 .map_err(|error| Error::Preflight(error.to_string()))?;
-            let sidecar = dsh_sidecar_config(
+            let session = persistent_provider_config(
                 binding,
                 workspace,
                 attempt_dir.join("diagnostics"),
-                crate::provider::deepseek_harness::PermissionMode::ReadOnly,
+                Sandbox::ReadOnly,
                 attempt_dir.join("sessions"),
                 &self.config,
             )?;
             self.provider_pool
                 .invoke_temporary(
-                    sidecar,
+                    session,
                     source_attempt_id,
                     &prompt,
                     &schema,

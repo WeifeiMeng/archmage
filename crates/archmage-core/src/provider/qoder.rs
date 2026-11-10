@@ -113,13 +113,19 @@ impl QoderSession {
         }
         private_directory(&config.diagnostics_dir)?;
         let policy = AcpWorkspacePolicy::new(&config.repository, config.access)?;
-        let mut args = vec![OsString::from("--acp")];
+        let mut args = vec![
+            OsString::from("--acp"),
+            OsString::from("--strict-mcp-config"),
+            OsString::from("--setting-sources"),
+            OsString::new(),
+        ];
         if let Some(model) = &config.model {
             args.extend([OsString::from("--model"), OsString::from(model)]);
         }
         if let Some(agent_name) = &config.agent_name {
             args.extend([OsString::from("--agent"), OsString::from(agent_name)]);
         }
+        append_explicit_extensions(&mut args, &config.provider_config)?;
         let environment = config.environment.clone().into_iter().collect::<Vec<_>>();
         let process = spawn_owned_piped(
             &config.binary,
@@ -150,6 +156,10 @@ impl QoderSession {
 
     pub fn session_id(&self) -> &str {
         &self.session_id
+    }
+
+    pub fn identity(&self) -> &crate::process::ProcessIdentity {
+        self.process.identity()
     }
 
     async fn initialize(&mut self) -> Result<()> {
@@ -485,6 +495,49 @@ impl QoderSession {
             .get(terminal_id)
             .ok_or_else(|| Error::Preflight("unknown ACP terminal".into()))
     }
+}
+
+fn append_explicit_extensions(args: &mut Vec<OsString>, config: &Value) -> Result<()> {
+    let object = config
+        .as_object()
+        .ok_or_else(|| Error::Preflight("Qoder provider configuration must be an object".into()))?;
+    for (key, flag) in [
+        ("pluginDirs", "--plugin-dir"),
+        ("allowedTools", "--allowed-tools"),
+        ("disallowedTools", "--disallowed-tools"),
+    ] {
+        if let Some(values) = object.get(key) {
+            let values = values.as_array().ok_or_else(|| {
+                Error::Preflight(format!("Qoder {key} configuration must be an array"))
+            })?;
+            for value in values {
+                let value = value
+                    .as_str()
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        Error::Preflight(format!("Qoder {key} entries must be nonblank strings"))
+                    })?;
+                args.extend([OsString::from(flag), OsString::from(value)]);
+            }
+        }
+    }
+    for (key, flag) in [("agents", "--agents"), ("settings", "--settings")] {
+        if let Some(value) = object.get(key) {
+            if !value.is_object() {
+                return Err(Error::Preflight(format!(
+                    "Qoder {key} configuration must be an object"
+                )));
+            }
+            args.extend([
+                OsString::from(flag),
+                OsString::from(
+                    serde_json::to_string(value)
+                        .map_err(|error| Error::Preflight(error.to_string()))?,
+                ),
+            ]);
+        }
+    }
+    Ok(())
 }
 
 fn parse_params<T: serde::de::DeserializeOwned>(params: Value) -> Result<T> {
