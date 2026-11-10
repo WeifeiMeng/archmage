@@ -188,11 +188,7 @@ impl Store {
             "UPDATE flow_deliveries SET state='running' WHERE id=?1 AND state='queued'",
             [&id],
         )?;
-        let item = tx.query_row(
-            &format!("{DELIVERY_SELECT} WHERE d.id=?1"),
-            [&id],
-            delivery,
-        )?;
+        let item = tx.query_row(&format!("{DELIVERY_SELECT} WHERE d.id=?1"), [&id], delivery)?;
         event(
             &tx,
             run,

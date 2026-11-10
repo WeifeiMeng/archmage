@@ -26,7 +26,7 @@ pub struct OwnedProcess {
 pub struct OwnedPipedProcess {
     child: tokio::process::Child,
     identity: ProcessIdentity,
-    stdin: tokio::process::ChildStdin,
+    stdin: Option<tokio::process::ChildStdin>,
     stdout: BufReader<tokio::process::ChildStdout>,
     stderr_task: Option<tokio::task::JoinHandle<Result<Vec<u8>>>>,
 }
@@ -255,7 +255,7 @@ pub async fn spawn_owned_piped(
     Ok(OwnedPipedProcess {
         child,
         identity,
-        stdin,
+        stdin: Some(stdin),
         stdout,
         stderr_task: Some(stderr_task),
     })
@@ -267,11 +267,18 @@ impl OwnedPipedProcess {
     }
 
     pub fn stdin(&mut self) -> &mut tokio::process::ChildStdin {
-        &mut self.stdin
+        self.stdin.as_mut().expect("process stdin is open")
     }
 
     pub fn stdout(&mut self) -> &mut BufReader<tokio::process::ChildStdout> {
         &mut self.stdout
+    }
+
+    pub async fn shutdown_stdin(&mut self) -> Result<()> {
+        if let Some(mut stdin) = self.stdin.take() {
+            stdin.shutdown().await?;
+        }
+        Ok(())
     }
 
     pub fn try_wait(&mut self) -> Result<Option<ExitStatus>> {

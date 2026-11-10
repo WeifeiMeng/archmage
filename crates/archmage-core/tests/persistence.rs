@@ -53,7 +53,8 @@ fn schema_sixteen_upgrades_to_qoder_without_losing_bindings() {
         conn.execute_batch(migration).unwrap();
     }
     assert_eq!(
-        conn.query_row("SELECT COUNT(*) FROM capability_bindings", [], |row| row.get::<_, i64>(0))
+        conn.query_row("SELECT COUNT(*) FROM capability_bindings", [], |row| row
+            .get::<_, i64>(0))
             .unwrap(),
         4
     );
@@ -62,12 +63,14 @@ fn schema_sixteen_upgrades_to_qoder_without_losing_bindings() {
     let store = Store::open(&path).unwrap();
     assert_eq!(store.schema_version().unwrap(), 17);
     assert_eq!(store.capability_bindings().unwrap().len(), 4);
-    assert!(store
-        .agent_management_snapshot()
-        .unwrap()
-        .adapters
-        .iter()
-        .any(|adapter| adapter.kind.to_string() == "qoder" && adapter.supported));
+    assert!(
+        store
+            .agent_management_snapshot()
+            .unwrap()
+            .adapters
+            .iter()
+            .any(|adapter| adapter.kind.to_string() == "qoder" && adapter.supported)
+    );
 }
 
 #[test]
