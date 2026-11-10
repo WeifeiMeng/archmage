@@ -17,6 +17,7 @@ uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 libc = "0.2"
 fs2 = "0.4"
+agent-client-protocol.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
