@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import time
 
 scenario = os.environ.get("FAKE_QODER_SCENARIO", "success")
 
@@ -31,7 +32,7 @@ for line in sys.stdin:
         send({"jsonrpc":"2.0","id":request_id,"result":{
             "protocolVersion":version,
             "agentInfo":{"name":"fake-qoder","version":"1.2.3-test"},
-            "agentCapabilities":{"loadSession":True,"promptCapabilities":{}},
+            "agentCapabilities":{"loadSession":True,"promptCapabilities":{},"sessionCapabilities":{"close":{}}},
             "authMethods":[]
         }})
     elif method == "session/new":
@@ -79,4 +80,9 @@ for line in sys.stdin:
         send({"jsonrpc":"2.0","id":request_id,"result":{"stopReason":"end_turn"}})
     elif method == "session/cancel":
         continue
+    elif method == "session/close":
+        send({"jsonrpc":"2.0","id":request_id,"result":{}})
+
+if scenario == "linger-close":
+    time.sleep(60)
 

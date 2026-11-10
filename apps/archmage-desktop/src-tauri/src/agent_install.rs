@@ -268,8 +268,6 @@ mod tests {
                 .as_deref(),
             Some("irm https://qoder.com/install.ps1 | iex")
         );
-        assert!(
-            !resolve(ProviderKind::Qoder, "windows", "aarch64", None, false).supported
-        );
+        assert!(!resolve(ProviderKind::Qoder, "windows", "aarch64", None, false).supported);
     }
 }

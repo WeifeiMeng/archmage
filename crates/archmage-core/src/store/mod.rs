@@ -641,7 +641,7 @@ impl Store {
         let tx = self
             .db
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let current: Option<(
+        type AgentExecutionIdentity = (
             String,
             Option<String>,
             Option<String>,
@@ -649,7 +649,8 @@ impl Store {
             Option<String>,
             String,
             bool,
-        )> = tx
+        );
+        let current: Option<AgentExecutionIdentity> = tx
             .query_row(
                 "SELECT provider_kind,executable_path,provider_route,model,agent_name,
                         provider_config_json,enabled FROM agent_instances WHERE id=?1",

@@ -83,7 +83,7 @@ impl PersistentProviderSession {
 }
 
 enum PoolEntry {
-    Live(PersistentProviderSession),
+    Live(Box<PersistentProviderSession>),
     Poisoned(String),
     Closing,
 }
@@ -128,7 +128,7 @@ impl ProviderPool {
                 config.session_id = format!("archmage-{}", uuid::Uuid::new_v4());
             }
             match start_session(config).await {
-                Ok(sidecar) => *guard = PoolEntry::Live(sidecar),
+                Ok(sidecar) => *guard = PoolEntry::Live(Box::new(sidecar)),
                 Err(error) => {
                     let message = stable_message(&error);
                     *guard = PoolEntry::Poisoned(message.clone());

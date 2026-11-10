@@ -60,6 +60,7 @@ pub struct QoderSession {
     stderr_path: PathBuf,
     terminals: BTreeMap<String, TerminalRecord>,
     next_terminal: u64,
+    supports_session_close: bool,
 }
 
 struct TerminalRecord {
@@ -146,6 +147,7 @@ impl QoderSession {
             stderr_path,
             terminals: BTreeMap::new(),
             next_terminal: 0,
+            supports_session_close: false,
         };
         if let Err(error) = session.initialize().await {
             let _ = session.process.cancel(Duration::from_secs(1)).await;
@@ -182,6 +184,9 @@ impl QoderSession {
                 "Qoder returned an unsupported ACP protocol version".into(),
             ));
         }
+        self.supports_session_close = result
+            .pointer("/agentCapabilities/sessionCapabilities/close")
+            .is_some();
         let mcp_servers = self
             .config
             .provider_config
@@ -250,10 +255,26 @@ impl QoderSession {
     }
 
     pub async fn close(mut self) -> Result<()> {
+        if self.supports_session_close {
+            let session_id = self.session_id.clone();
+            if let Err(error) = self
+                .request("session/close", json!({"sessionId": session_id}), None)
+                .await
+            {
+                let _ = self.process.cancel(Duration::from_secs(1)).await;
+                return Err(error);
+            }
+        }
         self.process.shutdown_stdin().await?;
-        let (status, stderr) = tokio::time::timeout(Duration::from_secs(5), self.process.wait())
-            .await
-            .map_err(|_| Error::TimedOut)??;
+        let (status, stderr) =
+            match tokio::time::timeout(Duration::from_secs(2), self.process.wait()).await {
+                Ok(result) => result?,
+                Err(_) if self.supports_session_close => {
+                    self.process.cancel(Duration::from_secs(1)).await?;
+                    return Ok(());
+                }
+                Err(_) => return Err(Error::TimedOut),
+            };
         write_private(&self.stderr_path, &stderr)?;
         if status.success() {
             Ok(())

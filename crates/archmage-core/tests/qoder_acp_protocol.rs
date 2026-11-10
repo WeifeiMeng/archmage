@@ -1,5 +1,6 @@
 #![cfg(unix)]
 
+use archmage_core::process::identity_is_alive;
 use archmage_core::provider::{
     acp::AcpAccess,
     qoder::{QoderSession, QoderSessionConfig, inspect_at},
@@ -87,4 +88,15 @@ async fn qoder_session_serves_bounded_client_operations() {
         "written through ACP\n"
     );
     session.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn qoder_close_reaps_a_cli_that_stays_resident_after_session_close() {
+    let temp = tempfile::tempdir().unwrap();
+    let session = QoderSession::start(config(&temp, "linger-close"))
+        .await
+        .unwrap();
+    let identity = session.identity().clone();
+    session.close().await.unwrap();
+    assert!(!identity_is_alive(&identity));
 }
