@@ -1,5 +1,5 @@
 export type RunRequest = { repository: string; goal: string; teamId?: string };
-export type ProviderKind = "codex" | "deepseek_harness" | "claude" | "openclaw" | "hermes";
+export type ProviderKind = "codex" | "deepseek_harness" | "qoder" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
 export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
 
@@ -47,6 +47,8 @@ export type AgentInstance = {
   executablePath: string | null;
   providerRoute: string | null;
   model: string | null;
+  agentName: string | null;
+  providerConfig: Record<string, unknown>;
   enabled: boolean;
   connectionState: ConnectionState;
   discoveredVersion: string | null;
@@ -57,7 +59,7 @@ export type AgentInstance = {
 
 export type AgentInstanceInput = Pick<
   AgentInstance,
-  "id" | "providerKind" | "displayName" | "executablePath" | "model" | "enabled"
+  "id" | "providerKind" | "displayName" | "executablePath" | "model" | "agentName" | "providerConfig" | "enabled"
 > & { providerRoute: string | null };
 
 export type CapabilityBinding = {
@@ -138,6 +140,8 @@ export type FrozenAgentBinding = {
   executablePath: string | null;
   providerRoute: string | null;
   model: string | null;
+  agentName: string | null;
+  providerConfig: Record<string, unknown>;
 };
 
 export type NodeSnapshot = {
@@ -234,10 +238,10 @@ export const connectionLabel = (state: ConnectionState) =>
   ({ unverified: "连接未验证", ready: "可用", failed: "连接失败" })[state];
 
 export const isSupportedProvider = (provider: ProviderKind) =>
-  provider === "codex" || provider === "deepseek_harness";
+  provider === "codex" || provider === "deepseek_harness" || provider === "qoder";
 
 export const providerLabel = (provider: ProviderKind) =>
-  ({ codex: "Codex", deepseek_harness: "DeepSeek Harness", claude: "Claude", openclaw: "OpenClaw", hermes: "Hermes" })[provider];
+  ({ codex: "Codex", deepseek_harness: "DeepSeek Harness", qoder: "Qoder", claude: "Claude", openclaw: "OpenClaw", hermes: "Hermes" })[provider];
 
 export function agentInputIsComplete(input: Pick<AgentInstanceInput, "providerKind" | "providerRoute" | "model">): boolean {
   return input.providerKind !== "deepseek_harness"

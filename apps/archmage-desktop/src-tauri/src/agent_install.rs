@@ -1,12 +1,13 @@
 use archmage_core::{
     agent::ProviderKind,
-    provider::{codex, deepseek_harness},
+    provider::{codex, deepseek_harness, qoder},
 };
 use serde::Serialize;
 
 const CODEX_DOCS: &str = "https://github.com/openai/codex#quickstart";
 const DSH_DOCS: &str =
     "https://github.com/deepseek-ai/deepseek-harness/blob/master/python/sdk/README.md";
+const QODER_DOCS: &str = "https://docs.qoder.com/cli/installation";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +78,30 @@ pub fn resolve(
                     reason,
                 )
             }
+            ProviderKind::Qoder => {
+                let supported = matches!(platform, "macos" | "linux")
+                    || (platform == "windows" && architecture != "aarch64");
+                let command = match platform {
+                    "macos" | "linux" => Some("curl -fsSL https://qoder.com/install | bash".into()),
+                    "windows" if architecture != "aarch64" => {
+                        Some("irm https://qoder.com/install.ps1 | iex".into())
+                    }
+                    _ => None,
+                };
+                (
+                    supported,
+                    None,
+                    command,
+                    QODER_DOCS,
+                    (!supported).then(|| {
+                        if platform == "windows" && architecture == "aarch64" {
+                            "Qoder CLI 当前不支持 Windows ARM64。".into()
+                        } else {
+                            "当前 Qoder CLI 安装指引仅覆盖 macOS、Linux 和 Windows。".into()
+                        }
+                    }),
+                )
+            }
             _ => (
                 false,
                 None,
@@ -112,6 +137,7 @@ pub async fn list() -> Vec<AgentInstallGuidance> {
     } else {
         false
     };
+    let qoder_detected = qoder::inspect_at(None).await.is_ok();
 
     vec![
         resolve(
@@ -127,6 +153,13 @@ pub async fn list() -> Vec<AgentInstallGuidance> {
             architecture,
             macos_major,
             dsh_detected,
+        ),
+        resolve(
+            ProviderKind::Qoder,
+            platform,
+            architecture,
+            macos_major,
+            qoder_detected,
         ),
     ]
 }
@@ -218,6 +251,25 @@ mod tests {
                 false
             )
             .supported
+        );
+    }
+
+    #[test]
+    fn resolves_qoder_installers_for_supported_platforms() {
+        assert_eq!(
+            resolve(ProviderKind::Qoder, "macos", "aarch64", Some(14), false)
+                .command
+                .as_deref(),
+            Some("curl -fsSL https://qoder.com/install | bash")
+        );
+        assert_eq!(
+            resolve(ProviderKind::Qoder, "windows", "x86_64", None, false)
+                .command
+                .as_deref(),
+            Some("irm https://qoder.com/install.ps1 | iex")
+        );
+        assert!(
+            !resolve(ProviderKind::Qoder, "windows", "aarch64", None, false).supported
         );
     }
 }

@@ -15,6 +15,12 @@ const guidance: AgentInstallGuidance[] = [
     documentationUrl: "https://github.com/openai/codex#quickstart", unsupportedReason: null,
   },
   {
+    providerKind: "qoder", platform: "macos", architecture: "aarch64",
+    supported: true, detected: true, prerequisite: null,
+    command: "curl -fsSL https://qoder.com/install | bash",
+    documentationUrl: "https://docs.qoder.com/cli/installation", unsupportedReason: null,
+  },
+  {
     providerKind: "deepseek_harness", platform: "windows", architecture: "x86_64",
     supported: false, detected: false, prerequisite: "Python 3.10 或更高版本",
     command: null, documentationUrl: "https://github.com/deepseek-ai/deepseek-harness",
@@ -35,6 +41,8 @@ const snapshot: AgentManagementSnapshot = {
     executablePath: null,
     providerRoute: null,
     model: null,
+    agentName: null,
+    providerConfig: {},
     enabled: true,
     connectionState: "ready",
     discoveredVersion: "codex-cli 0.154.0",
@@ -75,9 +83,34 @@ describe("Agent Management browser preview", () => {
     expect(html).not.toContain("LOCAL AGENT CONNECTIONS");
     expect(html).toContain("添加 Codex");
     expect(html).toContain("添加 DeepSeek Harness");
+    expect(html).toContain("添加 Qoder");
     expect(html).toContain("添加 DeepSeek Harness 实例");
     expect(html).not.toContain("添加 Codex 实例");
     expect(html).not.toContain("<select");
+  });
+
+  it("shows explicit Qoder ACP configuration fields", () => {
+    const html = renderToStaticMarkup(
+      <AgentManagementContent
+        snapshot={{ ...snapshot, adapters: [...snapshot.adapters, { kind: "qoder", displayName: "Qoder", supported: true }] }}
+        busy={null}
+        addingProvider="qoder"
+        guidance={guidance}
+        activeGuide={null}
+        onOpenGuidance={() => undefined}
+        onCloseGuidance={() => undefined}
+        onRefreshGuidance={async () => undefined}
+        onToggleAdding={() => undefined}
+        onRun={async () => true}
+        onOpenCapabilities={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("添加 Qoder 实例");
+    expect(html).toContain("Qoder Agent");
+    expect(html).toContain("显式扩展配置");
+    expect(html).toContain("mcpServers");
+    expect(html).toContain("Archmage 不保存 Token");
   });
 
   it("shows platform guidance for a missing provider without executing it", () => {

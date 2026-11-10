@@ -79,16 +79,17 @@ describe("agent routing", () => {
     expect(agentInputIsComplete({ providerKind: "deepseek_harness", providerRoute: null, model: "deepseek-v4-flash" })).toBe(false);
     expect(agentInputIsComplete({ providerKind: "deepseek_harness", providerRoute: "deepseek-official", model: "deepseek-v4-flash" })).toBe(true);
   });
-  it("treats Codex and DeepSeek Harness as supported providers", () => {
+  it("treats Codex, DeepSeek Harness, and Qoder as supported providers", () => {
     expect(isSupportedProvider("codex")).toBe(true);
     expect(isSupportedProvider("deepseek_harness")).toBe(true);
+    expect(isSupportedProvider("qoder")).toBe(true);
     expect(isSupportedProvider("hermes")).toBe(false);
     expect(providerLabel("deepseek_harness")).toBe("DeepSeek Harness");
   });
   it("blocks a run when a capability has no enabled supported instance", () => {
     const snapshot: AgentManagementSnapshot = {
       adapters: [],
-      instances: [{ id: "codex-default", providerKind: "codex", displayName: "Codex", executablePath: null, providerRoute: null, model: null, enabled: false, connectionState: "unverified", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
+      instances: [{ id: "codex-default", providerKind: "codex", displayName: "Codex", executablePath: null, providerRoute: null, model: null, agentName: null, providerConfig: {}, enabled: false, connectionState: "unverified", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
       bindings: [{ capability: "designer", agentInstanceId: "codex-default" }],
     };
     expect(runBindingIssues(snapshot)).toEqual(["designer: Agent 实例已禁用", "coder: 未绑定 Agent", "tester: 未绑定 Agent", "reviewer: 未绑定 Agent"]);
@@ -96,7 +97,7 @@ describe("agent routing", () => {
   it("checks only members of the selected team", () => {
     const snapshot: AgentManagementSnapshot = {
       adapters: [],
-      instances: [{ id: "codex", providerKind: "codex", displayName: "Codex", executablePath: null, providerRoute: null, model: null, enabled: true, connectionState: "ready", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
+      instances: [{ id: "codex", providerKind: "codex", displayName: "Codex", executablePath: null, providerRoute: null, model: null, agentName: null, providerConfig: {}, enabled: true, connectionState: "ready", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
       bindings: [{ capability: "coder", agentInstanceId: "codex" }, { capability: "reviewer", agentInstanceId: "codex" }],
     };
     expect(runBindingIssues(snapshot, ["coder", "reviewer"])).toEqual([]);
@@ -105,8 +106,16 @@ describe("agent routing", () => {
   it("allows a capability bound to DeepSeek Harness", () => {
     const snapshot: AgentManagementSnapshot = {
       adapters: [],
-      instances: [{ id: "dsh", providerKind: "deepseek_harness", displayName: "DSH", executablePath: null, providerRoute: "deepseek-official", model: "deepseek-v4-flash", enabled: true, connectionState: "ready", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
+      instances: [{ id: "dsh", providerKind: "deepseek_harness", displayName: "DSH", executablePath: null, providerRoute: "deepseek-official", model: "deepseek-v4-flash", agentName: null, providerConfig: {}, enabled: true, connectionState: "ready", discoveredVersion: null, lastVerifiedAt: null, lastError: null, verificationThreadId: null }],
       bindings: [{ capability: "coder", agentInstanceId: "dsh" }],
+    };
+    expect(runBindingIssues(snapshot, ["coder"])).toEqual([]);
+  });
+  it("allows a capability bound to Qoder", () => {
+    const snapshot: AgentManagementSnapshot = {
+      adapters: [],
+      instances: [{ id: "qoder", providerKind: "qoder", displayName: "Qoder", executablePath: null, providerRoute: null, model: null, agentName: "coder", providerConfig: { mcpServers: [] }, enabled: true, connectionState: "ready", discoveredVersion: "1.1.38", lastVerifiedAt: null, lastError: null, verificationThreadId: "session-1" }],
+      bindings: [{ capability: "coder", agentInstanceId: "qoder" }],
     };
     expect(runBindingIssues(snapshot, ["coder"])).toEqual([]);
   });
