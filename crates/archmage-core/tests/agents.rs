@@ -667,3 +667,50 @@ async fn deepseek_harness_can_be_discovered_and_verified() {
     assert!(events.contains("\"model\":\"deepseek-v4-flash\""));
     assert!(events.contains("\"event\":\"close\""));
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn qoder_can_be_discovered_and_verified_over_acp() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let config = Config::resolve(Some(&temp.path().join("data")), None).unwrap();
+    config.prepare().unwrap();
+    let service = AgentService::new(config.data_root.clone());
+    let binary = temp.path().join("qoder");
+    std::fs::copy("tests/fixtures/fake_qoder_acp.py", &binary).unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
+    service
+        .save(&AgentInstanceInput {
+            id: "qoder-local".into(),
+            provider_kind: ProviderKind::Qoder,
+            display_name: "Qoder Local".into(),
+            executable_path: Some(binary),
+            provider_route: None,
+            model: Some("performance".into()),
+            agent_name: Some("archmage-reviewer".into()),
+            provider_config: serde_json::json!({"mcpServers": []}),
+            enabled: true,
+        })
+        .unwrap();
+
+    let discovered = service.discover("qoder-local").await.unwrap();
+    let instance = discovered
+        .instances
+        .iter()
+        .find(|item| item.id == "qoder-local")
+        .unwrap();
+    assert_eq!(instance.discovered_version.as_deref(), Some("1.2.3-test"));
+    assert_eq!(instance.connection_state, ConnectionState::Unverified);
+
+    let verified = service.verify("qoder-local").await.unwrap();
+    let instance = verified
+        .instances
+        .iter()
+        .find(|item| item.id == "qoder-local")
+        .unwrap();
+    assert_eq!(instance.connection_state, ConnectionState::Ready);
+    assert_eq!(
+        instance.verification_thread_id.as_deref(),
+        Some("fake-session")
+    );
+}

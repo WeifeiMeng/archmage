@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    provider::{codex, deepseek_harness},
+    provider::{codex, deepseek_harness, qoder},
     store::{AgentObservation, Store},
 };
 use serde::{Deserialize, Serialize};
@@ -294,6 +294,9 @@ impl AgentService {
                     .await
                     .map(|tools| deepseek_harness::python_version_label(&tools))
             }
+            ProviderKind::Qoder => qoder::inspect_at(instance.executable_path.as_deref())
+                .await
+                .map(|tools| tools.version),
             kind => {
                 return Err(Error::Preflight(format!(
                     "{kind} provider is not supported yet"
@@ -313,6 +316,7 @@ impl AgentService {
                     ProviderKind::DeepseekHarness => {
                         "DeepSeek Harness Python SDK inspection failed"
                     }
+                    ProviderKind::Qoder => "Qoder executable inspection failed",
                     _ => "Agent inspection failed",
                 };
                 self.store()?.record_agent_observation_if_current(
@@ -331,6 +335,9 @@ impl AgentService {
         }
         if instance.provider_kind == ProviderKind::DeepseekHarness {
             return self.verify_deepseek_harness(&instance).await;
+        }
+        if instance.provider_kind == ProviderKind::Qoder {
+            return self.verify_qoder(&instance).await;
         }
         if instance.provider_kind != ProviderKind::Codex {
             return Err(Error::Preflight(format!(
@@ -449,6 +456,80 @@ impl AgentService {
                 self.store()?.record_agent_observation_if_current(
                     instance,
                     AgentObservation::Failed("DeepSeek Harness connection verification failed"),
+                )?;
+            }
+        }
+        self.snapshot()
+    }
+
+    async fn verify_qoder(&self, instance: &AgentInstance) -> Result<AgentManagementSnapshot> {
+        let tools = match qoder::inspect_at(instance.executable_path.as_deref()).await {
+            Ok(tools) => tools,
+            Err(_) => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Failed("Qoder executable inspection failed"),
+                )?;
+                return self.snapshot();
+            }
+        };
+        let root = self.data_root.join("probes").join(&instance.id);
+        private_directory(&root)?;
+        let probe = tempfile::Builder::new()
+            .prefix("probe-")
+            .tempdir_in(&root)?;
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(probe.path())
+            .status()
+            .map_err(Error::Io)?;
+        let config = qoder::QoderSessionConfig {
+            binary: tools.binary.clone(),
+            repository: probe.path().to_path_buf(),
+            model: instance.model.clone(),
+            agent_name: instance.agent_name.clone(),
+            provider_config: instance.provider_config.clone(),
+            access: crate::provider::acp::AcpAccess::ReadOnly,
+            diagnostics_dir: probe.path().join("diagnostics"),
+            deadline: std::time::Duration::from_secs(60),
+            max_line_bytes: 1024 * 1024,
+            max_stream_bytes: 4 * 1024 * 1024,
+            max_result_bytes: 1024 * 1024,
+            environment: std::collections::BTreeMap::new(),
+        };
+        let result = async {
+            let mut session = qoder::QoderSession::start(config).await?;
+            let outcome = match session
+                .prompt(
+                    "verification",
+                    b"Return exactly the JSON object {\"ok\":true}. Do not edit files or run commands.",
+                )
+                .await
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let _ = session.cancel().await;
+                    return Err(error);
+                }
+            };
+            session.close().await?;
+            Ok::<_, Error>(outcome)
+        }
+        .await;
+        match result {
+            Ok(outcome) if outcome.result == serde_json::json!({"ok": true}) => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Ready {
+                        version: &tools.version,
+                        thread_id: &outcome.conversation_id,
+                    },
+                )?;
+            }
+            _ => {
+                self.store()?.record_agent_observation_if_current(
+                    instance,
+                    AgentObservation::Failed("Qoder connection verification failed"),
                 )?;
             }
         }
