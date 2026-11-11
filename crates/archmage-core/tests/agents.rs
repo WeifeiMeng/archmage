@@ -668,7 +668,7 @@ async fn deepseek_harness_can_be_discovered_and_verified() {
     assert!(events.contains("\"event\":\"close\""));
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn qoder_can_be_discovered_and_verified_over_acp() {
     use std::os::unix::fs::PermissionsExt;

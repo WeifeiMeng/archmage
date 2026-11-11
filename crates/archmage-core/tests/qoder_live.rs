@@ -9,6 +9,7 @@ use std::{collections::BTreeMap, time::Duration};
 async fn real_qoder_acp_completes_a_strict_json_turn() {
     let tools = inspect_at(None).await.unwrap();
     let repository = tempfile::tempdir().unwrap();
+    let diagnostics = tempfile::tempdir().unwrap();
     let status = std::process::Command::new("git")
         .args(["init", "--quiet"])
         .current_dir(repository.path())
@@ -22,7 +23,7 @@ async fn real_qoder_acp_completes_a_strict_json_turn() {
         agent_name: None,
         provider_config: serde_json::json!({"mcpServers": []}),
         access: AcpAccess::ReadOnly,
-        diagnostics_dir: repository.path().join("diagnostics"),
+        diagnostics_dir: diagnostics.path().to_path_buf(),
         deadline: Duration::from_secs(120),
         max_line_bytes: 1024 * 1024,
         max_stream_bytes: 4 * 1024 * 1024,

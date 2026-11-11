@@ -478,6 +478,9 @@ impl AgentService {
         let probe = tempfile::Builder::new()
             .prefix("probe-")
             .tempdir_in(&root)?;
+        let diagnostics = tempfile::Builder::new()
+            .prefix("diagnostics-")
+            .tempdir_in(&root)?;
         std::process::Command::new("git")
             .args(["init", "--quiet"])
             .current_dir(probe.path())
@@ -490,7 +493,7 @@ impl AgentService {
             agent_name: instance.agent_name.clone(),
             provider_config: instance.provider_config.clone(),
             access: crate::provider::acp::AcpAccess::ReadOnly,
-            diagnostics_dir: probe.path().join("diagnostics"),
+            diagnostics_dir: diagnostics.path().to_path_buf(),
             deadline: std::time::Duration::from_secs(60),
             max_line_bytes: 1024 * 1024,
             max_stream_bytes: 4 * 1024 * 1024,

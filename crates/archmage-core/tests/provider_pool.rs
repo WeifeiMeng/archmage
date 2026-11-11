@@ -10,7 +10,7 @@ use archmage_core::{
 use serde_json::json;
 use std::{collections::BTreeMap, path::Path, sync::Mutex, time::Duration};
 
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 fn qoder_config(root: &Path, name: &str) -> QoderSessionConfig {
     use std::os::unix::fs::PermissionsExt;
     let binary = root.join(format!("qoder-{name}"));
@@ -28,7 +28,10 @@ fn qoder_config(root: &Path, name: &str) -> QoderSessionConfig {
         max_line_bytes: 4096,
         max_stream_bytes: 64 * 1024,
         max_result_bytes: 4096,
-        environment: BTreeMap::from([("FAKE_QODER_SCENARIO".into(), "success".into())]),
+        environment: BTreeMap::from([
+            ("FAKE_QODER_SCENARIO".into(), "success".into()),
+            ("PATH".into(), "/usr/bin:/bin:/usr/sbin:/sbin".into()),
+        ]),
     }
 }
 
@@ -110,7 +113,7 @@ async fn pool_reuses_by_run_capability_and_isolates_other_keys() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn pool_reuses_qoder_by_run_capability_and_closes_temporary_sessions() {
     let temp = tempfile::tempdir().unwrap();
@@ -168,5 +171,164 @@ async fn pool_reuses_qoder_by_run_capability_and_closes_temporary_sessions() {
         identities
             .iter()
             .all(|identity| !identity_is_alive(identity))
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn qoder_pool_cancellation_interrupts_a_running_prompt_without_waiting_for_the_mutex() {
+    let temp = tempfile::tempdir().unwrap();
+    let pool = std::sync::Arc::new(ProviderPool::new());
+    let mut config = qoder_config(temp.path(), "cancel");
+    config
+        .environment
+        .insert("FAKE_QODER_SCENARIO".into(), "prompt-hang".into());
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+    let started_tx = Mutex::new(Some(started_tx));
+    let invoke = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            pool.invoke_main(
+                SidecarKey::new("run-cancel", "coder"),
+                config,
+                "attempt-1",
+                b"hang",
+                &json!({"type":"object"}),
+                |_| {
+                    started_tx.lock().unwrap().take().unwrap().send(()).unwrap();
+                    Ok(())
+                },
+            )
+            .await
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(5), started_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        pool.cancel_capability("run-cancel", "coder"),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), invoke)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err()
+    );
+    let retry = pool
+        .invoke_main(
+            SidecarKey::new("run-cancel", "coder"),
+            qoder_config(temp.path(), "unexpected-retry"),
+            "attempt-2",
+            b"must not reuse the killed session",
+            &json!({"type":"object"}),
+            |_| panic!("a cancelled pooled session must stay poisoned"),
+        )
+        .await;
+    assert!(retry.is_err());
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn qoder_pool_cancellation_interrupts_session_initialization() {
+    let temp = tempfile::tempdir().unwrap();
+    let child_pid_path = temp.path().join("initialize-child.pid");
+    let pool = std::sync::Arc::new(ProviderPool::new());
+    let mut config = qoder_config(temp.path(), "initializing");
+    config
+        .environment
+        .insert("FAKE_QODER_SCENARIO".into(), "initialize-hang".into());
+    config.environment.insert(
+        "FAKE_CHILD_PID_PATH".into(),
+        child_pid_path.clone().into_os_string(),
+    );
+    let invoke = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            pool.invoke_main(
+                SidecarKey::new("run-initializing", "coder"),
+                config,
+                "attempt-1",
+                b"must not start",
+                &json!({"type":"object"}),
+                |_| panic!("initialization never reached a live session"),
+            )
+            .await
+        }
+    });
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !child_pid_path.is_file() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("fake Qoder did not create its child PID file");
+    let child_pid: i32 = std::fs::read_to_string(&child_pid_path)
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(unsafe { libc::kill(child_pid, 0) }, 0);
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        pool.cancel_capability("run-initializing", "coder"),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(2), invoke)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err()
+    );
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while unsafe { libc::kill(child_pid, 0) } == 0 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("Qoder initialization child survived cancellation");
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn qoder_pool_cancellation_terminates_and_poisons_an_idle_session() {
+    let temp = tempfile::tempdir().unwrap();
+    let pool = ProviderPool::new();
+    let identity = Mutex::new(None);
+    pool.invoke_main(
+        SidecarKey::new("run-idle", "coder"),
+        qoder_config(temp.path(), "idle"),
+        "attempt-1",
+        b"return JSON",
+        &json!({"type":"object"}),
+        |spawned| {
+            *identity.lock().unwrap() = Some(spawned.clone());
+            Ok(())
+        },
+    )
+    .await
+    .unwrap();
+    let identity = identity.into_inner().unwrap().unwrap();
+    assert!(identity_is_alive(&identity));
+    pool.cancel_capability("run-idle", "coder").await.unwrap();
+    assert!(!identity_is_alive(&identity));
+    assert!(
+        pool.invoke_main(
+            SidecarKey::new("run-idle", "coder"),
+            qoder_config(temp.path(), "must-not-restart"),
+            "attempt-2",
+            b"return JSON",
+            &json!({"type":"object"}),
+            |_| panic!("idle cancellation must poison the slot"),
+        )
+        .await
+        .is_err()
     );
 }

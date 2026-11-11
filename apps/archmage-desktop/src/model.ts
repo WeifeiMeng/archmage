@@ -140,6 +140,7 @@ export type FrozenAgentBinding = {
   executablePath: string | null;
   providerRoute: string | null;
   model: string | null;
+  discoveredVersion: string | null;
   agentName: string | null;
   providerConfig: Record<string, unknown>;
 };

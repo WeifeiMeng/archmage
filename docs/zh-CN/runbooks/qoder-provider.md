@@ -41,7 +41,11 @@ Archmage 使用 ACP、严格 MCP 配置和空 setting sources 启动 Qoder。它
 - 终端 cwd 必须位于 worktree 内；提权命令和受保护的破坏性目标会被拒绝；
 - 最终 assistant 输出必须是一个有界 JSON 对象；Markdown 代码围栏和修复猜测都会被拒绝。
 
-Run 结束时关闭 session。取消会先发送 `session/cancel`，宽限期后再终止已登记的进程组。重启期间丢失的执行中 Attempt 会变为 `interrupted`，Archmage 不会静默伪造历史连续性。
+当前经过真实读写逃逸测试的强化执行边界是 macOS `sandbox-exec`：Qoder 主进程与 ACP terminal 只能读取 Run worktree、系统运行时以及明确白名单的 Qoder 可执行资源/认证文件，不能读取其他用户仓库或凭证文件；workspace-write 会话只能写 Run worktree 和私有诊断目录，只读会话只能写私有诊断目录。Linux 与 Windows 仍可安装、发现和检查 Qoder CLI；在等价 OS 沙箱接入前，Archmage 会拒绝在这些平台执行 Qoder session，而不是退化为无沙箱运行。
+
+Run 结束时关闭 session。取消会立即唤醒被 ACP 响应阻塞的 turn，发送 `session/cancel`，再终止已登记的进程组；已终止的 session 不会重新放回池中。重启期间丢失的执行中 Attempt 会变为 `interrupted`，Archmage 不会静默伪造历史连续性。
+
+Qoder 适配器支持受控的 `session/load`：只有 Agent 声明 `loadSession`、持久 session ID 存在且当前 worktree snapshot 与记录值完全一致时才加载，否则创建新 session 并明确标记未恢复。当前产品级 `archmage resume` 入口尚未开放，因此用户不能通过 CLI 恢复 interrupted Run；该协议能力目前供后续显式重试链路调用，不代表自动恢复。
 
 ## 诊断与验证
 

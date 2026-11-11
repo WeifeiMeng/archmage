@@ -7,8 +7,14 @@ use crate::{
         qoder::{QoderSession, QoderSessionConfig},
     },
 };
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+use tokio::sync::{Mutex, Notify};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SidecarKey {
@@ -80,6 +86,13 @@ impl PersistentProviderSession {
             Self::Qoder(session) => session.cancel().await,
         }
     }
+
+    fn qoder_cancel_handle(&self) -> Option<crate::provider::qoder::QoderCancelHandle> {
+        match self {
+            Self::Qoder(session) => Some(session.cancellation_handle()),
+            Self::DeepseekHarness(_) => None,
+        }
+    }
 }
 
 enum PoolEntry {
@@ -89,7 +102,14 @@ enum PoolEntry {
 }
 
 pub struct ProviderPool {
-    entries: Mutex<HashMap<SidecarKey, Arc<Mutex<PoolEntry>>>>,
+    entries: Mutex<HashMap<SidecarKey, Arc<PoolSlot>>>,
+}
+
+struct PoolSlot {
+    entry: Mutex<PoolEntry>,
+    qoder_cancel: Mutex<Option<crate::provider::qoder::QoderCancelHandle>>,
+    cancelled: AtomicBool,
+    cancel_notify: Notify,
 }
 
 impl Default for ProviderPool {
@@ -119,16 +139,28 @@ impl ProviderPool {
             let mut entries = self.entries.lock().await;
             entries
                 .entry(key)
-                .or_insert_with(|| Arc::new(Mutex::new(PoolEntry::Closing)))
+                .or_insert_with(|| {
+                    Arc::new(PoolSlot {
+                        entry: Mutex::new(PoolEntry::Closing),
+                        qoder_cancel: Mutex::new(None),
+                        cancelled: AtomicBool::new(false),
+                        cancel_notify: Notify::new(),
+                    })
+                })
                 .clone()
         };
-        let mut guard = entry.lock().await;
+        let mut guard = entry.entry.lock().await;
         if matches!(*guard, PoolEntry::Closing) {
             if let ProviderSessionConfig::DeepseekHarness(config) = &mut config {
                 config.session_id = format!("archmage-{}", uuid::Uuid::new_v4());
             }
-            match start_session(config).await {
-                Ok(sidecar) => *guard = PoolEntry::Live(Box::new(sidecar)),
+            let start_result =
+                start_session_cancellable(config, &entry.cancelled, &entry.cancel_notify).await;
+            match start_result {
+                Ok(sidecar) => {
+                    *entry.qoder_cancel.lock().await = sidecar.qoder_cancel_handle();
+                    *guard = PoolEntry::Live(Box::new(sidecar));
+                }
                 Err(error) => {
                     let message = stable_message(&error);
                     *guard = PoolEntry::Poisoned(message.clone());
@@ -136,13 +168,41 @@ impl ProviderPool {
                 }
             }
         }
-        match &mut *guard {
-            PoolEntry::Live(session) => {
-                on_spawn(session.identity())?;
-                session.invoke(invocation_id, task, schema).await
+        if entry.cancelled.load(Ordering::Acquire) {
+            if let PoolEntry::Live(session) = std::mem::replace(
+                &mut *guard,
+                PoolEntry::Poisoned("provider session was cancelled".into()),
+            ) {
+                let _ = session.cancel().await;
             }
+            *entry.qoder_cancel.lock().await = None;
+            return Err(Error::Preflight("provider session was cancelled".into()));
+        }
+        let result = match &mut *guard {
+            PoolEntry::Live(session) => match on_spawn(session.identity()) {
+                Ok(()) => session.invoke(invocation_id, task, schema).await,
+                Err(error) => Err(error),
+            },
             PoolEntry::Poisoned(message) => Err(Error::Preflight(message.clone())),
             PoolEntry::Closing => Err(Error::Conflict),
+        };
+        let cancelled = entry.cancelled.load(Ordering::Acquire);
+        if result.is_err() || cancelled {
+            let message = if cancelled {
+                "provider session was cancelled".into()
+            } else {
+                stable_message(result.as_ref().expect_err("checked error"))
+            };
+            let poisoned = PoolEntry::Poisoned(message);
+            if let PoolEntry::Live(session) = std::mem::replace(&mut *guard, poisoned) {
+                let _ = session.cancel().await;
+            }
+            *entry.qoder_cancel.lock().await = None;
+        }
+        if cancelled {
+            Err(Error::Preflight("provider session was cancelled".into()))
+        } else {
+            result
         }
     }
 
@@ -186,7 +246,7 @@ impl ProviderPool {
         };
         let mut first_error = None;
         for entry in removed {
-            let mut guard = entry.lock().await;
+            let mut guard = entry.entry.lock().await;
             if let PoolEntry::Live(session) = std::mem::replace(&mut *guard, PoolEntry::Closing)
                 && let Err(error) = session.close().await
                 && first_error.is_none()
@@ -218,7 +278,23 @@ impl ProviderPool {
         let Some(entry) = entry else {
             return Ok(());
         };
-        let mut guard = entry.lock().await;
+        entry.cancelled.store(true, Ordering::Release);
+        entry.cancel_notify.notify_one();
+        let qoder_cancel = entry.qoder_cancel.lock().await.clone();
+        if let Some(handle) = qoder_cancel {
+            handle.cancel().await?;
+            if let Ok(mut guard) = entry.entry.try_lock()
+                && let PoolEntry::Live(session) = std::mem::replace(
+                    &mut *guard,
+                    PoolEntry::Poisoned("provider session was cancelled".into()),
+                )
+            {
+                *entry.qoder_cancel.lock().await = None;
+                session.cancel().await?;
+            }
+            return Ok(());
+        }
+        let mut guard = entry.entry.lock().await;
         if let PoolEntry::Live(session) = std::mem::replace(
             &mut *guard,
             PoolEntry::Poisoned("provider session was cancelled".into()),
@@ -238,6 +314,26 @@ async fn start_session(config: ProviderSessionConfig) -> Result<PersistentProvid
         }
         ProviderSessionConfig::Qoder(config) => Ok(PersistentProviderSession::Qoder(
             QoderSession::start(config).await?,
+        )),
+    }
+}
+
+async fn start_session_cancellable(
+    config: ProviderSessionConfig,
+    cancelled: &AtomicBool,
+    cancel_notify: &Notify,
+) -> Result<PersistentProviderSession> {
+    if cancelled.load(Ordering::Acquire) {
+        return Err(Error::Preflight("provider session was cancelled".into()));
+    }
+    match config {
+        ProviderSessionConfig::DeepseekHarness(config) => {
+            Ok(PersistentProviderSession::DeepseekHarness(
+                DeepseekHarnessSidecar::start(config).await?,
+            ))
+        }
+        ProviderSessionConfig::Qoder(config) => Ok(PersistentProviderSession::Qoder(
+            QoderSession::start_cancellable(config, cancelled, cancel_notify).await?,
         )),
     }
 }

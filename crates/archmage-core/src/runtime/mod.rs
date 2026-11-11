@@ -86,6 +86,8 @@ pub struct FrozenAgentBinding {
     pub provider_route: Option<String>,
     pub model: Option<String>,
     #[serde(default)]
+    pub discovered_version: Option<String>,
+    #[serde(default)]
     pub agent_name: Option<String>,
     #[serde(default)]
     pub provider_config: serde_json::Value,
@@ -273,6 +275,12 @@ impl Runtime {
                     binding.executable_path = Some(tools.python_binary);
                 }
                 ProviderKind::Qoder => {
+                    let instance = self.store()?.agent_instance(&binding.agent_instance_id)?;
+                    if instance.connection_state != crate::agent::ConnectionState::Ready {
+                        return Err(Error::Preflight(format!(
+                            "capability {capability} uses an unverified Qoder Agent"
+                        )));
+                    }
                     let tools =
                         crate::provider::qoder::inspect_at(binding.executable_path.as_deref())
                             .await
@@ -442,6 +450,7 @@ impl Runtime {
                     executable_path: instance.executable_path,
                     provider_route: instance.provider_route,
                     model: instance.model,
+                    discovered_version: instance.discovered_version,
                     agent_name: instance.agent_name,
                     provider_config: instance.provider_config,
                 },

@@ -41,7 +41,11 @@ Each live `Run + Capability` owns one Qoder process and ACP session. Later deliv
 - Terminal cwd must stay inside the worktree. Privilege escalation and protected destructive targets are rejected.
 - Final assistant output must be exactly one bounded JSON object. Markdown fences and repair heuristics are rejected.
 
-Run completion closes sessions. Cancellation sends `session/cancel` and then terminates the registered process group after a grace period. A process lost during restart leaves the running Attempt `interrupted`; Archmage does not silently manufacture continuity.
+The hardened execution boundary currently verified with real read and write escape probes is macOS `sandbox-exec`: the Qoder process and ACP terminals may read only the Run worktree, system runtime resources, and explicitly allowlisted Qoder executable/authentication files, not other user repositories or credential files. Workspace-write sessions may write only the Run worktree and private diagnostics; read-only sessions may write only private diagnostics. Qoder CLI can still be installed, discovered, and inspected on Linux and Windows, but Archmage rejects Qoder session execution on those platforms until an equivalent OS sandbox is integrated instead of falling back to an unsandboxed process.
+
+Run completion closes sessions. Cancellation wakes a turn blocked on an ACP response, sends `session/cancel`, and then terminates the registered process group; the terminated session is not returned to the pool. A process lost during restart leaves the running Attempt `interrupted`; Archmage does not silently manufacture continuity.
+
+The Qoder adapter supports controlled `session/load`: it loads only when the Agent advertises `loadSession`, a persisted session ID is available, and the current worktree snapshot exactly matches the recorded value. Otherwise it creates a new session and reports that continuity was not restored. The product-level `archmage resume` entry point is not available yet, so users cannot currently resume an interrupted Run from the CLI; this protocol capability is for the later explicit-retry path and does not imply automatic recovery.
 
 ## Diagnostics and verification
 

@@ -312,9 +312,8 @@ fn two_member_team_freezes_only_selected_run_nodes() {
     std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
     git(&repo, &["add", "README.md"]);
     git(&repo, &["commit", "--quiet", "-m", "fixture"]);
-    let runtime =
-        Runtime::open(Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap())
-            .unwrap();
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
     let graph = TeamGraph {
         nodes: vec![
             TeamNode {
@@ -526,9 +525,8 @@ async fn start_run_freezes_qoder_agent_and_provider_configuration() {
     let binary = temp.path().join("qoder");
     std::fs::copy("tests/fixtures/fake_qoder_acp.py", &binary).unwrap();
     std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o700)).unwrap();
-    let runtime =
-        Runtime::open(Config::resolve(Some(&temp.path().join("data")), Some(&repo)).unwrap())
-            .unwrap();
+    let data = temp.path().join("data");
+    let runtime = Runtime::open(Config::resolve(Some(&data), Some(&repo)).unwrap()).unwrap();
     let agents = runtime.agent_service();
     agents
         .save(&AgentInstanceInput {
@@ -543,6 +541,10 @@ async fn start_run_freezes_qoder_agent_and_provider_configuration() {
             enabled: true,
         })
         .unwrap();
+    Store::open(&data.join("archmage.db"))
+        .unwrap()
+        .record_agent_ready("qoder-local", "1.2.3-test", "verified-session")
+        .unwrap();
     for capability in ["designer", "coder", "tester", "reviewer"] {
         agents.bind(capability, "qoder-local").unwrap();
     }
@@ -555,6 +557,7 @@ async fn start_run_freezes_qoder_agent_and_provider_configuration() {
     assert!(run.agent_bindings.values().all(|binding| {
         binding.provider_kind == ProviderKind::Qoder
             && binding.agent_name.as_deref() == Some("archmage-coder")
+            && binding.discovered_version.as_deref() == Some("1.2.3-test")
             && binding.provider_config == serde_json::json!({"mcpServers": []})
     }));
 }
