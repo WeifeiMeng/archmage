@@ -4,4 +4,5 @@ pub mod codex_event;
 pub mod deepseek_harness;
 pub mod executor;
 pub mod pool;
+pub mod progress;
 pub mod qoder;

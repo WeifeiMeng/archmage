@@ -3,6 +3,7 @@ use archmage_core::{
     provider::{
         acp::AcpAccess,
         deepseek_harness::{PermissionMode, SidecarConfig},
+        executor::ProviderLifecycle,
         pool::{ProviderPool, SidecarKey},
         qoder::QoderSessionConfig,
     },
@@ -33,6 +34,45 @@ fn qoder_config(root: &Path, name: &str) -> QoderSessionConfig {
             ("PATH".into(), "/usr/bin:/bin:/usr/sbin:/sbin".into()),
         ]),
     }
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+async fn qoder_pool_observer_receives_public_progress_but_not_thought() {
+    let temp = tempfile::tempdir().unwrap();
+    let pool = ProviderPool::new();
+    let mut config = qoder_config(temp.path(), "progress");
+    config
+        .environment
+        .insert("FAKE_QODER_SCENARIO".into(), "progress".into());
+    let observed = Mutex::new(Vec::new());
+    pool.invoke_main(
+        SidecarKey::new("run-progress", "coder"),
+        config,
+        "attempt-progress",
+        b"return JSON",
+        &json!({"type":"object"}),
+        |event| {
+            observed.lock().unwrap().push(event);
+            Ok(())
+        },
+    )
+    .await
+    .unwrap();
+    let observed = observed.into_inner().unwrap();
+    assert!(matches!(
+        observed.first(),
+        Some(ProviderLifecycle::Spawned(_))
+    ));
+    assert!(observed.iter().any(|event| matches!(
+        event,
+        ProviderLifecycle::Progress(progress) if progress.kind == "tool"
+    )));
+    assert!(!observed.iter().any(|event| matches!(
+        event,
+        ProviderLifecycle::Progress(progress) if progress.text.as_deref() == Some("private")
+    )));
+    pool.close_run("run-progress").await.unwrap();
 }
 
 fn config(root: &Path, name: &str) -> SidecarConfig {
@@ -80,8 +120,10 @@ async fn pool_reuses_by_run_capability_and_isolates_other_keys() {
             invocation,
             invocation.as_bytes(),
             &json!({"type":"object"}),
-            |identity| {
-                identities.lock().unwrap().push(identity.clone());
+            |event| {
+                if let ProviderLifecycle::Spawned(identity) = event {
+                    identities.lock().unwrap().push(identity);
+                }
                 Ok(())
             },
         )
@@ -94,8 +136,10 @@ async fn pool_reuses_by_run_capability_and_isolates_other_keys() {
         "review",
         b"review",
         &json!({"type":"object"}),
-        |identity| {
-            identities.lock().unwrap().push(identity.clone());
+        |event| {
+            if let ProviderLifecycle::Spawned(identity) = event {
+                identities.lock().unwrap().push(identity);
+            }
             Ok(())
         },
     )
@@ -126,8 +170,10 @@ async fn pool_reuses_qoder_by_run_capability_and_closes_temporary_sessions() {
             invocation,
             b"return JSON",
             &json!({"type":"object"}),
-            |identity| {
-                identities.lock().unwrap().push(identity.clone());
+            |event| {
+                if let ProviderLifecycle::Spawned(identity) = event {
+                    identities.lock().unwrap().push(identity);
+                }
                 Ok(())
             },
         )
@@ -140,8 +186,10 @@ async fn pool_reuses_qoder_by_run_capability_and_closes_temporary_sessions() {
         "review",
         b"return JSON",
         &json!({"type":"object"}),
-        |identity| {
-            identities.lock().unwrap().push(identity.clone());
+        |event| {
+            if let ProviderLifecycle::Spawned(identity) = event {
+                identities.lock().unwrap().push(identity);
+            }
             Ok(())
         },
     )
@@ -153,8 +201,10 @@ async fn pool_reuses_qoder_by_run_capability_and_closes_temporary_sessions() {
         "consult",
         b"return JSON",
         &json!({"type":"object"}),
-        |identity| {
-            *temporary.lock().unwrap() = Some(identity.clone());
+        |event| {
+            if let ProviderLifecycle::Spawned(identity) = event {
+                *temporary.lock().unwrap() = Some(identity);
+            }
             Ok(())
         },
     )
@@ -308,8 +358,10 @@ async fn qoder_pool_cancellation_terminates_and_poisons_an_idle_session() {
         "attempt-1",
         b"return JSON",
         &json!({"type":"object"}),
-        |spawned| {
-            *identity.lock().unwrap() = Some(spawned.clone());
+        |event| {
+            if let ProviderLifecycle::Spawned(spawned) = event {
+                *identity.lock().unwrap() = Some(spawned);
+            }
             Ok(())
         },
     )

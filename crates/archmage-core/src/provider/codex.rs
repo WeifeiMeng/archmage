@@ -151,6 +151,16 @@ pub async fn invoke_with_identity(
     prompt: &[u8],
     on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
 ) -> Result<CodexOutcome> {
+    invoke_with_observers(tools, invocation, prompt, on_spawn, |_| Ok(())).await
+}
+
+pub async fn invoke_with_observers(
+    tools: &LocalTools,
+    invocation: &CodexInvocation,
+    prompt: &[u8],
+    on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
+    mut on_progress: impl FnMut(&super::progress::ProviderProgress) -> Result<()> + Send,
+) -> Result<CodexOutcome> {
     if !invocation.repository.is_dir() || !invocation.schema_path.is_file() {
         return Err(Error::Preflight(
             "Codex invocation repository and schema must exist".into(),
@@ -177,7 +187,13 @@ pub async fn invoke_with_identity(
             match stream {
                 Stream::Stdout => {
                     event_log.write_all(bytes)?;
-                    events.extend(decoder.push(bytes)?);
+                    let decoded = decoder.push(bytes)?;
+                    for event in &decoded {
+                        if let Some(progress) = super::progress::codex_progress(event) {
+                            on_progress(&progress)?;
+                        }
+                    }
+                    events.extend(decoded);
                 }
                 Stream::Stderr => stderr_log.write_all(bytes)?,
             }

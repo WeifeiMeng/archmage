@@ -375,13 +375,16 @@ impl Runtime {
                     attempt_id,
                     &context.rendered,
                     &schema,
-                    |identity| {
-                        store.attach_attempt_process(
+                    |event| match event {
+                        ProviderLifecycle::Spawned(identity) => store.attach_attempt_process(
                             attempt_id,
                             attempt_revision,
                             generation,
-                            identity,
-                        )
+                            &identity,
+                        ),
+                        ProviderLifecycle::Progress(progress) => {
+                            store.record_agent_progress(attempt_id, generation, &progress)
+                        }
                     },
                 )
                 .await?
@@ -402,6 +405,9 @@ impl Runtime {
                     generation,
                     &identity,
                 ),
+                ProviderLifecycle::Progress(progress) => {
+                    store.record_agent_progress(attempt_id, generation, &progress)
+                }
             })
             .await?
         };

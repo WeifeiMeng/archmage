@@ -175,22 +175,21 @@ impl Runtime {
                 &self.config,
             )?;
             self.provider_pool
-                .invoke_temporary(
-                    session,
-                    source_attempt_id,
-                    &prompt,
-                    &schema,
-                    move |identity| {
-                        registration.store()?.register_consultation_process(
-                            &registered_id,
-                            &registered_run,
-                            &registered_attempt,
-                            &registered_target,
-                            generation,
-                            identity,
-                        )
-                    },
-                )
+                .invoke_temporary(session, source_attempt_id, &prompt, &schema, move |event| {
+                    match event {
+                        ProviderLifecycle::Spawned(identity) => {
+                            registration.store()?.register_consultation_process(
+                                &registered_id,
+                                &registered_run,
+                                &registered_attempt,
+                                &registered_target,
+                                generation,
+                                &identity,
+                            )
+                        }
+                        ProviderLifecycle::Progress(_) => Ok(()),
+                    }
+                })
                 .await
         } else {
             let invocation = provider_execution(
@@ -213,6 +212,7 @@ impl Runtime {
                         &identity,
                     )
                 }
+                ProviderLifecycle::Progress(_) => Ok(()),
             })
             .await
         };

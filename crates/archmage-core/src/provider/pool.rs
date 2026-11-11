@@ -3,7 +3,8 @@ use crate::{
     process::ProcessIdentity,
     provider::{
         deepseek_harness::{DeepseekHarnessSidecar, SidecarConfig},
-        executor::ProviderOutcome,
+        executor::{ProviderLifecycle, ProviderOutcome},
+        progress::ProviderProgress,
         qoder::{QoderSession, QoderSessionConfig},
     },
 };
@@ -66,10 +67,15 @@ impl PersistentProviderSession {
         invocation_id: &str,
         task: &[u8],
         schema: &serde_json::Value,
+        on_progress: &mut (dyn FnMut(ProviderProgress) -> Result<()> + Send),
     ) -> Result<ProviderOutcome> {
         match self {
             Self::DeepseekHarness(session) => session.invoke(invocation_id, task, schema).await,
-            Self::Qoder(session) => session.prompt(invocation_id, task).await,
+            Self::Qoder(session) => {
+                session
+                    .prompt_observed(invocation_id, task, on_progress)
+                    .await
+            }
         }
     }
 
@@ -132,7 +138,7 @@ impl ProviderPool {
         invocation_id: &str,
         task: &[u8],
         schema: &serde_json::Value,
-        on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
+        mut observer: impl FnMut(ProviderLifecycle) -> Result<()> + Send,
     ) -> Result<ProviderOutcome> {
         let mut config = config.into();
         let entry = {
@@ -179,10 +185,18 @@ impl ProviderPool {
             return Err(Error::Preflight("provider session was cancelled".into()));
         }
         let result = match &mut *guard {
-            PoolEntry::Live(session) => match on_spawn(session.identity()) {
-                Ok(()) => session.invoke(invocation_id, task, schema).await,
-                Err(error) => Err(error),
-            },
+            PoolEntry::Live(session) => {
+                match observer(ProviderLifecycle::Spawned(session.identity().clone())) {
+                    Ok(()) => {
+                        session
+                            .invoke(invocation_id, task, schema, &mut |progress| {
+                                observer(ProviderLifecycle::Progress(progress))
+                            })
+                            .await
+                    }
+                    Err(error) => Err(error),
+                }
+            }
             PoolEntry::Poisoned(message) => Err(Error::Preflight(message.clone())),
             PoolEntry::Closing => Err(Error::Conflict),
         };
@@ -212,15 +226,20 @@ impl ProviderPool {
         invocation_id: &str,
         task: &[u8],
         schema: &serde_json::Value,
-        on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()>,
+        mut observer: impl FnMut(ProviderLifecycle) -> Result<()> + Send,
     ) -> Result<ProviderOutcome> {
         let mut config = config.into();
         if let ProviderSessionConfig::DeepseekHarness(config) = &mut config {
             config.session_id = format!("archmage-consult-{}", uuid::Uuid::new_v4());
         }
         let mut session = start_session(config).await?;
-        on_spawn(session.identity())?;
-        match session.invoke(invocation_id, task, schema).await {
+        observer(ProviderLifecycle::Spawned(session.identity().clone()))?;
+        match session
+            .invoke(invocation_id, task, schema, &mut |progress| {
+                observer(ProviderLifecycle::Progress(progress))
+            })
+            .await
+        {
             Ok(outcome) => {
                 session.close().await?;
                 Ok(outcome)

@@ -2,6 +2,7 @@ use super::{Attempt, AttemptOutcome, Store};
 use crate::context::ContextSnapshot;
 use crate::error::{Error, Result};
 use crate::process::ProcessIdentity;
+use crate::provider::progress::ProviderProgress;
 use rusqlite::{Transaction, TransactionBehavior, params};
 use serde_json::{Value, json};
 
@@ -120,6 +121,48 @@ impl Store {
             Some(&node),
             Some(id),
             json!({"owner_generation":generation,"pid":identity.pid,"pgid":identity.pgid}),
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn record_agent_progress(
+        &mut self,
+        attempt: &str,
+        generation: i64,
+        progress: &ProviderProgress,
+    ) -> Result<()> {
+        let tx = self
+            .db
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let valid: bool = tx.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM attempts a
+                JOIN node_runs n ON n.id=a.node_run_id
+                JOIN runs r ON r.id=n.run_id
+                WHERE a.id=?1 AND a.state='running' AND a.owner_generation=?2
+                  AND r.state='running' AND r.owner_generation=?2
+            )",
+            params![attempt, generation],
+            |row| row.get(0),
+        )?;
+        if !valid {
+            return Err(Error::Conflict);
+        }
+        let (node, run): (String, String) = tx.query_row(
+            "SELECT n.id,n.run_id FROM attempts a JOIN node_runs n ON n.id=a.node_run_id WHERE a.id=?1",
+            [attempt],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let payload =
+            serde_json::to_value(progress).map_err(|error| Error::Preflight(error.to_string()))?;
+        event(
+            &tx,
+            &run,
+            "agent.progress",
+            Some(&node),
+            Some(attempt),
+            payload,
         )?;
         tx.commit()?;
         Ok(())

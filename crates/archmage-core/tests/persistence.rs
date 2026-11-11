@@ -1,4 +1,8 @@
-use archmage_core::store::{AttemptOutcome, Store};
+use archmage_core::{
+    process::ProcessIdentity,
+    provider::progress::ProviderProgress,
+    store::{AttemptOutcome, Store},
+};
 use serde_json::json;
 
 fn setup() -> (tempfile::TempDir, Store, String, String) {
@@ -147,6 +151,55 @@ fn store_enforces_foreign_keys_and_full_durability() {
     assert_eq!(health.synchronous, 2);
     assert_eq!(health.journal_mode, "wal");
     assert_eq!(health.busy_timeout_ms, 5000);
+}
+
+#[test]
+fn agent_progress_is_owned_ordered_and_rejects_stale_generation() {
+    let (_dir, mut store, run, node) = setup();
+    let attempt = store.begin_attempt(&node, 1).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store
+        .attach_attempt_process(
+            &attempt.id,
+            0,
+            generation,
+            &ProcessIdentity {
+                pid: 123,
+                pgid: 123,
+                started: "progress-process".into(),
+            },
+        )
+        .unwrap();
+
+    store
+        .record_agent_progress(
+            &attempt.id,
+            generation,
+            &ProviderProgress::message("Agent message", "Checking tests"),
+        )
+        .unwrap();
+    let event = store
+        .events(&run, 0)
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event_type == "agent.progress")
+        .unwrap();
+    assert_eq!(event.node_id.as_deref(), Some(node.as_str()));
+    assert_eq!(event.attempt_id.as_deref(), Some(attempt.id.as_str()));
+    assert_eq!(event.payload["kind"], "message");
+    assert_eq!(event.payload["text"], "Checking tests");
+
+    let before = store.events(&run, 0).unwrap();
+    assert!(
+        store
+            .record_agent_progress(
+                &attempt.id,
+                generation + 1,
+                &ProviderProgress::message("Agent message", "stale"),
+            )
+            .is_err()
+    );
+    assert_eq!(store.events(&run, 0).unwrap(), before);
 }
 
 #[test]

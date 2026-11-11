@@ -2,13 +2,14 @@ use crate::{
     agent::ProviderKind,
     error::{Error, Result},
     process::ProcessIdentity,
-    provider::codex,
+    provider::{codex, progress::ProviderProgress},
 };
 use std::{path::PathBuf, sync::Mutex, time::Duration};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProviderLifecycle {
     Spawned(ProcessIdentity),
+    Progress(ProviderProgress),
 }
 
 #[derive(Clone, Debug)]
@@ -54,11 +55,21 @@ pub async fn invoke(
             invocation.max_line_bytes = execution.max_line_bytes;
             invocation.max_stream_bytes = execution.max_stream_bytes;
             invocation.max_result_bytes = execution.max_result_bytes;
-            let outcome = codex::invoke_with_identity(&tools, &invocation, prompt, |identity| {
-                (observer.lock().expect("provider observer lock"))(ProviderLifecycle::Spawned(
-                    identity.clone(),
-                ))
-            })
+            let outcome = codex::invoke_with_observers(
+                &tools,
+                &invocation,
+                prompt,
+                |identity| {
+                    (observer.lock().expect("provider observer lock"))(ProviderLifecycle::Spawned(
+                        identity.clone(),
+                    ))
+                },
+                |progress| {
+                    (observer.lock().expect("provider observer lock"))(ProviderLifecycle::Progress(
+                        progress.clone(),
+                    ))
+                },
+            )
             .await?;
             Ok(ProviderOutcome {
                 conversation_id: outcome.thread_id,

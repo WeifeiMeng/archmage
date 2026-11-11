@@ -187,6 +187,15 @@ for line in sys.stdin:
             text = '{"value":"' + ('x' * 4096) + '"}'
         if read_escape is not None:
             text = json.dumps(read_escape, separators=(",", ":"))
+        if scenario == "progress":
+            send({"jsonrpc":"2.0","method":"session/update","params":{
+                "sessionId":"fake-session",
+                "update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"private"}}
+            }})
+            send({"jsonrpc":"2.0","method":"session/update","params":{
+                "sessionId":"fake-session",
+                "update":{"sessionUpdate":"tool_call","toolCallId":"tool-progress","title":"Run tests","status":"pending"}
+            }})
         send({"jsonrpc":"2.0","method":"session/update","params":{
             "sessionId":"wrong-session" if scenario == "wrong-session" else "fake-session",
             "update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":text}}

@@ -8,6 +8,7 @@ use crate::{
         acp::{AcpAccess, AcpWorkspacePolicy},
         codex::find_executable,
         executor::ProviderOutcome,
+        progress::{ProviderProgress, qoder_progress},
     },
 };
 use agent_client_protocol::v1::schema::{
@@ -368,6 +369,7 @@ impl QoderSession {
                         "mcpServers": mcp_servers
                     }),
                     None,
+                    None,
                 )
                 .await?;
             if load.is_ok() {
@@ -392,20 +394,33 @@ impl QoderSession {
         Ok(())
     }
 
-    pub async fn prompt(&mut self, _attempt_id: &str, prompt: &[u8]) -> Result<ProviderOutcome> {
+    pub async fn prompt(&mut self, attempt_id: &str, prompt: &[u8]) -> Result<ProviderOutcome> {
+        self.prompt_observed(attempt_id, prompt, |_| Ok(())).await
+    }
+
+    pub async fn prompt_observed(
+        &mut self,
+        _attempt_id: &str,
+        prompt: &[u8],
+        mut on_progress: impl FnMut(ProviderProgress) -> Result<()> + Send,
+    ) -> Result<ProviderOutcome> {
         let prompt = std::str::from_utf8(prompt)
             .map_err(|_| Error::Preflight("Qoder prompt is not UTF-8".into()))?;
         let mut text = String::new();
         let session_id = self.session_id.clone();
-        self.request(
+        self.request_observed(
             "session/prompt",
             json!({
                 "sessionId": session_id,
                 "prompt": [{"type": "text", "text": prompt}]
             }),
             Some(&mut text),
+            &mut on_progress,
         )
         .await?;
+        if !text.is_empty() {
+            on_progress(ProviderProgress::message("Agent message", &text))?;
+        }
         if text.len() > self.config.max_result_bytes {
             return Err(Error::Limit("Qoder result limit exceeded".into()));
         }
@@ -475,7 +490,19 @@ impl QoderSession {
         params: Value,
         agent_text: Option<&mut String>,
     ) -> Result<Value> {
-        self.request_with_remote_error(method, params, agent_text)
+        self.request_with_remote_error(method, params, agent_text, None)
+            .await?
+            .map_err(|error| Error::Preflight(format!("Qoder ACP request failed: {error}")))
+    }
+
+    async fn request_observed(
+        &mut self,
+        method: &str,
+        params: Value,
+        agent_text: Option<&mut String>,
+        on_progress: &mut (dyn FnMut(ProviderProgress) -> Result<()> + Send),
+    ) -> Result<Value> {
+        self.request_with_remote_error(method, params, agent_text, Some(on_progress))
             .await?
             .map_err(|error| Error::Preflight(format!("Qoder ACP request failed: {error}")))
     }
@@ -485,6 +512,7 @@ impl QoderSession {
         method: &str,
         params: Value,
         mut agent_text: Option<&mut String>,
+        mut on_progress: Option<&mut (dyn FnMut(ProviderProgress) -> Result<()> + Send)>,
     ) -> Result<std::result::Result<Value, Value>> {
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
@@ -524,6 +552,15 @@ impl QoderSession {
                 }
                 if let Some(target) = agent_text.as_deref_mut() {
                     append_agent_text(&frame, target, self.config.max_result_bytes)?;
+                }
+                if frame
+                    .pointer("/params/update/sessionUpdate")
+                    .and_then(Value::as_str)
+                    != Some("agent_message_chunk")
+                    && let Some(progress) = qoder_progress(&frame)
+                    && let Some(observer) = on_progress.as_deref_mut()
+                {
+                    observer(progress)?;
                 }
                 continue;
             }

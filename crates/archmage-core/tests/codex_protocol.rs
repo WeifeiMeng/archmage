@@ -1,5 +1,9 @@
 use archmage_core::provider::codex::{self, CodexInvocation, Sandbox, validate_help};
 use archmage_core::provider::codex_event::Decoder;
+use archmage_core::provider::progress::{
+    MAX_PROGRESS_TEXT_BYTES, ProviderProgress, codex_progress, qoder_progress,
+};
+use serde_json::json;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -42,6 +46,63 @@ fn failure_events_are_preserved() {
         .unwrap();
     assert_eq!(events[0]["type"], "turn.failed");
     assert_eq!(events[1]["type"], "error");
+}
+
+#[test]
+fn codex_progress_allows_public_items_and_drops_reasoning() {
+    assert_eq!(
+        codex_progress(&json!({
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": "Working on tests"}
+        })),
+        Some(ProviderProgress::message(
+            "Agent message",
+            "Working on tests"
+        ))
+    );
+    assert!(
+        codex_progress(&json!({
+            "type": "item.completed",
+            "item": {"type": "reasoning", "text": "private"}
+        }))
+        .is_none()
+    );
+}
+
+#[test]
+fn progress_text_is_utf8_bounded() {
+    let mapped = codex_progress(&json!({
+        "type": "item.completed",
+        "item": {"type": "agent_message", "text": "你".repeat(MAX_PROGRESS_TEXT_BYTES)}
+    }))
+    .unwrap();
+    let text = mapped.text.unwrap();
+    assert!(text.len() <= MAX_PROGRESS_TEXT_BYTES);
+    assert!(text.is_char_boundary(text.len()));
+}
+
+#[test]
+fn qoder_progress_drops_agent_thought_and_maps_tool_status() {
+    assert!(
+        qoder_progress(&json!({
+            "params": {"update": {
+                "sessionUpdate": "agent_thought_chunk",
+                "content": {"type": "text", "text": "private"}
+            }}
+        }))
+        .is_none()
+    );
+    let mapped = qoder_progress(&json!({
+        "params": {"update": {
+            "sessionUpdate": "tool_call",
+            "toolCallId": "t1",
+            "title": "Run tests",
+            "status": "pending"
+        }}
+    }))
+    .unwrap();
+    assert_eq!(mapped.kind, "tool");
+    assert_eq!(mapped.status.as_deref(), Some("pending"));
 }
 
 #[test]
