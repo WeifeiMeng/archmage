@@ -64,7 +64,35 @@ fn group_exists(pgid: i32) -> bool {
     unsafe { libc::kill(-pgid, 0) == 0 }
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
+fn process_started(pid: u32) -> Result<String> {
+    let mut info = std::mem::MaybeUninit::<libc::proc_bsdinfo>::zeroed();
+    let size = std::mem::size_of::<libc::proc_bsdinfo>();
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid as libc::c_int,
+            libc::PROC_PIDTBSDINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size as libc::c_int,
+        )
+    };
+    if written != size as libc::c_int {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let info = unsafe { info.assume_init() };
+    if info.pbi_pid != pid {
+        return Err(Error::Preflight(
+            "process identity cannot be confirmed".into(),
+        ));
+    }
+    Ok(format!(
+        "{}:{}",
+        info.pbi_start_tvsec, info.pbi_start_tvusec
+    ))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
 fn process_started(pid: u32) -> Result<String> {
     let result = std::process::Command::new("/bin/ps")
         .args(["-o", "lstart=", "-p", &pid.to_string()])
@@ -467,14 +495,15 @@ pub async fn capture_observed(
     max: usize,
     observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
 ) -> Result<Captured> {
-    capture_observed_with_identity(
+    capture_observed_inner(
         binary,
         args,
         cwd,
         input,
         deadline,
         max,
-        |_| Ok(()),
+        &[],
+        None::<fn(&ProcessIdentity) -> Result<()>>,
         observer,
     )
     .await
@@ -519,6 +548,32 @@ pub async fn capture_observed_with_identity_env(
     on_spawn: impl FnOnce(&ProcessIdentity) -> Result<()> + Send,
     observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
 ) -> Result<Captured> {
+    capture_observed_inner(
+        binary,
+        args,
+        cwd,
+        input,
+        deadline,
+        max,
+        environment,
+        Some(on_spawn),
+        observer,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn capture_observed_inner(
+    binary: &Path,
+    args: &[OsString],
+    cwd: Option<&Path>,
+    input: &[u8],
+    deadline: Duration,
+    max: usize,
+    environment: &[(OsString, OsString)],
+    on_spawn: Option<impl FnOnce(&ProcessIdentity) -> Result<()> + Send>,
+    observer: impl FnMut(Stream, &[u8]) -> Result<()> + Send,
+) -> Result<Captured> {
     let observer = std::sync::Mutex::new(observer);
     let mut command = Command::new(binary);
     command
@@ -536,20 +591,26 @@ pub async fn capture_observed_with_identity_env(
     let pid = child
         .id()
         .ok_or_else(|| Error::Spawn("child PID unavailable".into()))?;
+    let pgid = pid as i32;
     #[cfg(unix)]
-    let identity = ProcessIdentity {
-        pid,
-        pgid: pid as i32,
-        started: process_started(pid)?,
-    };
+    if let Some(on_spawn) = on_spawn {
+        let identity = ProcessIdentity {
+            pid,
+            pgid,
+            started: process_started(pid)?,
+        };
+        on_spawn(&identity)?;
+    }
     #[cfg(not(unix))]
-    let identity = ProcessIdentity {
-        pid,
-        pgid: pid as i32,
-        started: String::new(),
-    };
-    on_spawn(&identity)?;
-    let pgid = Some(identity.pgid);
+    if let Some(on_spawn) = on_spawn {
+        let identity = ProcessIdentity {
+            pid,
+            pgid,
+            started: String::new(),
+        };
+        on_spawn(&identity)?;
+    }
+    let pgid = Some(pgid);
     let mut stdin = child.stdin.take().expect("piped stdin");
     let stdout = child.stdout.take().expect("piped stdout");
     let stderr = child.stderr.take().expect("piped stderr");

@@ -118,17 +118,29 @@ async fn output_limit_is_an_error_not_silent_truncation() {
 
 #[tokio::test]
 async fn cancellation_escalates_and_kills_the_process_group() {
+    let temp = tempfile::tempdir().unwrap();
+    let ready = temp.path().join("trap-ready");
     let mut child = spawn_owned(
         Path::new("/bin/sh"),
         &[
             OsString::from("-c"),
-            OsString::from("trap '' TERM; while :; do sleep 1; done"),
+            OsString::from(format!(
+                "trap '' TERM; touch '{}'; while :; do sleep 1; done",
+                ready.display()
+            )),
         ],
         None,
     )
     .await
     .unwrap();
     let identity = child.identity().clone();
+    for _ in 0..100 {
+        if ready.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(ready.exists(), "child did not install its TERM trap");
     let started = Instant::now();
 
     child
