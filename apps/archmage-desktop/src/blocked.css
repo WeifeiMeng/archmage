@@ -1,0 +1,10 @@
+.status-dot.blocked {
+  background: var(--danger);
+}
+
+.node-strip button.blocked,
+.state-pill.blocked {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}

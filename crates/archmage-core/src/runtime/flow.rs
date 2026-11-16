@@ -1,7 +1,8 @@
 use super::{
     Runtime,
     dispatch::{
-        capability, error_code, persistent_provider_config, private_dir, provider_execution,
+        capability, error_code, managed_branch_instructions, persistent_provider_config,
+        private_dir, provider_execution,
     },
 };
 use crate::{
@@ -35,7 +36,7 @@ impl Runtime {
 
         loop {
             let run = self.snapshot(run_id)?;
-            if run.state == "completed" {
+            if matches!(run.state.as_str(), "completed" | "blocked") {
                 return Ok(run);
             }
             if run.state != "running" {
@@ -175,6 +176,7 @@ impl Runtime {
             );
         }
         let configuration = run.capability_configurations.get(kind.key());
+        let branch = store.workspace_for_run(&run.id)?.branch;
         let neighbors = graph
             .edges
             .iter()
@@ -182,10 +184,11 @@ impl Runtime {
             .map(|edge| edge.to.as_str())
             .collect::<Vec<_>>();
         let role = format!(
-            "{}\nThis is a message-flow Team. Incoming delivery sequence: {}. Outgoing recipients: {}. Terminal capability: {}. Return the role deliverable and routing envelope together. Choose continue with at least one outgoing recipient, or complete only if you are the terminal capability. Do not invent handoffs or tests that are not in the supplied context.",
+            "{}\n{}\nThis is a message-flow Team. Incoming delivery sequence: {}. Outgoing recipients: {}. Terminal capability: {}. Return the role deliverable and routing envelope together. Choose continue with at least one outgoing recipient, complete only if you are the terminal capability, or blocked with no recipients when work cannot proceed. Do not invent handoffs or tests that are not in the supplied context.",
             configuration
                 .map(|item| item.extra_instructions.as_str())
                 .unwrap_or(""),
+            managed_branch_instructions(&branch),
             delivery.sequence,
             neighbors.join(", "),
             graph.terminal.as_deref().unwrap_or("")
@@ -300,6 +303,7 @@ impl Runtime {
             &outcome.conversation_id,
             &routing.next,
             routing.decision == "complete",
+            routing.decision == "blocked",
         )
     }
 }

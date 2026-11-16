@@ -13,6 +13,7 @@ const kindLabel: Record<AgentProgress["kind"], string> = {
 function capabilityState(capability: string, state: string) {
   if (state === "running") return `${capability} 正在运行`;
   if (state === "succeeded") return `${capability} 已完成`;
+  if (state === "blocked") return `${capability} 已阻塞`;
   if (state === "failed") return `${capability} 执行失败`;
   if (state === "cancelled") return `${capability} 已取消`;
   if (state === "interrupted") return `${capability} 已中断`;

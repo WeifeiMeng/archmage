@@ -15,6 +15,7 @@ const STATE_LABELS: Record<string, string> = {
   queued: "等待执行",
   running: "执行中",
   completed: "已交付",
+  blocked: "已阻塞",
   failed: "失败",
   cancelled: "已取消",
   interrupted: "已中断",
@@ -101,7 +102,7 @@ export function deliverySender(delivery: FlowDelivery): CapabilityKey | null {
 }
 
 export function deliveryReceivers(delivery: FlowDelivery): CapabilityKey[] {
-  if (!delivery.routing || delivery.routing.decision === "complete") return [];
+  if (!delivery.routing || delivery.routing.decision === "complete" || delivery.routing.decision === "blocked") return [];
   return delivery.routing.next;
 }
 

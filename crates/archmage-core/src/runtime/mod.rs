@@ -54,6 +54,8 @@ pub struct RunRequest {
     pub goal: String,
     #[serde(default)]
     pub team_id: Option<String>,
+    #[serde(default)]
+    pub target_branch: Option<String>,
 }
 
 impl RunRequest {
@@ -66,11 +68,17 @@ impl RunRequest {
             repository: repository.as_ref().to_path_buf(),
             goal,
             team_id: None,
+            target_branch: None,
         })
     }
 
     pub fn with_team(mut self, team_id: impl Into<String>) -> Self {
         self.team_id = Some(team_id.into());
+        self
+    }
+
+    pub fn with_target_branch(mut self, target_branch: impl Into<String>) -> Self {
+        self.target_branch = Some(target_branch.into());
         self
     }
 }
@@ -162,6 +170,8 @@ struct FrozenRunDefinition {
     pub(crate) version: u32,
     pub(crate) repository: PathBuf,
     #[serde(default)]
+    pub(crate) target_branch: Option<String>,
+    #[serde(default)]
     pub(crate) checks: Vec<CheckSpec>,
     #[serde(default)]
     pub(crate) agent_bindings: BTreeMap<String, FrozenAgentBinding>,
@@ -225,8 +235,14 @@ impl Runtime {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         let definition = FrozenRunDefinition {
-            version: 6,
+            version: 7,
             repository,
+            target_branch: request
+                .target_branch
+                .as_deref()
+                .map(str::trim)
+                .filter(|branch| !branch.is_empty())
+                .map(str::to_owned),
             checks: Vec::new(),
             agent_bindings,
             capability_configurations,
@@ -312,6 +328,7 @@ impl Runtime {
             &run_id,
             &request.repository,
             &self.config.data_root.join("worktrees"),
+            request.target_branch.as_deref(),
         )?;
         Ok(run_id)
     }

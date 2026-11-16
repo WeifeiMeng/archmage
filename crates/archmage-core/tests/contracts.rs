@@ -102,6 +102,96 @@ fn flow_contract_checks_terminal_authority_and_recipient_edges() {
 }
 
 #[test]
+fn blocked_coder_is_a_valid_terminal_routing_decision() {
+    let graph = TeamGraph {
+        nodes: vec![TeamNode {
+            capability: "coder".into(),
+            x: 0,
+            y: 0,
+        }],
+        edges: vec![],
+        mode: TeamMode::Flow,
+        entry: Some("coder".into()),
+        terminal: None,
+    };
+    let blocked = json!({"deliverable":{"schema_version":"1","summary_markdown":"Cannot proceed","status":"blocked","changed_paths":[],"notes":["missing input"]},"routing":{"decision":"blocked","next":[]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&blocked).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_ok()
+    );
+    let mut inconsistent = blocked;
+    inconsistent["routing"] = json!({"decision":"continue","next":[]});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&inconsistent).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn blocked_routing_is_limited_to_blocked_coder_or_tester_results() {
+    let graph = TeamGraph {
+        nodes: vec![
+            TeamNode {
+                capability: "tester".into(),
+                x: 0,
+                y: 0,
+            },
+            TeamNode {
+                capability: "designer".into(),
+                x: 100,
+                y: 0,
+            },
+        ],
+        edges: vec![],
+        mode: TeamMode::Flow,
+        entry: Some("tester".into()),
+        terminal: None,
+    };
+    let tester = json!({"deliverable":{"schema_version":"1","summary_markdown":"Blocked","status":"blocked","commands":[],"limitations":["missing service"]},"routing":{"decision":"blocked","next":[]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Tester,
+            &serde_json::to_vec(&tester).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_ok()
+    );
+
+    let implemented = json!({"deliverable":{"schema_version":"1","summary_markdown":"Done","status":"implemented","changed_paths":[],"notes":[]},"routing":{"decision":"blocked","next":[]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Coder,
+            &serde_json::to_vec(&implemented).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_err()
+    );
+
+    let designer = json!({"deliverable":{"schema_version":"1","summary_markdown":"Design","design_markdown":"Details","acceptance_criteria":["works"],"implementation_steps":["build"]},"routing":{"decision":"blocked","next":[]}});
+    assert!(
+        validate_flow_output(
+            CapabilityKind::Designer,
+            &serde_json::to_vec(&designer).unwrap(),
+            &ContractContext::default(),
+            &graph
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn nonterminal_reviewer_may_approve_and_continue() {
     let graph = TeamGraph {
         nodes: vec![

@@ -134,6 +134,7 @@ describe("delivery states", () => {
     expect(deliveryStateLabel("cancelled")).toBe("已取消");
     expect(deliveryStateLabel("interrupted")).toBe("已中断");
     expect(deliveryStateLabel("skipped_due_terminal")).toBe("已跳过");
+    expect(deliveryStateLabel("blocked")).toBe("已阻塞");
     expect(deliverySkipReason("skipped_due_failure")).toBe("上游失败，本步未执行");
     expect(deliverySkipReason("skipped_due_cancel")).toBe("运行被取消，本步未执行");
     expect(deliverySkipReason("skipped_due_interruption")).toBe("运行中断，本步未执行");

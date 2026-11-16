@@ -141,6 +141,73 @@ fn failed_run_settles_active_and_queued_deliveries() {
 }
 
 #[test]
+fn blocked_delivery_preserves_result_and_terminates_run_without_failure() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
+    let run = store.create_run("goal", &["coder", "reviewer"]).unwrap();
+    store.start_run(&run, 0).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store.enqueue_flow_entry(&run, generation, "coder").unwrap();
+    let delivery = store
+        .claim_flow_delivery(&run, generation)
+        .unwrap()
+        .unwrap();
+    let node = store.nodes(&run).unwrap().remove(0);
+    store.ready_node(&node.id, node.revision).unwrap();
+    let attempt = store.begin_attempt(&node.id, node.revision + 1).unwrap();
+    store
+        .bind_flow_attempt(&delivery.id, generation, &attempt.id)
+        .unwrap();
+    store
+        .attach_attempt_process(
+            &attempt.id,
+            attempt.revision,
+            generation,
+            &ProcessIdentity {
+                pid: 42,
+                pgid: 42,
+                started: "test".into(),
+            },
+        )
+        .unwrap();
+    let output = serde_json::json!({"status":"blocked","notes":["missing input"]});
+    let artifact = ArtifactStore::open(&temp.path().join("artifacts"))
+        .unwrap()
+        .publish(
+            &mut store,
+            &attempt.id,
+            output.to_string().as_bytes(),
+            "application/json",
+        )
+        .unwrap();
+    store
+        .finish_flow_delivery(
+            &delivery.id,
+            generation,
+            &attempt.id,
+            &artifact,
+            None,
+            &output,
+            "thread-blocked",
+            &[],
+            false,
+            true,
+        )
+        .unwrap();
+
+    assert_eq!(store.run(&run).unwrap().state, "blocked");
+    assert_eq!(store.nodes(&run).unwrap()[0].state, "blocked");
+    assert_eq!(store.flow_deliveries(&run).unwrap()[0].state, "blocked");
+    assert_eq!(store.node_result(&run, "coder").unwrap().output, output);
+    let events = store.events(&run, 0).unwrap();
+    assert!(
+        events
+            .iter()
+            .any(|event| event.event_type == "workflow.blocked")
+    );
+}
+
+#[test]
 fn finishing_one_delivery_atomically_queues_each_selected_recipient() {
     let temp = tempfile::tempdir().unwrap();
     let mut store = Store::open(&temp.path().join("archmage.db")).unwrap();
@@ -192,6 +259,7 @@ fn finishing_one_delivery_atomically_queues_each_selected_recipient() {
                 "thread-1",
                 &["coder".into()],
                 false,
+                false,
             )
             .is_err()
     );
@@ -208,6 +276,7 @@ fn finishing_one_delivery_atomically_queues_each_selected_recipient() {
             &serde_json::json!({"summary":"design"}),
             "thread-1",
             &["coder".into(), "tester".into()],
+            false,
             false,
         )
         .unwrap();
@@ -515,6 +584,7 @@ fn finish_test_delivery_with_output(
             "thread-test",
             next,
             complete,
+            false,
         )
         .unwrap();
 }

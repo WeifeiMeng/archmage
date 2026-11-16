@@ -1,4 +1,4 @@
-export type RunRequest = { repository: string; goal: string; teamId?: string };
+export type RunRequest = { repository: string; goal: string; teamId?: string; targetBranch?: string };
 export type ProviderKind = "codex" | "deepseek_harness" | "qoder" | "claude" | "openclaw" | "hermes";
 export type ConnectionState = "unverified" | "ready" | "failed";
 export type CapabilityKey = "designer" | "coder" | "tester" | "reviewer";
@@ -231,8 +231,9 @@ export const initialTimelineState: TimelineState = {
   needsRefresh: false,
 };
 
-export function toRunRequest(repository: string, goal: string, teamId?: string): RunRequest {
-  return { repository: repository.trim(), goal: goal.trim(), ...(teamId ? { teamId } : {}) };
+export function toRunRequest(repository: string, goal: string, teamId?: string, targetBranch?: string): RunRequest {
+  const branch = targetBranch?.trim();
+  return { repository: repository.trim(), goal: goal.trim(), ...(teamId ? { teamId } : {}), ...(branch ? { targetBranch: branch } : {}) };
 }
 
 export const connectionLabel = (state: ConnectionState) =>

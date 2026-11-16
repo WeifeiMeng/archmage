@@ -141,7 +141,7 @@ impl Store {
         let mut db = Connection::open(path)?;
         db.busy_timeout(Duration::from_millis(5000))?;
         db.execute_batch(
-            "PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
+            "PRAGMA foreign_keys=OFF; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
         )?;
         let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let has_schema: bool = tx.query_row(
@@ -171,6 +171,7 @@ impl Store {
             ))?;
             tx.execute_batch(include_str!("../../migrations/0016_deepseek_harness.sql"))?;
             tx.execute_batch(include_str!("../../migrations/0017_qoder.sql"))?;
+            tx.execute_batch(include_str!("../../migrations/0018_blocked_flow.sql"))?;
         } else {
             let mut version: i64 = tx.query_row(
                 "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -247,13 +248,27 @@ impl Store {
                 tx.execute_batch(include_str!("../../migrations/0017_qoder.sql"))?;
                 version = 17;
             }
-            if version != 17 {
+            if version == 17 {
+                tx.execute_batch(include_str!("../../migrations/0018_blocked_flow.sql"))?;
+                version = 18;
+            }
+            if version != 18 {
                 return Err(Error::Preflight(format!(
                     "unsupported database schema {version}"
                 )));
             }
         }
+        let violations: i64 =
+            tx.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+                row.get(0)
+            })?;
+        if violations != 0 {
+            return Err(Error::Preflight(format!(
+                "database has {violations} foreign key violations after migration"
+            )));
+        }
         tx.commit()?;
+        db.execute_batch("PRAGMA foreign_keys=ON")?;
         Ok(Self { db })
     }
     pub fn schema_version(&self) -> Result<i64> {

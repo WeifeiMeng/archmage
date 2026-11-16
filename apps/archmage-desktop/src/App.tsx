@@ -37,6 +37,7 @@ import { applyTheme, DEFAULT_THEME, persistTheme, type Theme } from "./theme";
 import "./agents.css";
 import "./capabilities.css";
 import "./newRun.css";
+import "./blocked.css";
 import {
   initialTimelineState,
   capabilityDisplayName,
@@ -66,7 +67,7 @@ const nodeMeta = {
 
 function stateLabel(state: string, outcome?: string | null) {
   if (state === "completed") return outcome === "approved" ? "已批准" : "需要修改";
-  return ({ pending: "等待", ready: "就绪", running: "运行中", succeeded: "完成", failed: "失败", interrupted: "已中断", cancelled: "已取消", created: "已创建", provisioning: "准备中" } as Record<string, string>)[state] ?? state;
+  return ({ pending: "等待", ready: "就绪", running: "运行中", succeeded: "完成", blocked: "已阻塞", failed: "失败", interrupted: "已中断", cancelled: "已取消", created: "已创建", provisioning: "准备中" } as Record<string, string>)[state] ?? state;
 }
 
 type AppProps = { initialTheme?: Theme };
@@ -78,6 +79,7 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
   const [timeline, setTimeline] = useState<TimelineState>(initialTimelineState);
   const [repository, setRepository] = useState("");
   const [goal, setGoal] = useState("");
+  const [targetBranch, setTargetBranch] = useState("");
   const [view, setView] = useState<AppView>("runs");
   const [capabilityDirty, setCapabilityDirty] = useState(false);
   const [teamDirty, setTeamDirty] = useState(false);
@@ -245,7 +247,7 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
     return () => window.clearInterval(timer);
   }, [refreshRun, snapshot]);
 
-  const request = useMemo(() => toRunRequest(repository, goal, teamId), [repository, goal, teamId]);
+  const request = useMemo(() => toRunRequest(repository, goal, teamId, targetBranch), [repository, goal, teamId, targetBranch]);
   const selectedTeam = selectedTeamForRun(teams, teamId, teamLoadState);
   const bindingIssues = agents && selectedTeam ? runBindingIssues(agents, selectedTeam.graph.nodes.map((node) => node.capability)) : [];
   const canStart = environment === "ready" && agents !== null && bindingIssues.length === 0 && !!selectedTeam && request.repository.length > 0 && request.goal.length > 0 && !busy;
@@ -304,6 +306,8 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
                 <div className="new-run-panel-heading"><div><span>STEP 1</span><h2>任务定义</h2><p>告诉团队在哪里工作，以及需要交付什么。</p></div></div>
                 <label htmlFor="repository">Git 仓库<span>必填</span></label>
                 <div className="path-field"><FolderGit2 size={18} /><input id="repository" value={repository} onChange={(event) => setRepository(event.target.value)} placeholder="选择一个已有 commit 的本地仓库" /><button onClick={chooseRepository}><FolderOpen size={17} />选择</button></div>
+                <label htmlFor="target-branch">目标分支<span>可选，由 Archmage 创建</span></label>
+                <div className="path-field"><Code2 size={18} /><input id="target-branch" value={targetBranch} onChange={(event) => setTargetBranch(event.target.value)} placeholder="留空则使用 archmage/run-&lt;id&gt;" /></div>
                 <label htmlFor="goal">目标<span>必填</span></label>
                 <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="描述希望这个团队完成的具体结果……" rows={7} />
               </section>

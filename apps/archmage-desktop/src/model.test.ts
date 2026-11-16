@@ -60,6 +60,7 @@ describe("run request", () => {
       goal: "goal",
       teamId: "team-1",
     });
+    expect(toRunRequest(" /repo ", " goal ", "team-1", " feature/fix ")).toEqual({ repository: "/repo", goal: "goal", teamId: "team-1", targetBranch: "feature/fix" });
   });
 });
 

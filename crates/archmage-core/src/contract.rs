@@ -30,6 +30,11 @@ struct FlowEnvelope {
 pub fn flow_output_schema(kind: CapabilityKind) -> Result<String> {
     let deliverable: Value =
         serde_json::from_str(kind.schema()).map_err(|error| invalid(error.to_string()))?;
+    let routing_decisions = if matches!(kind, CapabilityKind::Coder | CapabilityKind::Tester) {
+        serde_json::json!(["continue", "complete", "blocked"])
+    } else {
+        serde_json::json!(["continue", "complete"])
+    };
     let schema = serde_json::json!({
         "type": "object",
         "additionalProperties": false,
@@ -41,7 +46,7 @@ pub fn flow_output_schema(kind: CapabilityKind) -> Result<String> {
                 "additionalProperties": false,
                 "required": ["decision", "next"],
                 "properties": {
-                    "decision": {"type": "string", "enum": ["continue", "complete"]},
+                    "decision": {"type": "string", "enum": routing_decisions},
                     "next": {"type": "array", "items": {"type": "string"}}
                 }
             }
@@ -87,7 +92,21 @@ pub fn validate_flow_output(
                 return Err(invalid("routing recipients must follow outgoing edges"));
             }
         }
-        _ => return Err(invalid("routing decision must be continue or complete")),
+        "blocked" => {
+            if !routing.next.is_empty()
+                || !matches!(kind, CapabilityKind::Coder | CapabilityKind::Tester)
+                || deliverable["status"] != "blocked"
+            {
+                return Err(invalid(
+                    "blocked routing requires a blocked coder or tester with no recipients",
+                ));
+            }
+        }
+        _ => {
+            return Err(invalid(
+                "routing decision must be continue, complete, or blocked",
+            ));
+        }
     }
     if kind == CapabilityKind::Reviewer && graph.terminal.as_deref() == Some(kind.key()) {
         let approved = deliverable["status"] == "approved";
@@ -95,11 +114,10 @@ pub fn validate_flow_output(
             return Err(invalid("review status and routing decision disagree"));
         }
     }
-    if kind == CapabilityKind::Coder && deliverable["status"] == "blocked" {
-        return Err(invalid("blocked coder output cannot route a flow"));
-    }
-    if kind == CapabilityKind::Tester && deliverable["status"] == "blocked" {
-        return Err(invalid("blocked tester output cannot route a flow"));
+    if matches!(kind, CapabilityKind::Coder | CapabilityKind::Tester)
+        && (deliverable["status"] == "blocked") != (routing.decision == "blocked")
+    {
+        return Err(invalid("blocked status and routing decision disagree"));
     }
     if kind == CapabilityKind::Tester
         && deliverable["status"] == "failed"

@@ -320,7 +320,8 @@ impl Runtime {
         } else {
             resolve_context_with_revision
         };
-        let role_instructions = team_role_instructions(kind, &run, extra_instructions);
+        let role_instructions =
+            team_role_instructions(kind, &run, extra_instructions, &workspace_record.branch);
         let context = resolve(
             kind,
             prompt_version,
@@ -702,9 +703,11 @@ fn team_role_instructions(
     kind: CapabilityKind,
     run: &super::RunSnapshot,
     configured: &str,
+    branch: &str,
 ) -> String {
+    let workspace = managed_branch_instructions(branch);
     if run.team.is_none() {
-        return configured.to_owned();
+        return format!("{configured}\n{workspace}");
     }
     let note = match kind {
         CapabilityKind::Designer => "Create a design from the goal and repository view.",
@@ -718,7 +721,13 @@ fn team_role_instructions(
             "Review only the supplied evidence. If no test_result is supplied, tests have not been run by a Tester; never claim they passed. You may approve based on available evidence if justified."
         }
     };
-    format!("{configured}\n{note}")
+    format!("{configured}\n{workspace}\n{note}")
+}
+
+pub(super) fn managed_branch_instructions(branch: &str) -> String {
+    format!(
+        "Current Archmage-managed branch: {branch}. Do not create, switch, rename, or delete Git branches or modify worktree Git metadata. Treat branch preparation requested by the user as already completed by Archmage."
+    )
 }
 
 fn insert_result(
@@ -794,5 +803,14 @@ mod tests {
                 .unwrap()
                 .tester_accepted
         );
+    }
+
+    #[test]
+    fn managed_branch_instruction_exposes_name_without_git_metadata_path() {
+        let instructions = managed_branch_instructions("docs/topic");
+        assert!(instructions.contains("Current Archmage-managed branch: docs/topic"));
+        assert!(instructions.contains("Do not create, switch, rename, or delete Git branches"));
+        assert!(instructions.contains("already completed by Archmage"));
+        assert!(!instructions.contains(".git/worktrees"));
     }
 }

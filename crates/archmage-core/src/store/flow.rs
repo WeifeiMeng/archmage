@@ -226,10 +226,12 @@ impl Store {
         thread_id: &str,
         next: &[String],
         complete: bool,
+        blocked: bool,
     ) -> Result<()> {
         if thread_id.trim().is_empty()
-            || (complete && !next.is_empty())
-            || (!complete && next.is_empty())
+            || (complete && blocked)
+            || ((complete || blocked) && !next.is_empty())
+            || (!complete && !blocked && next.is_empty())
         {
             return Err(Error::Preflight("invalid flow routing decision".into()));
         }
@@ -268,13 +270,22 @@ impl Store {
         if changed != 1 {
             return Err(Error::Conflict);
         }
-        tx.execute("UPDATE node_runs SET state='succeeded',revision=revision+1 WHERE id=?1 AND state='running'", [&node])?;
-        let routing = json!({"decision":if complete {"complete"} else {"continue"},"next":next});
-        tx.execute("UPDATE flow_deliveries SET state='completed',attempt_id=?2,routing_json=?3 WHERE id=?1 AND state='running'", params![delivery_id,attempt_id,routing.to_string()])?;
+        let terminal_state = if blocked { "blocked" } else { "succeeded" };
+        tx.execute(
+            "UPDATE node_runs SET state=?2,revision=revision+1 WHERE id=?1 AND state='running'",
+            params![node, terminal_state],
+        )?;
+        let routing = json!({"decision":if complete {"complete"} else if blocked {"blocked"} else {"continue"},"next":next});
+        let delivery_state = if blocked { "blocked" } else { "completed" };
+        tx.execute("UPDATE flow_deliveries SET state=?4,attempt_id=?2,routing_json=?3 WHERE id=?1 AND state='running'", params![delivery_id,attempt_id,routing.to_string(),delivery_state])?;
         event(
             &tx,
             &run,
-            "node.succeeded",
+            if blocked {
+                "node.blocked"
+            } else {
+                "node.succeeded"
+            },
             Some(&node),
             Some(attempt_id),
             json!({"owner_generation":generation,"thread_id":thread_id,"result_artifact_id":result_artifact_id}),
@@ -282,12 +293,28 @@ impl Store {
         event(
             &tx,
             &run,
-            "flow.delivery_completed",
+            if blocked {
+                "flow.delivery_blocked"
+            } else {
+                "flow.delivery_completed"
+            },
             Some(&node),
             Some(attempt_id),
             json!({"delivery_id":delivery_id,"routing":routing}),
         )?;
-        if complete {
+        if blocked {
+            tx.execute("UPDATE flow_deliveries SET state='skipped_due_terminal' WHERE run_id=?1 AND state='queued'", [&run])?;
+            let outcome = format!("{target}_blocked");
+            tx.execute("UPDATE runs SET state='blocked',outcome=?3,revision=revision+1 WHERE id=?1 AND state='running' AND owner_generation=?2", params![run,generation,outcome])?;
+            event(
+                &tx,
+                &run,
+                "workflow.blocked",
+                None,
+                None,
+                json!({"outcome":outcome,"capability":target}),
+            )?;
+        } else if complete {
             tx.execute("UPDATE flow_deliveries SET state='skipped_due_terminal' WHERE run_id=?1 AND state='queued'", [&run])?;
             tx.execute("UPDATE runs SET state='completed',outcome='approved',revision=revision+1 WHERE id=?1 AND state='running' AND owner_generation=?2", params![run,generation])?;
             event(

@@ -75,12 +75,40 @@ pub fn provision(
     run: &str,
     source: &Path,
     worktree_root: &Path,
+    target_branch: Option<&str>,
 ) -> Result<ProvisionedWorkspace> {
     let repo = inspect_repository(source)?;
     fs::create_dir_all(worktree_root)?;
     let worktree_root = fs::canonicalize(worktree_root)?;
     let path = worktree_root.join(run);
-    let branch = format!("archmage/run-{run}");
+    let branch = target_branch
+        .map(str::trim)
+        .filter(|branch| !branch.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("archmage/run-{run}"));
+    git::run(
+        &repo.root,
+        &[
+            OsStr::new("check-ref-format"),
+            OsStr::new("--branch"),
+            OsStr::new(&branch),
+        ],
+    )
+    .map_err(|_| Error::Preflight(format!("invalid target branch: {branch}")))?;
+    if git::run(
+        &repo.root,
+        &[
+            OsStr::new("show-ref"),
+            OsStr::new("--verify"),
+            OsStr::new(&format!("refs/heads/{branch}")),
+        ],
+    )
+    .is_ok()
+    {
+        return Err(Error::Preflight(format!(
+            "target branch already exists: {branch}"
+        )));
+    }
     let path_text = path
         .to_str()
         .ok_or_else(|| Error::Preflight("worktree path must be UTF-8 in S0".into()))?;

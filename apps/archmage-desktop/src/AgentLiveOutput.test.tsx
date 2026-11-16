@@ -33,4 +33,15 @@ describe("AgentLiveOutput", () => {
     expect(html).toContain("Designer 已完成");
     expect(html).toContain("Design complete");
   });
+
+  it("labels a blocked capability without hiding its historical output", () => {
+    const html = renderToStaticMarkup(<AgentLiveOutput
+      capability="Coder"
+      provider="Codex · codex"
+      state="blocked"
+      progress={[{ sequence: 2, kind: "notice", label: "Missing prerequisite", status: null, text: "Need credentials", metadata: {} }]}
+    />);
+    expect(html).toContain("Coder 已阻塞");
+    expect(html).toContain("Need credentials");
+  });
 });

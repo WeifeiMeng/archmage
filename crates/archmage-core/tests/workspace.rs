@@ -40,7 +40,14 @@ fn dirty_source_is_not_copied_into_run_worktree() {
     let mut store = Store::open(&data.path().join("state.db")).unwrap();
     let run = store.create_run("isolate", &["design"]).unwrap();
 
-    let created = provision(&mut store, &run, source.path(), &data.path().join("runs")).unwrap();
+    let created = provision(
+        &mut store,
+        &run,
+        source.path(),
+        &data.path().join("runs"),
+        None,
+    )
+    .unwrap();
 
     assert_eq!(created.state, ProvisionState::Ready);
     assert_eq!(
@@ -75,12 +82,66 @@ fn provisions_two_runs_with_paths_containing_spaces() {
     let first = store.create_run("one", &["design"]).unwrap();
     let second = store.create_run("two", &["design"]).unwrap();
 
-    let a = provision(&mut store, &first, &source, &data.join("run worktrees")).unwrap();
-    let b = provision(&mut store, &second, &source, &data.join("run worktrees")).unwrap();
+    let a = provision(
+        &mut store,
+        &first,
+        &source,
+        &data.join("run worktrees"),
+        None,
+    )
+    .unwrap();
+    let b = provision(
+        &mut store,
+        &second,
+        &source,
+        &data.join("run worktrees"),
+        None,
+    )
+    .unwrap();
 
     assert_ne!(a.path, b.path);
     assert_ne!(a.branch, b.branch);
     assert_eq!(a.baseline, b.baseline);
+}
+
+#[test]
+fn provisions_requested_branch_and_rejects_invalid_or_existing_names() {
+    let source = repo();
+    let data = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&data.path().join("state.db")).unwrap();
+    let run = store.create_run("custom", &["design"]).unwrap();
+    let created = provision(
+        &mut store,
+        &run,
+        source.path(),
+        &data.path().join("runs"),
+        Some("feature/product-fix"),
+    )
+    .unwrap();
+    assert_eq!(created.branch, "feature/product-fix");
+
+    let invalid = store.create_run("invalid", &["design"]).unwrap();
+    assert!(
+        provision(
+            &mut store,
+            &invalid,
+            source.path(),
+            &data.path().join("runs"),
+            Some("bad branch")
+        )
+        .is_err()
+    );
+    let existing = store.create_run("existing", &["design"]).unwrap();
+    assert!(
+        provision(
+            &mut store,
+            &existing,
+            source.path(),
+            &data.path().join("runs"),
+            Some("feature/product-fix")
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -91,7 +152,16 @@ fn unborn_repository_is_rejected_before_intent() {
     let mut store = Store::open(&data.path().join("state.db")).unwrap();
     let run = store.create_run("unborn", &["design"]).unwrap();
 
-    assert!(provision(&mut store, &run, source.path(), &data.path().join("runs")).is_err());
+    assert!(
+        provision(
+            &mut store,
+            &run,
+            source.path(),
+            &data.path().join("runs"),
+            None
+        )
+        .is_err()
+    );
     assert!(store.workspace_for_run(&run).is_err());
     assert_eq!(store.run(&run).unwrap().state, "created");
 }
@@ -108,7 +178,7 @@ fn failed_git_add_keeps_provisioning_intent() {
     fs::create_dir(&expected).unwrap();
     fs::write(expected.join("do-not-delete"), "owned elsewhere").unwrap();
 
-    assert!(provision(&mut store, &run, source.path(), &roots).is_err());
+    assert!(provision(&mut store, &run, source.path(), &roots, None).is_err());
     let intent = store.workspace_for_run(&run).unwrap();
     assert_eq!(intent.state, "provisioning");
     let canonical_parent = fs::canonicalize(&roots).unwrap();

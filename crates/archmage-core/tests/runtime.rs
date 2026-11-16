@@ -24,6 +24,15 @@ fn git(repo: &Path, args: &[&str]) {
 }
 
 #[test]
+fn run_request_serializes_an_optional_target_branch() {
+    let request = RunRequest::new(Path::new("/repo"), "goal")
+        .unwrap()
+        .with_target_branch("docs/topic");
+    let value = serde_json::to_value(request).unwrap();
+    assert_eq!(value["targetBranch"], "docs/topic");
+}
+
+#[test]
 fn review_gate_requires_every_outgoing_consultation_and_aggregates_rejections() {
     let graph = TeamGraph::builtin();
     let edges: Vec<_> = graph.outgoing("designer").collect();
