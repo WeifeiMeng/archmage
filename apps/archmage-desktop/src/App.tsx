@@ -26,6 +26,9 @@ import { SettingsShell } from "./SettingsShell";
 import { RunTeamPreview } from "./RunTeamPreview";
 import { RunHeaderActions } from "./RunHeaderActions";
 import { FlowDeliverySwimlane } from "./FlowDeliverySwimlane";
+import { AgentLiveOutput } from "./AgentLiveOutput";
+import { RunSplitPane } from "./RunSplitPane";
+import { progressForNode } from "./agentProgress";
 import { flowLaneMembers } from "./flowDelivery";
 import { ManagementHero, PageMetric } from "./ManagementHero";
 import { environmentSummary } from "./managementLayout";
@@ -39,6 +42,7 @@ import {
   capabilityDisplayName,
   isActive,
   reduceEvent,
+  providerLabel,
   runBindingIssues,
   selectedTeamForRun,
   shouldConfirmCapabilityExit,
@@ -332,15 +336,33 @@ export default function App({ initialTheme = DEFAULT_THEME }: AppProps) {
   );
 }
 
-function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal }: { snapshot: RunSnapshot; timeline: TimelineState; onRefresh: () => void; onCancel: () => void; onReveal: () => void }) {
+export function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal }: { snapshot: RunSnapshot; timeline: TimelineState; onRefresh: () => void; onCancel: () => void; onReveal: () => void }) {
   const [selectedNode, setSelectedNode] = useState<string>(snapshot.nodes.find((node) => node.state === "running")?.id ?? snapshot.nodes[0]?.id);
   const node = snapshot.nodes.find((item) => item.id === selectedNode) ?? snapshot.nodes[0];
   const nodeEvents = timeline.events.filter((event) => event.node_id === node?.id);
+  const nodeProgress = node ? progressForNode(timeline.events, node.id) : [];
+  const capabilityLabel = node ? capabilityDisplayName(snapshot.capabilityConfigurations[node.key], node.key) : "—";
+  const binding = node ? snapshot.agentBindings[node.key] : undefined;
+  const providerIdentity = binding ? `${providerLabel(binding.providerKind)} · ${binding.providerKind}` : "历史配置";
+  const inspector = <section className="panel inspector">
+    <div className="panel-title"><div><span>节点检查器</span><small>{capabilityLabel}</small></div></div>
+    {node ? <>
+      <div className="inspect-state"><span className={`status-dot ${node.state}`} /><strong>{capabilityLabel} · {stateLabel(node.state)}</strong><code>{node.id}</code></div>
+      <div className="inspect-section agent-output-section"><label>Agent 实时输出</label><AgentLiveOutput capability={capabilityLabel} provider={providerIdentity} state={node.state} progress={nodeProgress} /></div>
+      {node.result ? <>
+        <div className="result-meta"><MetaItem label="Conversation" value={node.result.threadId} /><MetaItem label="Attempt" value={node.result.attemptId} /><MetaItem label="Result Artifact" value={node.result.resultArtifactId} />{node.result.changesetArtifactId && <MetaItem label="ChangeSet" value={node.result.changesetArtifactId} />}</div>
+        <div className="inspect-section output-section"><label>结构化结果</label><ResultSummary output={node.result.output} /><details><summary>查看原始 JSON</summary><pre>{JSON.stringify(node.result.output, null, 2)}</pre></details></div>
+      </> : <div className="waiting-result"><LoaderCircle className={node.state === "running" ? "spin" : ""} size={17} /><div><strong>尚无结构化结果</strong><span>{node.state === "running" ? `${capabilityLabel} 正在执行，完成后会在此显示结果和 Artifact。` : "节点开始并成功完成后，结果会持久化到这里。"}</span></div></div>}
+      <div className="inspect-section"><label>下游咨询</label>{snapshot.consultations.filter((item) => item.sourceNodeId === node.id).map((item) => <div className="consultation-card" key={item.id}><strong>{item.targetCapability} · {item.decision === "approved" ? "认可" : "要求修改"} · 第 {item.round + 1} 轮</strong><p>{item.summary}</p>{item.suggestions.map((suggestion) => <p key={suggestion}>建议：{suggestion}</p>)}<code>{item.threadId}</code></div>)}{!snapshot.consultations.some((item) => item.sourceNodeId === node.id) && <p className="empty-copy">暂无咨询结果。</p>}</div>
+      <div className="inspect-section"><label>运行记录</label>{nodeEvents.length ? nodeEvents.map((event) => <div className="compact-event" key={event.sequence}><span>#{event.sequence} · {event.event_type}</span>{Object.keys(event.payload).length > 0 && <pre>{JSON.stringify(event.payload, null, 2)}</pre>}</div>) : <p className="empty-copy">该节点还没有事件。</p>}</div>
+    </> : null}
+  </section>;
+  const timelinePanel = <section className="panel timeline-panel"><div className="panel-title"><div><span>运行时间线</span><small>{timeline.events.length} 个持久化事件</small></div><span className="sequence">SEQ {timeline.lastSequence}</span></div><div className="timeline">{timeline.events.map((event) => <EventRow key={event.sequence} event={event} />)}{timeline.events.length === 0 && <p className="empty-copy">等待 Runtime 事件……</p>}</div></section>;
   return <div className="run-view">
     <header className="run-header"><div><div className="crumb"><span>Runs</span><ChevronRight size={14} />{snapshot.id.slice(0, 8)}</div><h1>{snapshot.goal}</h1><div className="run-meta"><span className={`state-pill ${snapshot.state}`}><Circle size={8} fill="currentColor" />{stateLabel(snapshot.state, snapshot.outcome)}</span><span>{snapshot.repository}</span>{snapshot.team && <span>团队：{snapshot.team.name} · v{snapshot.team.revision}</span>}<code>{snapshot.id}</code></div></div><RunHeaderActions workspaceAvailable={Boolean(snapshot.workspace)} cancellable={isActive(snapshot.state)} onRefresh={onRefresh} onReveal={onReveal} onCancel={onCancel} /></header>
     <section className="node-strip" aria-label="能力进度">{snapshot.nodes.map((item, index) => { const meta = nodeMeta[item.key]; const binding = snapshot.agentBindings[item.key]; const Icon = meta.icon; return <button key={item.id} className={`${item.state} ${selectedNode === item.id ? "selected" : ""}`} onClick={() => setSelectedNode(item.id)}><span className="node-index">{item.state === "succeeded" ? <Check size={15} /> : item.state === "running" ? <LoaderCircle className="spin" size={15} /> : index + 1}</span><Icon size={18} /><span><strong>{capabilityDisplayName(snapshot.capabilityConfigurations[item.key], item.key)}</strong><small>{stateLabel(item.state)} · {binding ? `${binding.displayName} (${binding.providerKind})` : "历史配置"}</small></span></button>; })}</section>
     {snapshot.team?.graph.mode === "flow" ? <FlowDeliverySwimlane members={flowLaneMembers(snapshot.team, snapshot.capabilityConfigurations)} deliveries={snapshot.flowDeliveries ?? []} stepLimit={snapshot.flowStepLimit ?? 24} /> : snapshot.team && <ConsultationProgress snapshot={snapshot} />}
-    <div className="run-grid"><section className="panel timeline-panel"><div className="panel-title"><div><span>运行时间线</span><small>{timeline.events.length} 个持久化事件</small></div><span className="sequence">SEQ {timeline.lastSequence}</span></div><div className="timeline">{timeline.events.map((event) => <EventRow key={event.sequence} event={event} />)}{timeline.events.length === 0 && <p className="empty-copy">等待 Runtime 事件……</p>}</div></section><section className="panel inspector"><div className="panel-title"><div><span>节点检查器</span><small>{node ? nodeMeta[node.key].label : "—"}</small></div></div>{node ? <><div className="inspect-state"><span className={`status-dot ${node.state}`} /><strong>{stateLabel(node.state)}</strong><code>{node.id}</code></div>{node.result ? <><div className="result-meta"><MetaItem label="Codex Thread" value={node.result.threadId} /><MetaItem label="Attempt" value={node.result.attemptId} /><MetaItem label="Result Artifact" value={node.result.resultArtifactId} />{node.result.changesetArtifactId && <MetaItem label="ChangeSet" value={node.result.changesetArtifactId} />}</div><div className="inspect-section output-section"><label>结构化结果</label><ResultSummary output={node.result.output} /><details><summary>查看原始 JSON</summary><pre>{JSON.stringify(node.result.output, null, 2)}</pre></details></div></> : <div className="waiting-result"><LoaderCircle className={node.state === "running" ? "spin" : ""} size={17} /><div><strong>尚无结构化结果</strong><span>{node.state === "running" ? "Codex 正在执行，完成后会在此显示结果和 Artifact。" : "节点开始并成功完成后，结果会持久化到这里。"}</span></div></div>}<div className="inspect-section"><label>下游咨询</label>{snapshot.consultations.filter((item) => item.sourceNodeId === node.id).map((item) => <div className="consultation-card" key={item.id}><strong>{item.targetCapability} · {item.decision === "approved" ? "认可" : "要求修改"} · 第 {item.round + 1} 轮</strong><p>{item.summary}</p>{item.suggestions.map((suggestion) => <p key={suggestion}>建议：{suggestion}</p>)}<code>{item.threadId}</code></div>)}{!snapshot.consultations.some((item) => item.sourceNodeId === node.id) && <p className="empty-copy">暂无咨询结果。</p>}</div><div className="inspect-section"><label>运行记录</label>{nodeEvents.length ? nodeEvents.map((event) => <div className="compact-event" key={event.sequence}><span>#{event.sequence} · {event.event_type}</span>{Object.keys(event.payload).length > 0 && <pre>{JSON.stringify(event.payload, null, 2)}</pre>}</div>) : <p className="empty-copy">该节点还没有事件。</p>}</div></> : null}</section></div>
+    <RunSplitPane inspector={inspector} timeline={timelinePanel} />
   </div>;
 }
 
