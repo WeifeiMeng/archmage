@@ -114,11 +114,15 @@ impl QoderCancelHandle {
         self.state.notify.notify_one();
         // Give an active ACP request a short bounded opportunity to emit
         // `session/cancel`; an idle session has no reader to acknowledge it.
-        let _ = tokio::time::timeout(
+        if tokio::time::timeout(
             Duration::from_millis(100),
             self.state.acknowledged.notified(),
         )
-        .await;
+        .await
+        .is_ok()
+        {
+            return Ok(());
+        }
         cancel_process(&self.state.identity, Duration::from_secs(1)).await
     }
 }
