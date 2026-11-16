@@ -36,8 +36,13 @@ function progressFromEvent(event: RunEvent): AgentProgress | null {
 }
 
 export function progressForNode(events: RunEvent[], nodeId: string): AgentProgress[] {
+  const latestAttempt = events
+    .filter((event) => event.node_id === nodeId && event.attempt_id)
+    .reduce<RunEvent | null>((latest, event) => !latest || event.sequence > latest.sequence ? event : latest, null)
+    ?.attempt_id;
+  if (!latestAttempt) return [];
   return events
-    .filter((event) => event.node_id === nodeId)
+    .filter((event) => event.node_id === nodeId && event.attempt_id === latestAttempt)
     .map(progressFromEvent)
     .filter((progress): progress is AgentProgress => progress !== null)
     .sort((left, right) => left.sequence - right.sequence);

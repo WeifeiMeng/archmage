@@ -343,7 +343,7 @@ export function RunWorkbench({ snapshot, timeline, onRefresh, onCancel, onReveal
   const nodeProgress = node ? progressForNode(timeline.events, node.id) : [];
   const capabilityLabel = node ? capabilityDisplayName(snapshot.capabilityConfigurations[node.key], node.key) : "—";
   const binding = node ? snapshot.agentBindings[node.key] : undefined;
-  const providerIdentity = binding ? `${providerLabel(binding.providerKind)} · ${binding.providerKind}` : "历史配置";
+  const providerIdentity = binding ? `${providerLabel(binding.providerKind)} · ${binding.providerKind.replaceAll("_", "-")}` : "历史配置";
   const inspector = <section className="panel inspector">
     <div className="panel-title"><div><span>节点检查器</span><small>{capabilityLabel}</small></div></div>
     {node ? <>

@@ -1,3 +1,4 @@
+use agent_client_protocol::v1::schema::SessionUpdate;
 use archmage_core::provider::codex::{self, CodexInvocation, Sandbox, validate_help};
 use archmage_core::provider::codex_event::Decoder;
 use archmage_core::provider::progress::{
@@ -7,6 +8,11 @@ use serde_json::json;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+
+fn acp_session_frame(update: serde_json::Value) -> serde_json::Value {
+    let update: SessionUpdate = serde_json::from_value(update).unwrap();
+    json!({"params": {"update": serde_json::to_value(update).unwrap()}})
+}
 
 #[test]
 fn sanitized_real_cli_fixture_decodes() {
@@ -70,6 +76,24 @@ fn codex_progress_allows_public_items_and_drops_reasoning() {
 }
 
 #[test]
+fn codex_progress_never_exposes_raw_commands() {
+    let mapped = codex_progress(&json!({
+        "type": "item.completed",
+        "item": {
+            "type": "command_execution",
+            "command": "API_TOKEN=secret curl -H 'Authorization: Bearer hidden' https://example.test",
+            "status": "completed",
+            "exit_code": 0
+        }
+    }))
+    .unwrap();
+    assert_eq!(mapped.label, "Run command");
+    assert_eq!(mapped.text, None);
+    assert!(!serde_json::to_string(&mapped).unwrap().contains("secret"));
+    assert!(!serde_json::to_string(&mapped).unwrap().contains("hidden"));
+}
+
+#[test]
 fn progress_text_is_utf8_bounded() {
     let mapped = codex_progress(&json!({
         "type": "item.completed",
@@ -103,6 +127,58 @@ fn qoder_progress_drops_agent_thought_and_maps_tool_status() {
     .unwrap();
     assert_eq!(mapped.kind, "tool");
     assert_eq!(mapped.status.as_deref(), Some("pending"));
+}
+
+#[test]
+fn qoder_progress_maps_real_acp_v1_updates() {
+    let plan = qoder_progress(&acp_session_frame(json!({
+            "sessionUpdate": "plan",
+            "entries": [
+                {"content": "Inspect code", "priority": "high", "status": "completed"},
+                {"content": "Run tests", "priority": "medium", "status": "in_progress"}
+            ]
+    })))
+    .unwrap();
+    assert_eq!(plan.status.as_deref(), Some("in_progress"));
+    assert!(plan.text.as_deref().unwrap().contains("Run tests"));
+
+    let usage = qoder_progress(&acp_session_frame(json!({
+            "sessionUpdate": "usage_update", "used": 1200, "size": 8000,
+            "cost": {"amount": 0.42, "currency": "USD"}
+    })))
+    .unwrap();
+    assert_eq!(usage.metadata["used"], 1200);
+    assert_eq!(usage.metadata["size"], 8000);
+    assert_eq!(usage.metadata["costAmount"], 0.42);
+    assert_eq!(usage.metadata["costCurrency"], "USD");
+
+    let mode = qoder_progress(&acp_session_frame(json!({
+        "sessionUpdate": "current_mode_update", "currentModeId": "code"
+    })))
+    .unwrap();
+    assert_eq!(mode.metadata["currentModeId"], "code");
+
+    let config = qoder_progress(&acp_session_frame(json!({
+        "sessionUpdate": "config_option_update", "configOptions": [
+            {"id": "model", "name": "Model", "type": "select", "currentValue": "private-value", "options": []}
+        ]
+    })))
+    .unwrap();
+    assert_eq!(config.metadata["optionCount"], 1);
+    assert!(
+        !serde_json::to_string(&config)
+            .unwrap()
+            .contains("private-value")
+    );
+
+    let notice = qoder_progress(&acp_session_frame(json!({
+            "sessionUpdate": "notice", "title": "Connection degraded",
+            "description": "Retrying safely", "severity": "warning"
+    })))
+    .unwrap();
+    assert_eq!(notice.label, "Connection degraded");
+    assert_eq!(notice.status.as_deref(), Some("warning"));
+    assert_eq!(notice.text.as_deref(), Some("Retrying safely"));
 }
 
 #[test]

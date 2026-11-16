@@ -34,4 +34,22 @@ describe("agent progress", () => {
       { sequence: 3, kind: "usage", label: "Usage", status: null, text: null, metadata: { input_tokens: 12 } },
     ]);
   });
+
+  it("shows only the latest attempt for a node", () => {
+    const oldAttempt = event({ sequence: 3, attempt_id: "attempt-1", payload: {
+      kind: "message", label: "Agent message", text: "old work",
+    } });
+    const currentAttempt = event({ sequence: 8, attempt_id: "attempt-2", payload: {
+      kind: "message", label: "Agent message", text: "current work",
+    } });
+    expect(progressForNode([currentAttempt, oldAttempt], "node-1").map((item) => item.text)).toEqual(["current work"]);
+  });
+
+  it("does not show an old attempt while a new attempt is starting", () => {
+    const oldAttempt = event({ sequence: 3, attempt_id: "attempt-1", payload: {
+      kind: "message", label: "Agent message", text: "old work",
+    } });
+    const created = event({ sequence: 8, event_type: "attempt.created", attempt_id: "attempt-2", payload: { number: 2 } });
+    expect(progressForNode([oldAttempt, created], "node-1")).toEqual([]);
+  });
 });

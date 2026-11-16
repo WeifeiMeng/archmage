@@ -203,6 +203,55 @@ fn agent_progress_is_owned_ordered_and_rejects_stale_generation() {
 }
 
 #[test]
+fn agent_progress_bounds_every_persisted_provider_field() {
+    let (_dir, mut store, run, node) = setup();
+    let attempt = store.begin_attempt(&node, 1).unwrap();
+    let generation = store.claim_run_owner(&run).unwrap();
+    store
+        .attach_attempt_process(
+            &attempt.id,
+            0,
+            generation,
+            &ProcessIdentity {
+                pid: 124,
+                pgid: 124,
+                started: "bounded-progress".into(),
+            },
+        )
+        .unwrap();
+    let mut progress = ProviderProgress::message("L".repeat(4096), "T".repeat(64 * 1024));
+    progress.status = Some("S".repeat(4096));
+    for index in 0..32 {
+        progress.metadata.insert(
+            format!("{}-{index}", "K".repeat(512)),
+            serde_json::Value::String("V".repeat(4096)),
+        );
+    }
+    store
+        .record_agent_progress(&attempt.id, generation, &progress)
+        .unwrap();
+    let payload = store
+        .events(&run, 0)
+        .unwrap()
+        .into_iter()
+        .find(|event| event.event_type == "agent.progress")
+        .unwrap()
+        .payload;
+    assert!(payload["label"].as_str().unwrap().len() <= 256);
+    assert!(payload["status"].as_str().unwrap().len() <= 128);
+    assert!(payload["text"].as_str().unwrap().len() <= 16 * 1024);
+    assert!(payload["metadata"].as_object().unwrap().len() <= 8);
+    assert!(
+        payload["metadata"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .all(|(key, value)| key.len() <= 64
+                && value.as_str().is_none_or(|item| item.len() <= 256))
+    );
+}
+
+#[test]
 fn schema_eleven_upgrades_to_consultation_provenance() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("schema-11.db");

@@ -154,8 +154,8 @@ impl Store {
             [attempt],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
-        let payload =
-            serde_json::to_value(progress).map_err(|error| Error::Preflight(error.to_string()))?;
+        let payload = serde_json::to_value(progress.sanitized())
+            .map_err(|error| Error::Preflight(error.to_string()))?;
         event(
             &tx,
             &run,

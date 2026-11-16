@@ -2,6 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub const MAX_PROGRESS_TEXT_BYTES: usize = 16 * 1024;
+const MAX_PROGRESS_LABEL_BYTES: usize = 256;
+const MAX_PROGRESS_STATUS_BYTES: usize = 128;
+const MAX_PROGRESS_METADATA_ENTRIES: usize = 8;
+const MAX_PROGRESS_METADATA_KEY_BYTES: usize = 64;
+const MAX_PROGRESS_METADATA_VALUE_BYTES: usize = 256;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderProgress {
@@ -35,6 +40,33 @@ impl ProviderProgress {
             metadata: Map::new(),
         }
     }
+
+    pub(crate) fn sanitized(&self) -> Self {
+        let mut metadata = Map::new();
+        for (key, value) in self.metadata.iter().take(MAX_PROGRESS_METADATA_ENTRIES) {
+            let value = match value {
+                Value::String(value) => {
+                    Value::String(bounded(value, MAX_PROGRESS_METADATA_VALUE_BYTES))
+                }
+                Value::Number(_) | Value::Bool(_) => value.clone(),
+                _ => continue,
+            };
+            metadata.insert(bounded(key, MAX_PROGRESS_METADATA_KEY_BYTES), value);
+        }
+        Self {
+            kind: match self.kind.as_str() {
+                "message" | "plan" | "tool" | "notice" | "usage" | "status" => self.kind.clone(),
+                _ => "status".into(),
+            },
+            label: bounded(&self.label, MAX_PROGRESS_LABEL_BYTES),
+            status: self
+                .status
+                .as_deref()
+                .map(|value| bounded(value, MAX_PROGRESS_STATUS_BYTES)),
+            text: self.text.as_deref().map(bounded_text),
+            metadata,
+        }
+    }
 }
 
 pub fn codex_progress(event: &Value) -> Option<ProviderProgress> {
@@ -55,10 +87,6 @@ pub fn codex_progress(event: &Value) -> Option<ProviderProgress> {
                         .and_then(Value::as_str)
                         .map(str::to_owned)
                         .or_else(|| Some(lifecycle.to_owned()));
-                    progress.text = item
-                        .get("command")
-                        .and_then(Value::as_str)
-                        .map(bounded_text);
                     copy_primitive(item, &mut progress.metadata, "exit_code");
                     Some(progress)
                 }
@@ -125,15 +153,39 @@ pub fn qoder_progress(frame: &Value) -> Option<ProviderProgress> {
             .map(|text| ProviderProgress::message("Agent message", text)),
         "plan" => {
             let mut progress = ProviderProgress::new("plan", "Plan updated");
-            progress.status = update
-                .get("status")
-                .and_then(Value::as_str)
+            let entries = update.get("entries")?.as_array()?;
+            progress.status = entries
+                .iter()
+                .filter_map(|entry| entry.get("status").and_then(Value::as_str))
+                .find(|status| *status == "in_progress")
+                .or_else(|| {
+                    entries
+                        .iter()
+                        .filter_map(|entry| entry.get("status").and_then(Value::as_str))
+                        .find(|status| *status == "pending")
+                })
+                .or_else(|| {
+                    entries
+                        .iter()
+                        .filter_map(|entry| entry.get("status").and_then(Value::as_str))
+                        .next()
+                })
                 .map(str::to_owned);
-            progress.text = update
-                .get("title")
-                .or_else(|| update.get("text"))
-                .and_then(Value::as_str)
-                .map(bounded_text);
+            let summary = entries
+                .iter()
+                .filter_map(|entry| {
+                    let content = entry.get("content")?.as_str()?;
+                    let status = entry
+                        .get("status")
+                        .and_then(Value::as_str)
+                        .unwrap_or("pending");
+                    Some(format!("[{status}] {content}"))
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !summary.is_empty() {
+                progress.text = Some(bounded_text(&summary));
+            }
             Some(progress)
         }
         "tool_call" | "tool_call_update" => {
@@ -150,39 +202,65 @@ pub fn qoder_progress(frame: &Value) -> Option<ProviderProgress> {
             copy_primitive(update, &mut progress.metadata, "toolCallId");
             Some(progress)
         }
-        "current_mode_update" | "config_option_update" => {
+        "current_mode_update" => {
             let mut progress = ProviderProgress::new("status", "Session configuration updated");
-            copy_primitive(update, &mut progress.metadata, "modeId");
-            copy_primitive(update, &mut progress.metadata, "configId");
+            copy_primitive(update, &mut progress.metadata, "currentModeId");
+            Some(progress)
+        }
+        "config_option_update" => {
+            let mut progress = ProviderProgress::new("status", "Session configuration updated");
+            if let Some(count) = update
+                .get("configOptions")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+            {
+                progress.metadata.insert("optionCount".into(), count.into());
+            }
             Some(progress)
         }
         "usage_update" => {
             let mut progress = ProviderProgress::new("usage", "Usage updated");
-            for key in ["inputTokens", "outputTokens", "totalTokens"] {
+            for key in ["used", "size"] {
                 copy_primitive(update, &mut progress.metadata, key);
+            }
+            if let Some(cost) = update.get("cost") {
+                copy_primitive_as(cost, &mut progress.metadata, "amount", "costAmount");
+                copy_primitive_as(cost, &mut progress.metadata, "currency", "costCurrency");
             }
             Some(progress)
         }
         "available_commands_update" => None,
         "user_message_chunk" | "agent_thought_chunk" => None,
-        "notice" => update
-            .get("message")
-            .and_then(Value::as_str)
-            .filter(|text| !text.is_empty())
-            .map(|text| ProviderProgress::message("Provider notice", text))
-            .map(|mut progress| {
-                progress.kind = "notice".into();
-                progress
-            }),
+        "notice" => {
+            let title = update.get("title")?.as_str()?.trim();
+            if title.is_empty() {
+                return None;
+            }
+            let mut progress = ProviderProgress::new("notice", title);
+            progress.status = update
+                .get("severity")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            progress.text = update
+                .get("description")
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .map(bounded_text);
+            Some(progress)
+        }
         _ => None,
     }
 }
 
 fn bounded_text(value: &str) -> String {
-    if value.len() <= MAX_PROGRESS_TEXT_BYTES {
+    bounded(value, MAX_PROGRESS_TEXT_BYTES)
+}
+
+fn bounded(value: &str, maximum: usize) -> String {
+    if value.len() <= maximum {
         return value.to_owned();
     }
-    let mut end = MAX_PROGRESS_TEXT_BYTES;
+    let mut end = maximum;
     while !value.is_char_boundary(end) {
         end -= 1;
     }
@@ -190,9 +268,18 @@ fn bounded_text(value: &str) -> String {
 }
 
 fn copy_primitive(source: &Value, target: &mut Map<String, Value>, key: &str) {
-    if let Some(value) = source.get(key)
+    copy_primitive_as(source, target, key, key);
+}
+
+fn copy_primitive_as(
+    source: &Value,
+    target: &mut Map<String, Value>,
+    source_key: &str,
+    target_key: &str,
+) {
+    if let Some(value) = source.get(source_key)
         && (value.is_string() || value.is_number() || value.is_boolean())
     {
-        target.insert(key.to_owned(), value.clone());
+        target.insert(target_key.to_owned(), value.clone());
     }
 }
