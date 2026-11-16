@@ -65,6 +65,15 @@ describe("RunSplitPane", () => {
     expect(localStorage.getItem(storageKey)).toBe("62");
   });
 
+  it("persists the last visible ratio when pointer interaction is cancelled", () => {
+    localStorage.clear();
+    const { separator, container } = renderSplit(43);
+    fireEvent.pointerDown(separator, { pointerId: 8, clientX: 500 });
+    fireEvent.pointerCancel(separator, { pointerId: 8 });
+    expect(container.style.getPropertyValue("--inspector-ratio")).toBe("50%");
+    expect(localStorage.getItem(storageKey)).toBe("50");
+  });
+
   it("restores preference while passive resizing only changes the effective ratio", () => {
     localStorage.setItem(storageKey, "20");
     const { container } = renderSplit();
