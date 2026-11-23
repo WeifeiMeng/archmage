@@ -15,7 +15,7 @@
 [![Desktop](https://img.shields.io/badge/desktop-Tauri-24c8db.svg)](apps/archmage-desktop)
 [![Status](https://img.shields.io/badge/status-development_preview-72d9a2.svg)](#当前边界)
 
-[快速开始](#快速开始) · [它解决什么问题](#archmage-解决什么问题) · [工作方式](#一次-run-如何工作) · [Agent Provider](#连接真实的-agent-provider) · [文档](#文档与排障)
+[下载 macOS 版](#下载-macos-版) · [快速开始](#快速开始) · [它解决什么问题](#archmage-解决什么问题) · [工作方式](#一次-run-如何工作) · [Agent Provider](#连接真实的-agent-provider) · [文档](#文档与排障)
 
 </div>
 
@@ -84,6 +84,10 @@ Archmage 把这些问题放进 Runtime，而不是留给提示词碰运气：
 
 ## 快速开始
 
+### 下载 macOS 版
+
+Archmage 1.0.0 Preview 提供适用于 macOS 14+ Apple Silicon Mac 的 DMG。请从 [GitHub Releases](https://github.com/WeifeiMeng/archmage/releases) 下载，并按照 [macOS 安装、升级与卸载指南](docs/zh-CN/runbooks/macos-installation.md)校验 SHA-256 和完成首次启动。此预览版未签名、未公证，不支持 Intel Mac 或自动更新。
+
 ### 安装开发版 CLI
 
 在仓库根目录执行：
@@ -141,6 +145,7 @@ Archmage 仍处于开发预览阶段。当前可执行版本聚焦于本地代�
 - [中文文档索引](docs/zh-CN/README.md)
 - [CLI 命令手册](docs/zh-CN/cli-reference.md)
 - [桌面客户端使用手册](docs/zh-CN/runbooks/desktop-s0.md)
+- [macOS 安装、升级与卸载指南](docs/zh-CN/runbooks/macos-installation.md)
 - [Qoder ACP Provider 运行手册](docs/zh-CN/runbooks/qoder-provider.md)
 - [当前版本指南与架构说明](docs/zh-CN/guide.md)
 - [原始产品说明](target.md)

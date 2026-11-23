@@ -76,4 +76,55 @@ describe("macOS release packaging contract", () => {
       expect(releaseNotes).toContain(phrase);
     }
   });
+
+  it("documents the same safe macOS installation lifecycle in both languages", () => {
+    const english = readFileSync(
+      new URL("../../../docs/en/runbooks/macos-installation.md", import.meta.url),
+      "utf8",
+    );
+    const chinese = readFileSync(
+      new URL("../../../docs/zh-CN/runbooks/macos-installation.md", import.meta.url),
+      "utf8",
+    );
+    const rootReadme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
+    const englishReadme = readFileSync(
+      new URL("../../../docs/en/README.md", import.meta.url),
+      "utf8",
+    );
+    const chineseReadme = readFileSync(
+      new URL("../../../docs/zh-CN/README.md", import.meta.url),
+      "utf8",
+    );
+
+    for (const document of [english, chinese]) {
+      expect(document).toContain("Archmage_1.0.0_aarch64.dmg");
+      expect(document).toContain("macOS 14");
+      expect(document).toContain("Apple Silicon");
+      expect(document).toContain("shasum -a 256");
+      expect(document).toContain("GitHub Releases");
+      expect(document).toContain("Application Support");
+      expect(document).toContain("Provider");
+    }
+    for (const phrase of [
+      "unsigned",
+      "Open Anyway",
+      "manual upgrade",
+      "downgrade",
+      "app-only uninstall",
+    ]) {
+      expect(english).toContain(phrase);
+    }
+    for (const phrase of ["未签名", "仍要打开", "手动升级", "降级", "仅卸载应用"]) {
+      expect(chinese).toContain(phrase);
+    }
+
+    const releases = "https://github.com/WeifeiMeng/archmage/releases";
+    expect(rootReadme).toContain("docs/zh-CN/runbooks/macos-installation.md");
+    expect(englishReadme).toContain("runbooks/macos-installation.md");
+    expect(chineseReadme).toContain("runbooks/macos-installation.md");
+    for (const readme of [rootReadme, englishReadme, chineseReadme]) {
+      expect(readme).toContain(releases);
+      expect(readme).not.toContain(`${releases}/latest`);
+    }
+  });
 });

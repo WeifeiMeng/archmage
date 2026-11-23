@@ -12,19 +12,22 @@ Team composition update: [Selectable Capabilities and relationships](superpowers
 
 Current Team increment: [Message-flow Teams](superpowers/specs/2026-10-14-message-flow-teams-design.md) adds Agent-selected deliverable routes, feedback cycles, and an explicit terminal signal for new Teams. The [implementation plan](superpowers/plans/2026-10-14-message-flow-teams.md) tracks its development. Existing Teams retain consultation semantics.
 
+**Want to install the desktop Preview?** Download it from [GitHub Releases](https://github.com/WeifeiMeng/archmage/releases), then follow the [macOS installation, upgrade, and uninstall runbook](runbooks/macos-installation.md). It currently supports macOS 14+ on Apple Silicon only.
+
 **Want to run the current code?** Use the [CLI command reference](cli-reference.md) or [desktop client guide](runbooks/desktop-s0.md). The [current-version guide](guide.md) adds contributor tests and architecture details.
 
 1. [CLI command reference](cli-reference.md)
 2. [Desktop client guide](runbooks/desktop-s0.md)
-3. [Product vision](product/vision.md)
-4. [MVP definition](product/mvp-definition.md)
-5. [Glossary](concepts/glossary.md)
-6. [Collaboration model](concepts/collaboration-model.md)
-7. [Architecture overview](architecture/overview.md)
-8. [Cross-provider Capability handoff](architecture/cross-provider-handoff.md)
-9. [Delivery roadmap](roadmap/README.md)
-10. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
-11. [Desktop runtime implementation plan](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
+3. [macOS installation, upgrade, and uninstall](runbooks/macos-installation.md)
+4. [Product vision](product/vision.md)
+5. [MVP definition](product/mvp-definition.md)
+6. [Glossary](concepts/glossary.md)
+7. [Collaboration model](concepts/collaboration-model.md)
+8. [Architecture overview](architecture/overview.md)
+9. [Cross-provider Capability handoff](architecture/cross-provider-handoff.md)
+10. [Delivery roadmap](roadmap/README.md)
+11. [S0: Real Codex vertical slice](roadmap/stages/s0-real-codex-slice.md)
+12. [Desktop runtime implementation plan](superpowers/plans/2026-09-28-desktop-runtime-vertical-slice.md)
 
 ## Documentation layers
 
