@@ -15,7 +15,7 @@
 [![Desktop](https://img.shields.io/badge/desktop-Tauri-24c8db.svg)](apps/archmage-desktop)
 [![Status](https://img.shields.io/badge/status-development_preview-72d9a2.svg)](#current-scope)
 
-[Quick Start](#quick-start) · [Why Archmage](#what-problem-does-archmage-solve) · [How It Works](#how-a-run-works) · [Agent Providers](#connect-real-agent-providers) · [Documentation](#documentation-and-troubleshooting)
+[Download for macOS](#download-for-macos) · [Quick Start](#quick-start) · [Why Archmage](#what-problem-does-archmage-solve) · [How It Works](#how-a-run-works) · [Agent Providers](#connect-real-agent-providers) · [Documentation](#documentation-and-troubleshooting)
 
 </div>
 
@@ -84,6 +84,10 @@ Use **Agent Management** in the desktop app to discover and verify Providers, **
 
 ## Quick start
 
+### Download for macOS
+
+Archmage 1.0.0 Preview provides a DMG for Apple Silicon Macs running macOS 14+. Download it from [GitHub Releases](https://github.com/WeifeiMeng/archmage/releases), then follow the [macOS installation, upgrade, and uninstall runbook](docs/en/runbooks/macos-installation.md) to verify SHA-256 and complete the first launch. This Preview is unsigned and not notarized; it does not support Intel Macs or automatic updates.
+
 ### Install the development CLI
 
 From the repository root:
@@ -141,6 +145,7 @@ Archmage is a development preview focused on collaborative delivery in local cod
 - [English documentation index](docs/en/README.md)
 - [CLI command reference](docs/en/cli-reference.md)
 - [Desktop client guide](docs/en/runbooks/desktop-s0.md)
+- [macOS installation, upgrade, and uninstall runbook](docs/en/runbooks/macos-installation.md)
 - [Qoder ACP Provider runbook](docs/en/runbooks/qoder-provider.md)
 - [Current-version guide and architecture notes](docs/en/guide.md)
 - [Original product brief](target.md)

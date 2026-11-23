@@ -88,6 +88,10 @@ describe("macOS release packaging contract", () => {
       "utf8",
     );
     const rootReadme = readFileSync(new URL("../../../README.md", import.meta.url), "utf8");
+    const rootEnglishReadme = readFileSync(
+      new URL("../../../README.en.md", import.meta.url),
+      "utf8",
+    );
     const englishReadme = readFileSync(
       new URL("../../../docs/en/README.md", import.meta.url),
       "utf8",
@@ -121,9 +125,10 @@ describe("macOS release packaging contract", () => {
 
     const releases = "https://github.com/WeifeiMeng/archmage/releases";
     expect(rootReadme).toContain("docs/zh-CN/runbooks/macos-installation.md");
+    expect(rootEnglishReadme).toContain("docs/en/runbooks/macos-installation.md");
     expect(englishReadme).toContain("runbooks/macos-installation.md");
     expect(chineseReadme).toContain("runbooks/macos-installation.md");
-    for (const readme of [rootReadme, englishReadme, chineseReadme]) {
+    for (const readme of [rootReadme, rootEnglishReadme, englishReadme, chineseReadme]) {
       expect(readme).toContain(releases);
       expect(readme).not.toContain(`${releases}/latest`);
     }
