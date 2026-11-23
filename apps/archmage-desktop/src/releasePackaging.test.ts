@@ -127,4 +127,9 @@ describe("macOS release packaging contract", () => {
       expect(readme).not.toContain(`${releases}/latest`);
     }
   });
+
+  it("keeps generated public release artifacts out of source control", () => {
+    const gitignore = readFileSync(new URL("../../../.gitignore", import.meta.url), "utf8");
+    expect(gitignore).toContain("/dist/release/");
+  });
 });

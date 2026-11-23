@@ -1,6 +1,7 @@
 .superpowers/
 .worktrees/
 /target/
+/dist/release/
 __pycache__/
 *.pyc
 apps/archmage-desktop/node_modules/
