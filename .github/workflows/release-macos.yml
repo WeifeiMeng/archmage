@@ -91,8 +91,9 @@ jobs:
           mkdir -p dist/release
           cp "${dmgs[0]}" "dist/release/${DMG_NAME}"
           scripts/verify-macos-release.sh "dist/release/${DMG_NAME}" "${VERSION}"
-          shasum -a 256 "dist/release/${DMG_NAME}" > "dist/release/${DMG_NAME}.sha256"
-          shasum -a 256 -c "dist/release/${DMG_NAME}.sha256"
+          cd dist/release
+          shasum -a 256 "${DMG_NAME}" > "${DMG_NAME}.sha256"
+          shasum -a 256 -c "${DMG_NAME}.sha256"
 
       - name: Upload verified release files
         uses: actions/upload-artifact@v4

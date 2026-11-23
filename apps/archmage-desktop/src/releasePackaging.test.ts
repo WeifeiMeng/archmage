@@ -51,6 +51,7 @@ describe("macOS release packaging contract", () => {
     );
     expect(workflow).toContain("scripts/verify-macos-release.sh");
     expect(workflow).toContain("shasum -a 256");
+    expect(workflow).toContain("cd dist/release");
     expect(workflow).toMatch(/release:\s*[\s\S]*needs: build/);
     expect(workflow).toMatch(/release:\s*[\s\S]*contents: write/);
     expect(workflow).toContain("github.ref_type == 'tag'");
