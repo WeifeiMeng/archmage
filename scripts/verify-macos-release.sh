@@ -45,6 +45,36 @@ hdiutil verify "$dmg"
 hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$dmg" >/dev/null
 mounted=1
 
+# Fail closed on the complete disk image layout. Tauri's DMG contains the app,
+# an Applications link, and two Finder metadata files; nothing else is public.
+while IFS= read -r -d '' entry; do
+  name=$(basename "$entry")
+  case "$name" in
+    Archmage.app)
+      [[ -d "$entry" ]] || {
+        echo "verify-macos-release: Archmage.app is not a directory" >&2
+        exit 1
+      }
+      ;;
+    Applications)
+      [[ -L "$entry" && "$(readlink "$entry")" == "/Applications" ]] || {
+        echo "verify-macos-release: Applications is not the expected /Applications link" >&2
+        exit 1
+      }
+      ;;
+    .DS_Store|.VolumeIcon.icns)
+      [[ -f "$entry" ]] || {
+        echo "verify-macos-release: unexpected DMG metadata entry type: $name" >&2
+        exit 1
+      }
+      ;;
+    *)
+      echo "verify-macos-release: unexpected DMG root entry: $name" >&2
+      exit 1
+      ;;
+  esac
+done < <(find "$mount_dir" -mindepth 1 -maxdepth 1 -print0)
+
 mapfile_support=0
 if [[ -n "${BASH_VERSION:-}" ]] && (( BASH_VERSINFO[0] >= 4 )); then
   mapfile_support=1
@@ -100,7 +130,7 @@ architectures=$(lipo -archs "$executable" | xargs)
   exit 1
 }
 
-forbidden=$(find "$app" \
+forbidden=$(find "$mount_dir" \
   \( -name '.env' -o -name '.env.*' -o -name '.git' -o -name '*.db' -o -name '*.sqlite' \
      -o -name 'node_modules' -o -name 'target' -o -iname '*fixture*' \
      -o -name '.credentials*' -o -name 'credentials.json' -o -name '*.pem' \

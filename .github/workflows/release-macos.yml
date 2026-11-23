@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out release source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,6 +37,16 @@ jobs:
           set -euo pipefail
           version=$(node -p "require('./apps/archmage-desktop/package.json').version")
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            if [[ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" != "tag" ]]; then
+              echo "Release tags must be annotated: ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
+            git fetch --no-tags origin main:refs/remotes/origin/main
+            tag_commit=$(git rev-parse "${GITHUB_REF_NAME}^{commit}")
+            if ! git merge-base --is-ancestor "${tag_commit}" refs/remotes/origin/main; then
+              echo "Release tag is not contained in origin/main: ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
             node scripts/release-version.mjs check --tag "${GITHUB_REF_NAME}"
           else
             node scripts/release-version.mjs check
@@ -138,9 +150,9 @@ jobs:
               echo "Refusing to replace an already published release: ${TAG}" >&2
               exit 1
             fi
-            gh release edit "${TAG}" --title "Archmage ${VERSION}" --notes-file "${notes}" --draft --prerelease
+            gh release edit "${TAG}" --title "Archmage ${VERSION} — macOS Apple Silicon Preview" --notes-file "${notes}" --draft --prerelease
           else
-            gh release create "${TAG}" --verify-tag --title "Archmage ${VERSION}" --notes-file "${notes}" --draft --prerelease
+            gh release create "${TAG}" --verify-tag --title "Archmage ${VERSION} — macOS Apple Silicon Preview" --notes-file "${notes}" --draft --prerelease
           fi
 
       - name: Upload release assets and publish Preview
@@ -157,10 +169,11 @@ jobs:
           test -s "${checksum}"
           gh release upload "${TAG}" "${dmg}" "${checksum}" --clobber
           asset_names=$(gh release view "${TAG}" --json assets --jq '.assets[].name')
+          asset_count=$(gh release view "${TAG}" --json assets --jq '.assets | length')
           dmg_count=$(printf '%s\n' "${asset_names}" | grep -Fxc "${DMG_NAME}" || true)
           checksum_count=$(printf '%s\n' "${asset_names}" | grep -Fxc "${DMG_NAME}.sha256" || true)
-          if [[ "${dmg_count}" != "1" || "${checksum_count}" != "1" ]]; then
-            echo "Release assets are incomplete; leaving ${TAG} as a draft" >&2
+          if [[ "${asset_count}" != "2" || "${dmg_count}" != "1" || "${checksum_count}" != "1" ]]; then
+            echo "Release assets are not exactly the verified DMG and checksum; leaving ${TAG} as a draft" >&2
             exit 1
           fi
           gh release edit "${TAG}" --draft=false --prerelease

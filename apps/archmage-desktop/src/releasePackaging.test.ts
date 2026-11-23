@@ -25,6 +25,8 @@ describe("macOS release packaging contract", () => {
     expect(verifier).toContain("hdiutil verify");
     expect(verifier).toContain("hdiutil attach");
     expect(verifier).toContain("lipo -archs");
+    expect(verifier).toContain('find "$mount_dir"');
+    expect(verifier).toContain("unexpected DMG root entry");
     expect(verifier).toContain("CFBundleIdentifier");
     expect(verifier).toContain("CFBundleShortVersionString");
     expect(verifier).toContain("LSMinimumSystemVersion");
@@ -45,6 +47,9 @@ describe("macOS release packaging contract", () => {
     expect(workflow).toMatch(/tags:\s*\n\s*- ["']v\*["']/);
     expect(workflow).toContain("permissions:\n  contents: read");
     expect(workflow).toContain("runs-on: macos-15");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("git cat-file -t");
+    expect(workflow).toContain("git merge-base --is-ancestor");
     expect(workflow).toContain("cargo clippy --workspace --all-targets -- -D warnings");
     expect(workflow).toContain(
       "npm run tauri -- build --target aarch64-apple-darwin --bundles dmg",
@@ -58,6 +63,9 @@ describe("macOS release packaging contract", () => {
     expect(workflow).toContain("github.ref_name");
     expect(workflow).toContain("--prerelease");
     expect(workflow).toContain("archmage-macos-arm64-");
+    expect(workflow).toContain('asset_count=$(gh release view');
+    expect(workflow).toContain('"${asset_count}" != "2"');
+    expect(workflow).toContain('Archmage ${VERSION} — macOS Apple Silicon Preview');
 
     for (const phrase of [
       "Apple Silicon",
