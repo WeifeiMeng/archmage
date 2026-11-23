@@ -1,0 +1,165 @@
+name: Release macOS arm64 Preview
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify arm64 DMG
+    runs-on: macos-15
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      artifact_name: ${{ steps.release.outputs.artifact_name }}
+      dmg_name: ${{ steps.release.outputs.dmg_name }}
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/archmage-desktop/package-lock.json
+
+      - name: Load release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./apps/archmage-desktop/package.json').version")
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            node scripts/release-version.mjs check --tag "${GITHUB_REF_NAME}"
+          else
+            node scripts/release-version.mjs check
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=archmage-macos-arm64-${version}" >> "${GITHUB_OUTPUT}"
+          echo "dmg_name=Archmage_${version}_aarch64.dmg" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare Rust target
+        run: |
+          rustup show
+          rustup target add aarch64-apple-darwin
+
+      - name: Install desktop dependencies
+        working-directory: apps/archmage-desktop
+        run: npm ci
+
+      - name: Check Rust formatting
+        run: cargo fmt --check
+
+      - name: Lint Rust workspace
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test Rust workspace
+        run: cargo test --workspace
+
+      - name: Test desktop application
+        working-directory: apps/archmage-desktop
+        run: npm test -- --run
+
+      - name: Build desktop frontend
+        working-directory: apps/archmage-desktop
+        run: npm run build
+
+      - name: Build arm64 DMG
+        working-directory: apps/archmage-desktop
+        run: npm run tauri -- build --target aarch64-apple-darwin --bundles dmg
+
+      - name: Normalize and verify release files
+        shell: bash
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          DMG_NAME: ${{ steps.release.outputs.dmg_name }}
+        run: |
+          set -euo pipefail
+          dmgs=()
+          while IFS= read -r -d '' dmg; do
+            dmgs+=("${dmg}")
+          done < <(find target/aarch64-apple-darwin/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -print0)
+          if [[ ${#dmgs[@]} -ne 1 ]]; then
+            echo "Expected exactly one DMG, found ${#dmgs[@]}" >&2
+            exit 1
+          fi
+          mkdir -p dist/release
+          cp "${dmgs[0]}" "dist/release/${DMG_NAME}"
+          scripts/verify-macos-release.sh "dist/release/${DMG_NAME}" "${VERSION}"
+          shasum -a 256 "dist/release/${DMG_NAME}" > "dist/release/${DMG_NAME}.sha256"
+          shasum -a 256 -c "dist/release/${DMG_NAME}.sha256"
+
+      - name: Upload verified release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/release/${{ steps.release.outputs.dmg_name }}
+            dist/release/${{ steps.release.outputs.dmg_name }}.sha256
+
+  release:
+    name: Publish GitHub Pre-release
+    needs: build
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@v4
+
+      - name: Download verified release files
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: dist/release
+
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes=".github/release-notes/v${VERSION}.md"
+          test -f "${notes}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            is_draft=$(gh release view "${TAG}" --json isDraft --jq '.isDraft')
+            if [[ "${is_draft}" != "true" ]]; then
+              echo "Refusing to replace an already published release: ${TAG}" >&2
+              exit 1
+            fi
+            gh release edit "${TAG}" --title "Archmage ${VERSION}" --notes-file "${notes}" --draft --prerelease
+          else
+            gh release create "${TAG}" --verify-tag --title "Archmage ${VERSION}" --notes-file "${notes}" --draft --prerelease
+          fi
+
+      - name: Upload release assets and publish Preview
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          DMG_NAME: ${{ needs.build.outputs.dmg_name }}
+        run: |
+          set -euo pipefail
+          dmg="dist/release/${DMG_NAME}"
+          checksum="${dmg}.sha256"
+          test -s "${dmg}"
+          test -s "${checksum}"
+          gh release upload "${TAG}" "${dmg}" "${checksum}" --clobber
+          asset_names=$(gh release view "${TAG}" --json assets --jq '.assets[].name')
+          dmg_count=$(printf '%s\n' "${asset_names}" | grep -Fxc "${DMG_NAME}" || true)
+          checksum_count=$(printf '%s\n' "${asset_names}" | grep -Fxc "${DMG_NAME}.sha256" || true)
+          if [[ "${dmg_count}" != "1" || "${checksum_count}" != "1" ]]; then
+            echo "Release assets are incomplete; leaving ${TAG} as a draft" >&2
+            exit 1
+          fi
+          gh release edit "${TAG}" --draft=false --prerelease

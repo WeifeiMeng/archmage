@@ -30,4 +30,50 @@ describe("macOS release packaging contract", () => {
     expect(verifier).toContain("LSMinimumSystemVersion");
     expect(verifier).toContain("dev.archmage.workbench");
   });
+
+  it("builds manually but publishes previews only from version tags", () => {
+    const workflow = readFileSync(
+      new URL("../../../.github/workflows/release-macos.yml", import.meta.url),
+      "utf8",
+    );
+    const releaseNotes = readFileSync(
+      new URL("../../../.github/release-notes/v1.0.0.md", import.meta.url),
+      "utf8",
+    );
+
+    expect(workflow).toContain("workflow_dispatch:");
+    expect(workflow).toMatch(/tags:\s*\n\s*- ["']v\*["']/);
+    expect(workflow).toContain("permissions:\n  contents: read");
+    expect(workflow).toContain("runs-on: macos-15");
+    expect(workflow).toContain("cargo clippy --workspace --all-targets -- -D warnings");
+    expect(workflow).toContain(
+      "npm run tauri -- build --target aarch64-apple-darwin --bundles dmg",
+    );
+    expect(workflow).toContain("scripts/verify-macos-release.sh");
+    expect(workflow).toContain("shasum -a 256");
+    expect(workflow).toMatch(/release:\s*[\s\S]*needs: build/);
+    expect(workflow).toMatch(/release:\s*[\s\S]*contents: write/);
+    expect(workflow).toContain("github.ref_type == 'tag'");
+    expect(workflow).toContain("github.ref_name");
+    expect(workflow).toContain("--prerelease");
+    expect(workflow).toContain("archmage-macos-arm64-");
+
+    for (const phrase of [
+      "Apple Silicon",
+      "macOS 14+",
+      "unsigned",
+      "not notarized",
+      "Open Anyway",
+      "Provider",
+      "manual upgrade",
+      "shasum -a 256",
+      "Apple 芯片",
+      "未签名",
+      "未公证",
+      "仍要打开",
+      "手动升级",
+    ]) {
+      expect(releaseNotes).toContain(phrase);
+    }
+  });
 });
